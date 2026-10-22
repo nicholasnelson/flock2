@@ -56,12 +56,13 @@ CELLS = {
     "mono_perc_stamp_cd": dict(mono=True, perceptual_weight=1.0, mode="stamp", pretrain_colour_dropout=0.5),
 }
 # 128 x 128 isometric world (16x8 tiles; referents salt lick, pine, flower, fox): black lines of
-# fixed 2 px width, ink = total line length, colour-dropout judge; sweep the cost per unit length.
+# fixed 2 px width, strokes fully on or off, ink = length + 4 px per stroke (a pen-lift price, so
+# dots are not free), colour-dropout judge; sweep the cost weight.
 for _ink, _tag in [(0.002, "002"), (0.01, "01"), (0.03, "03")]:
     for _mode in ("bubble", "stamp"):
         for _pw, _p in [(1.0, "perc"), (0.0, "noperc")]:
             CELLS[f"line_{_p}_{_mode}_ink{_tag}"] = dict(
-                mono=True, stroke_width=2.0, pretrain_colour_dropout=0.5, perceptual_weight=_pw, mode=_mode, ink_weight=_ink
+                mono=True, stroke_width=2.0, stroke_cost=4.0, hard_gate=True, pretrain_colour_dropout=0.5, perceptual_weight=_pw, mode=_mode, ink_weight=_ink
             )
 
 KEYS = ["acc", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]

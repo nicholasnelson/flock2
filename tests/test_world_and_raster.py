@@ -116,7 +116,7 @@ def test_composite_canvas_bubble_and_stamp():
     assert float(bubble[5, 5, 12]) == 1.0 and float(stamp[5, 5, 12]) == 1.0
 
 
-def test_fixed_width_lines_are_thin_and_ink_is_length_only():
+def test_fixed_width_lines_are_thin_and_ink_is_length_plus_stroke_cost():
     from flock.raster import Strokes, rasterise
 
     # one horizontal stroke across the middle, gate fully on; the raw width output is huge
@@ -128,3 +128,17 @@ def test_fixed_width_lines_are_thin_and_ink_is_length_only():
     assert 1 <= (col > 0.5).sum() <= 3  # about 2 px thick, whatever the width output says
     length = 32 * (float(jax.nn.sigmoid(2.0)) - float(jax.nn.sigmoid(-2.0)))
     assert abs(float(c.ink) - length) < 0.1
+    c4 = rasterise(st, size=32, fixed_width=2.0, stroke_cost=4.0)
+    assert abs(float(c4.ink) - (length + 4.0)) < 0.1
+
+
+def test_hard_gate_is_all_or_nothing_with_a_gradient():
+    from flock.raster import Strokes, rasterise
+
+    e = jnp.array([[-2.0, 0.0, 2.0, 0.0]])
+    f = lambda g: rasterise(Strokes(e, jnp.zeros(1), jnp.zeros((1, 16)), g), size=32, fixed_width=2.0, hard_gate=True)
+    half_on, half_off = f(jnp.array([0.3])), f(jnp.array([-0.3]))  # sigmoid 0.57 / 0.43
+    # a 2 px line centred between pixel rows peaks at ~0.81 alpha (soft edges), gate or no gate
+    assert float(half_on.alpha.max()) > 0.75 and float(half_off.alpha.max()) < 1e-6
+    g = jax.grad(lambda g: jnp.sum(f(g).alpha))(jnp.array([0.3]))
+    assert float(jnp.abs(g).sum()) > 0
