@@ -561,6 +561,53 @@ dramatic function (the fox approaches from behind).
 - Sheep visual field width: widely reported as ~270–320° with a small rear blind spot; not
   verified against a primary source in this research. **Unverified.**
 
+### Addendum: first-person view, ground reading, and steps toward language (M1+, 2026-10-23)
+
+Agreed with the owner in a side discussion; **for M1 onward, not M0** (M0 finishes on the
+isometric world). Items 1–3 revise Q8/Q9; item 4 is scope for M1 and later. Status: design
+direction, not yet tested; item 1 needs a benchmark before it is adopted.
+
+1. **Agents perceive a first-person view with billboard sprites** (Doom-style), not the rotated
+   isometric view; humans keep the isometric display, rendered from the state stream.
+   - Gains *(judgement)*: distance shrinks sprites by itself, which replaces the two-scale far
+     view in the foveated-vision addendum above; real occlusion (hiding behind trees, a fox
+     behind the flock); a real view cone.
+   - Precedents for learning from first-person pixel views: DreamerV3 on DeepMind Lab —
+     [Hafner et al. 2023](https://arxiv.org/abs/2301.04104), [Beattie et al. 2016 (DMLab)](https://arxiv.org/abs/1612.03801);
+     ViZDoom — [Kempka et al. 2016](https://arxiv.org/abs/1605.02097). **Established** (that
+     agents learn from such views; not that it suits this project).
+   - Cost: about 1.5–2× the isometric render (a guess, not benchmarked). Before deciding, a
+     short JAX ray-cast spike with a throughput benchmark against the current renderer.
+   - Relevant M0 finding: a perception encoder that must recognise objects at several scales
+     is what a first-person view forces; M0 had to add scale variation by hand
+     (`m0-toy-README.md`, the instance-variation work).
+2. **Field of view ≈ 300°, as a wide strip** (e.g. 256×64, the same pixel count as 128×128).
+   The owner explicitly does not want 360°: the ~60° blind wedge behind each sheep is intended,
+   because it makes warnings valuable, and no wrap-around padding is needed. A non-square image
+   is fine for convolutions; only flatten sizes and the receiver's choice grid change.
+3. **Ground marks are read by "looking down".** An action temporarily replaces world vision with
+   a top-down image of the ground at full resolution, fed through the *same* encoder with a mode
+   flag. This revives Q1's "look closely" idea. Reading costs vigilance, a good trade-off with
+   the fox; a mark is first noticed as a smudge in the 3D view, then walked to and read.
+   Speech bubbles stay in normal vision. *(Judgement.)*
+4. **Toward an emergent sheep language: consider folding into M1 now** *(judgement)*:
+   - (a) uneven information that pays off for both sides: occlusion, the blind wedge,
+     out-of-sight food or fox (communication needs an information gap — see Q9's evidence);
+   - (b) displacement: telling about absent, past or moved things (needs memory);
+   - (c) sequences of glyphs or bleats rather than single images, so syntax has somewhere to
+     live.
+
+   Later milestones: meaning spaces built from parts (what × where × how many × how urgent);
+   generations and communities — iterated learning makes transmitted languages more learnable
+   and structured ([Kirby, Cornish & Smith 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2504810)),
+   and communities converge on shared systems where isolated pairs develop local ones
+   ([Fay et al. 2010](https://onlinelibrary.wiley.com/doi/10.1111/j.1551-6709.2009.01090.x));
+   a reply channel for repair — drawings simplified only when the partner could give feedback
+   ([Fay et al. 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2607338/)); a resemblance
+   pressure that fades over time; structure metrics logged from the start (topographic
+   similarity — [Li & Bowling 2019](https://arxiv.org/pdf/1906.02403) — held-out
+   generalisation, dialect divergence).
+
 ---
 
 ## Q10. GPU-first architecture — the desktop runs everything
