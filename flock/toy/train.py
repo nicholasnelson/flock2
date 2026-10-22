@@ -112,7 +112,7 @@ def make_game_step(cfg: Config):
     wrt = _encoder_filter(cfg)
 
     @nnx.jit
-    def step(model: Agents, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array, ink_scale: jax.Array):
+    def step(model: Agents, judge: Encoder, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array, ink_scale: jax.Array):
         def loss_fn(m: Agents):
             fwd = game.forward(m, ep, key, cfg.opaque)
             ce, acc = game.success_loss(fwd.logits, ep.target_mask)
@@ -120,7 +120,7 @@ def make_game_step(cfg: Config):
             aux = {"ce": jnp.mean(ce), "acc": jnp.mean(acc), "ink": jnp.mean(fwd.canvas.ink)}
             loss = loss + ink_scale * cfg.ink_weight * jnp.mean(fwd.canvas.ink)
             if cfg.perceptual_weight > 0:
-                pl = game.perceptual_loss(m, fwd.canvas, fwd.sender_emb, ground)
+                pl = game.perceptual_loss(judge, fwd.canvas, world.to_onehot(ep.sender_view), ground)
                 aux["perceptual"] = pl
                 loss = loss + cfg.perceptual_weight * pl
             if cfg.listening_weight > 0:
@@ -181,7 +181,7 @@ def train(cfg: Config) -> dict:
         ep = env.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
         ground = world.to_onehot(jax.vmap(env.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
         ink_scale = jnp.float32(min(1.0, step / max(cfg.ink_ramp_steps, 1)))
-        aux = step_fn(model, opt, ep, ground, k_s, ink_scale)
+        aux = step_fn(model, judge, opt, ep, ground, k_s, ink_scale)
         if step % cfg.log_every == 0:
             log({"phase": "game", "step": step, **{k: float(v) for k, v in aux.items()}, "t": time.time() - t0})
 

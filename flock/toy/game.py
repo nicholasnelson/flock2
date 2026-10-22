@@ -81,12 +81,19 @@ def success_loss(logits: jax.Array, target_mask: jax.Array) -> tuple[jax.Array, 
     return ce, acc
 
 
-def perceptual_loss(model: Agents, canvas: Canvas, sender_emb: jax.Array, ground_views: jax.Array) -> jax.Array:
-    """Distance, in the perception encoder's embedding space, between the drawing stamped on
-    plain ground where the referent was and the sender's actual view of the referent."""
+def perceptual_loss(judge, canvas: Canvas, sender_view_onehot: jax.Array, ground_views: jax.Array) -> jax.Array:
+    """Distance, in a *frozen* perception encoder's embedding space, between the drawing
+    stamped on plain ground where the referent was and the sender's actual view of the referent.
+
+    The judge must be frozen (it is the pre-trained perception encoder, before any game
+    training). Measuring resemblance through a trainable encoder lets the encoder minimise the
+    loss by learning to ignore the canvas, and the drawing collapses to nothing — observed in
+    the first fine-tuned-encoder run.
+    """
     probe = jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, env.PROBE_CANVAS_PX, opaque_paper=False))(ground_views, canvas.colour, canvas.alpha)
-    emb_p, _ = model.encoder(probe)
-    target = jax.lax.stop_gradient(sender_emb)
+    emb_p, _ = judge(probe)
+    target, _ = judge(sender_view_onehot)
+    target = jax.lax.stop_gradient(target)
     n = lambda x: x / (jnp.linalg.norm(x, axis=-1, keepdims=True) + 1e-6)
     return jnp.mean(jnp.sum((n(emb_p) - n(target)) ** 2, axis=-1))
 
