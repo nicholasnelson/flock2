@@ -15,6 +15,12 @@ python -c "import jax; print(jax.devices())"   # expect a CudaDevice
 pytest -q                           # ~2 min on CPU
 ```
 
+On Windows, JAX's CUDA wheels are Linux-only: use WSL2 (the 4080 is visible there with the
+normal Windows driver). The working setup is a uv-managed Python 3.12 venv in WSL
+(`uv venv -p 3.12 ~/.venvs/flock2`) running against this checkout through `/mnt/c/...`, with
+`XLA_PYTHON_CLIENT_PREALLOCATE=false` so two runs can share the GPU. A default-size run takes
+about a minute; the full grid (15 cells x 3 seeds) under an hour.
+
 ## One run
 
 ```bash
@@ -122,6 +128,73 @@ Chance: acc 0.25, probes 0.17.
    1/40 of the budget. None of these is a reason to change the design before the real run.
 7. **Fine-tuning the encoder works once the loss goes through the judge**, but starts
    later; keep `freeze_encoder=True` as the default and treat fine-tuning as a cell.
+
+## GPU results (RTX 4080, default sizes, isometric renderer)
+
+Default sizes: 1,500 pre-training steps, 4,000 game steps at batch 64, eval batch 256. Chance:
+acc 0.25, probes 0.17. Mean ± s.d. over 3 seeds.
+
+### Grid 1 — round tree (2026-10-22, commit `1f07d77`)
+
+| cell | acc | acc_blank | acc_swapped | CIC | judge_probe | judge_rank | ink |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| shared_noperc | 1.00±0.00 | 0.22±0.04 | 0.09±0.02 | 7.0±0.5 | 0.17±0.02 | 0.19±0.03 | 6.5 |
+| shared_perc | 0.99±0.02 | 0.20±0.02 | 0.08±0.02 | 10.3±1.7 | 0.72±0.03 | 0.71±0.04 | 15.5 |
+| separate_noperc | 1.00±0.00 | 0.24±0.04 | 0.09±0.03 | 4.4±1.3 | 0.17±0.01 | 0.16±0.01 | 1.1 |
+| separate_perc | 0.99±0.01 | 0.24±0.02 | 0.09±0.01 | 10.5±0.3 | 0.76±0.12 | 0.73±0.08 | 10.6 |
+| shared_perc_stamp | 0.99±0.00 | 0.23±0.03 | 0.08±0.01 | 12.1±1.3 | 0.74±0.03 | 0.70±0.03 | 12.1 |
+| shared_noperc_stamp | 0.99±0.01 | 0.25±0.01 | 0.08±0.03 | 6.6±1.4 | 0.32±0.10 | 0.30±0.13 | 5.2 |
+| latent_noperc | 0.74±0.37 | 0.23±0.02 | 0.11±0.07 | 8.0±5.7 | 0.16±0.01 | 0.16±0.01 | 4.7 |
+| latent_perc | 0.99±0.00 | 0.22±0.00 | 0.08±0.01 | 11.9±0.4 | 0.77±0.03 | 0.76±0.04 | 35.9 |
+| pixels_noperc | 0.99±0.01 | 0.24±0.03 | 0.09±0.03 | 8.8±0.2 | 0.16±0.01 | 0.15±0.02 | 13.9 |
+| pixels_perc | 1.00±0.00 | 0.22±0.02 | 0.08±0.02 | 9.0±1.3 | 0.74±0.05 | 0.72±0.04 | 34.1 |
+| shared_perc_aux | 0.99±0.00 | 0.23±0.01 | 0.08±0.02 | 10.9±1.5 | 0.77±0.06 | 0.72±0.07 | 17.3 |
+| shared_noperc_aux | 1.00±0.00 | 0.24±0.03 | 0.10±0.03 | 7.2±1.7 | 0.18±0.03 | 0.19±0.05 | 6.0 |
+
+`latent_noperc`: seed 2 failed to communicate (acc 0.22); the other two reached 0.99–1.00.
+
+Galleries (seed 0), what they show:
+
+- *shared_noperc*: a clean, consistent but arbitrary colour code (light green for salt lick,
+  blue for flower, brown specks for tree and stump). Not iconic.
+- *shared_perc*: mostly grey shapes; some colour enters (pink for flower and stump; grey for
+  rock, which is its own colour). Shapes differ by type in size and placement.
+- *shared_perc_stamp*: the most picture-like gallery. Without the white bubble paper the salt
+  lick is drawn as a white block, the rock as a grey-and-white blob, bush and stump as dark
+  blobs. In bubble mode, white is the paper colour and cannot be drawn, so the salt lick's
+  defining colour is unavailable there.
+- *latent_perc*, *pixels_perc*: scattered single-pixel noise to a human eye, yet judge probes
+  of ~0.75.
+
+What this establishes (at this scale, on this world):
+
+1. **Communication emerges in every cell** (acc ≈ 1.0, blank at chance, swapped below chance):
+   the drawings are causally used. Only one seed of one cell (latent, no resemblance loss)
+   failed.
+2. **Iconicity comes from the resemblance loss, not from sharing the encoder.**
+   `shared_noperc` is at chance on both judge probes; `shared_perc` and `separate_perc` are
+   indistinguishable. This is the literature's prediction ([Mihai & Hare 2021](https://arxiv.org/abs/2106.02067):
+game loss alone gives drawings humans cannot read; see Q2), and the
+   "shared encoder makes iconicity emerge" hypothesis is not supported in bubble mode.
+3. **Exception worth following up: stamp mode without the resemblance loss** reaches judge
+   probes of ~2× chance (0.32 ± 0.10; seeds 0.45, 0.20, 0.32). A stamp is read on the ground,
+   as the referent itself would be seen, so this is the one condition where the shared-encoder
+   route shows anything. Three seeds with a wide spread: tentative.
+4. **The judge probe is gameable by senders that control pixels directly.** Latent and pixel
+   senders with the resemblance loss score as high as strokes but their drawings are noise to
+   a person. For those cells the judge measures adversarial match, not resemblance; the human
+   quiz is the only valid readability test there. *(Judgement, from the galleries.)*
+5. **Predictions that failed:** the pixel sender trains fine (predicted to fail); latent is not
+   better at communicating than strokes (everything is at ceiling); auxiliary losses change
+   nothing (communication is already at ceiling without them).
+6. **Not human-readable yet in bubble mode**: no gallery would pass the 35% quiz bar by eye.
+   The stamp galleries are the best candidates.
+
+### Grid 2 — pine tree and 8×8 drawings
+
+Same grid on the taller pine (`14ab226`) plus three cells where strokes are drawn on 8×8 and
+shown 2× enlarged (`canvas_res=8`, commit `35f0986`): the owner's hypothesis that a coarser
+drawing pushes toward simplified pictographs rather than faithful renderings. Results pending.
 
 ## What the plan predicts
 
