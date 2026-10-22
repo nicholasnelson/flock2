@@ -166,44 +166,50 @@ def _pad(s: np.ndarray, h: int, w: int) -> np.ndarray:
 
 SHEEP_FRONT_R = _parse(
     [
-        "..WWWW....",
-        ".WWWWWWss.",
-        "WWWWWWWsPs",
-        "WWWWWWWWss",
-        ".WWWWWWW..",
-        "..K.K.K...",
-        "..K...K...",
+        "....WWWW....",
+        "..WWWWWWWW..",
+        ".WWWWWWWWWW.",
+        ".WWWWWWWWWW.",
+        "WWWWWWWWWWPs",
+        "WWWWWWWWWsss",
+        ".SWWWWWWWsKs",
+        "..SSSSSSSsss",
+        "...K...K.SS.",
+        "...K...K....",
     ]
 )
 SHEEP_BACK_R = _parse(
     [
-        ".......s.s",
-        "..WWWWWWWW",
-        ".WWWWWWWW.",
-        "WWWWWWWWW.",
-        "WWWWWWWW..",
-        ".WWWWWW...",
-        "..K.K.K...",
+        ".........sPs",
+        "........WWss",
+        "......WWWWWW",
+        "....WWWWWWWW",
+        "..WWWWWWWWW.",
+        ".WWWWWWWWWW.",
+        "WWWWWWWWWW..",
+        "WSSSSSSSS...",
+        ".K...K..K...",
+        ".K...K..K...",
     ]
 )
 FOX_FRONT_R = _parse(
     [
-        "......OO..",
-        "WO...OOKO.",
-        "OOO.OOOOOO",
-        ".OOOOOOOO.",
-        "..OOOOOO..",
-        "..K..K.K..",
+        "........O.O.",
+        "WWO....OOOO.",
+        "OOOO..OOOKOO",
+        ".OOOOOOOOOOW",
+        "..OOOOOOOO..",
+        "..K..K.K.K..",
     ]
 )
 FOX_BACK_R = _parse(
     [
-        "......O.O.",
-        ".....OOOO.",
-        "...OOOOOO.",
-        ".OOOOOOO..",
-        "WOOOOOO...",
-        "..K..K.K..",
+        "........O.O.",
+        ".......OOOO.",
+        "....OOOOOOO.",
+        ".WOOOOOOOO..",
+        "WOOOOOOOO...",
+        "OO.K..K.K...",
     ]
 )
 
