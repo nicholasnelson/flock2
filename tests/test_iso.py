@@ -26,7 +26,7 @@ def test_inverse_projection_matches_diamond_sprites():
         centre = np.asarray(iso.tile_screen_centre(jnp.array([-2, 2]), jnp.int32(h)))
         x, y = int(centre[0]), int(centre[1])
         box = v[y - 2 : y + 2, x - 4 : x + 4]
-        water = S.GROUND["water"]
+        water = S.GROUND_VARIANTS["water"][S.tile_variant(10, 14)]
         m = S.DIAMOND
         assert (box[m] == water[m]).all(), h
         # and that is the only water in the view

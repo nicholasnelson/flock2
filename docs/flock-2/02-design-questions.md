@@ -502,6 +502,27 @@ Resolution stays at 64×64 for M0/M1 (decision: keep for now; see the plan for t
 
 Implementation: `flock/iso.py`, `flock/sprites_iso.py`; tests in `tests/test_iso.py`.
 
+### Addendum: foveated vision (full detail near, less far) — recommended for M1
+
+Raised at plan review. Recommendation: **yes, as a two-scale view**, not true log-polar
+foveation. The sheep gets its 64×64 near view at full resolution (16 tiles across) plus a
+second 64×64 "far" view rendered at half scale (32 tiles across), stacked as extra input
+channels. *(Judgement.)*
+
+Why: it doubles the detection range for ≈2× pixel cost instead of the 4× of a 128² view;
+it is the cheapest way to let a fox be noticed far off while a drawing is only *readable*
+close up — which revives Q1's "glyph you notice, then walk to and read" without any action
+or second frame, because a stamp in the far channel is a blurred 8×8 blob and in the near
+channel a full 16×16 mark; and it matches the night-vision and blind-wedge masks, which
+simply apply to both scales. Prey ungulates have a broad low-acuity field with a horizontal
+high-acuity band rather than a fovea, so "wide and coarse plus a sharp region" is the right
+shape biologically too (not verified against a primary source here). The cost is one extra
+render per sheep per tick and a 32-channel instead of 16-channel encoder input; both are
+small. It is an M1 item, not M0: the toy game needs no range.
+
+Implementation sketch: render a 128×128 view with the same gather at tile scale 8×4 and
+stride-2 subsample (or render directly with 4×2 tile boxes); concatenate one-hot channels.
+
 ## Q9. Visibility — whole world, local window, or a cone?
 
 ### Recommendation

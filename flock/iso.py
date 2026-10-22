@@ -32,7 +32,7 @@ from flock.palette import N_COLOURS, TRANSPARENT
 
 TILE_W, TILE_H = S.TILE_W, S.TILE_H
 VIEW = 64
-GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, 4, 8)
+GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, variants, 4, 8)
 OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, BOX_H, BOX_W)
 ANIMAL_STACK = jnp.asarray(S.ANIMAL_STACK)  # (n_animal, 2, BOX_H, BOX_W)
 BOX_H, BOX_W = S.BOX_H, S.BOX_W
@@ -130,7 +130,8 @@ def render_view(
     by = ys - oy - box[..., 1]
     bx = jnp.clip(bx, 0, TILE_W - 1)
     by = jnp.clip(by, 0, TILE_H - 1)
-    ground = GROUND_STACK[state, by, bx]
+    variant = S.tile_variant(jnp.clip(tr, 0, hh - 1), jnp.clip(tc, 0, ww - 1))
+    ground = GROUND_STACK[state, variant, by, bx]
     img = jnp.where(inside, ground, 0).astype(jnp.uint8)
 
     # --- sprites, back to front -----------------------------------------------------------
@@ -197,7 +198,7 @@ def render_world(tile_map: jax.Array, objects: Objects, agents: Agents, pad: int
         for c in range(ww):
             x = ox + (c - r) * (TILE_W // 2)
             y = oy + (c + r) * (TILE_H // 2)
-            spr = g[tm[r, c]]
+            spr = g[tm[r, c], S.tile_variant(r, c)]
             m = spr != TRANSPARENT
             img[y : y + TILE_H, x : x + TILE_W][m] = spr[m]
     items = []
