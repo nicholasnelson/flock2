@@ -106,11 +106,27 @@ def test_channel_jitter_moves_the_drawing_and_keeps_ink():
 
     a = jnp.zeros((2, 32, 32)).at[:, 10, 10].set(1.0)
     c = Canvas(colour=jnp.full((2, 32, 32, 16), 1.0 / 16), alpha=a, ink=jnp.array([3.0, 4.0]))
-    moved = game.shift_canvas(c, jax.random.PRNGKey(0), 4)
+    moved = game.transmit(c, jax.random.PRNGKey(0), jitter=4)
     m = np.asarray(moved.alpha)
     assert np.allclose(m.sum((1, 2)), 1.0)  # the mark is still there, once
     for b in range(2):
         y, x = np.argwhere(m[b] > 0.5)[0]
         assert abs(y - 10) <= 4 and abs(x - 10) <= 4
     assert np.allclose(np.asarray(moved.ink), [3.0, 4.0])
-    assert game.shift_canvas(c, jax.random.PRNGKey(0), 0) is c
+    assert game.transmit(c, jax.random.PRNGKey(0)) is c
+
+
+def test_transmit_centres_on_ink_and_rotates():
+    from flock.raster import Canvas
+
+    # a short horizontal dash near the top-left of a 32 px frame, in two drawings
+    a = jnp.zeros((2, 32, 32)).at[:, 3, 2:8].set(1.0)
+    c = Canvas(colour=jnp.full((2, 32, 32, 16), 1.0 / 16), alpha=a, ink=jnp.zeros((2,)))
+    out = np.asarray(game.transmit(c, jax.random.PRNGKey(1), centre=True).alpha)
+    for b in range(2):
+        ys, xs = np.nonzero(out[b] > 0.5)
+        assert abs(ys.mean() - 15.5) <= 1 and abs(xs.mean() - 15.5) <= 1  # centred
+        assert len(ys) == 6  # nothing lost
+    rot = np.asarray(game.transmit(c, jax.random.PRNGKey(2), centre=True, rotate=True).alpha)
+    shapes = {tuple(np.ptp(np.argwhere(r > 0.5), 0)) for r in rot}
+    assert shapes <= {(0, 5), (5, 0)}  # a dash, either way round

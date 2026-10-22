@@ -61,6 +61,7 @@ def rasterise(
     fixed_width: float | None = None,
     stroke_cost: float = 0.0,
     hard_gate: bool = False,
+    min_strokes: int = 0,
 ) -> Canvas:
     """Render strokes to a soft canvas.
 
@@ -70,7 +71,8 @@ def rasterise(
     ``stroke_cost`` per stroke (a pen-lift price, so a zero-length dot is not free); otherwise
     width is free and ink is length + width. With ``hard_gate`` each stroke is fully on or off
     in the forward pass (straight-through gradient), so nothing can be said in faint,
-    half-drawn strokes a viewer cannot see.
+    half-drawn strokes a viewer cannot see. ``min_strokes`` (with ``hard_gate``) forces the
+    strokes the network most wants on to be on, so a drawing is never blank.
     """
     pts = _pixel_centres(size) * size  # pixel coordinates
     ends = jax.nn.sigmoid(strokes.endpoints) * size  # (K, 4)
@@ -80,7 +82,11 @@ def rasterise(
         width = jnp.full(strokes.width.shape, fixed_width)
     gate = jax.nn.sigmoid(strokes.gate)  # (K,)
     if hard_gate:
-        gate = (gate > 0.5).astype(gate.dtype) + gate - jax.lax.stop_gradient(gate)
+        on = (gate > 0.5).astype(gate.dtype)
+        if min_strokes > 0:
+            kth = jnp.sort(strokes.gate)[-min(min_strokes, gate.shape[0])]
+            on = jnp.maximum(on, (strokes.gate >= kth).astype(gate.dtype))
+        gate = on + gate - jax.lax.stop_gradient(gate)
     colour = jax.nn.softmax(strokes.colour / temperature, axis=-1)  # (K, 16)
     if hard_colour:
         hard = jax.nn.one_hot(jnp.argmax(colour, axis=-1), N_COLOURS)

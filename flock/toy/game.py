@@ -59,32 +59,58 @@ def receive(model: Agents, receiver_base: jax.Array, canvas: Canvas, canvas_px: 
     return logits, rv
 
 
-def shift_canvas(canvas: Canvas, key: jax.Array, jitter: int) -> Canvas:
-    """Channel noise: move each drawing by a random whole-pixel offset in [-jitter, jitter]
-    within its frame (what leaves the frame is lost, the freed border is blank), so where in
-    the frame a mark sits can carry no information. Ink is unchanged."""
-    if jitter <= 0:
+def transmit(canvas: Canvas, key: jax.Array, jitter: int = 0, centre: bool = False, rotate: bool = False) -> Canvas:
+    """What the drawing looks like on arrival. ``centre``: moved so its ink centroid is at the
+    middle of the frame (where a mark sits carries no information); then moved by up to
+    ``jitter`` px; ``rotate``: turned by a random multiple of 90 degrees (a ground mark can
+    be read from any side). Ink is unchanged."""
+    if not (centre or rotate) and jitter <= 0:
         return canvas
     b, s = canvas.alpha.shape[0], canvas.alpha.shape[1]
-    d = jax.random.randint(key, (b, 2), -jitter, jitter + 1)
-    J = jitter
+    k1, k2 = jax.random.split(key)
+    d = jax.random.randint(k1, (b, 2), -jitter, jitter + 1) if jitter > 0 else jnp.zeros((b, 2), jnp.int32)
+    if centre:
+        a = jax.lax.stop_gradient(canvas.alpha)
+        idx = jnp.arange(s) + 0.5
+        m = jnp.sum(a, axis=(1, 2))
+        cy = jnp.sum(a * idx[None, :, None], axis=(1, 2)) / jnp.maximum(m, 1e-6)
+        cx = jnp.sum(a * idx[None, None, :], axis=(1, 2)) / jnp.maximum(m, 1e-6)
+        c = jnp.stack([cy, cx], -1)
+        c = jnp.where(m[:, None] > 1e-3, c, s / 2)  # a blank drawing stays put
+        d = d + jnp.round(s / 2 - c).astype(jnp.int32)
+    P = s  # enough padding for any shift that keeps some ink in frame
+    d = jnp.clip(d, -P, P)
+    n = canvas.colour.shape[-1]
 
-    def one(col, a, dd):
-        colp = jnp.pad(col, ((J, J), (J, J), (0, 0)), constant_values=1.0 / col.shape[-1])
-        ap = jnp.pad(a, J)
-        r, c = J - dd[0], J - dd[1]
-        return jax.lax.dynamic_slice(colp, (r, c, 0), (s, s, col.shape[-1])), jax.lax.dynamic_slice(ap, (r, c), (s, s))
+    def move(col, al, dd):
+        colp = jnp.pad(col, ((P, P), (P, P), (0, 0)), constant_values=1.0 / n)
+        ap = jnp.pad(al, P)
+        r, cc = P - dd[0], P - dd[1]
+        return jax.lax.dynamic_slice(colp, (r, cc, 0), (s, s, n)), jax.lax.dynamic_slice(ap, (r, cc), (s, s))
 
-    col, a = jax.vmap(one)(canvas.colour, canvas.alpha, d)
-    return Canvas(colour=col, alpha=a, ink=canvas.ink)
+    col, al = jax.vmap(move)(canvas.colour, canvas.alpha, d)
+    if rotate:
+        k = jax.random.randint(k2, (b,), 0, 4)
+        rot = lambda x, kk: jax.lax.switch(kk, [lambda v: v, lambda v: jnp.rot90(v, 1), lambda v: jnp.rot90(v, 2), lambda v: jnp.rot90(v, 3)], x)
+        col, al = jax.vmap(rot)(col, k), jax.vmap(rot)(al, k)
+    return Canvas(colour=col, alpha=al, ink=canvas.ink)
 
 
-def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False, jitter: int = 0) -> Forward:
-    """Sender draws, receiver reads. With ``jitter`` the drawing the receiver sees is moved
-    within its frame (channel noise); ``Forward.canvas`` is the drawing as drawn."""
+def channel_args(cfg) -> dict:
+    """How a drawing is transformed on its way to the reader (and the judge), from a config."""
+    return dict(
+        jitter=getattr(cfg, "jitter_px", 0),
+        centre=getattr(cfg, "centre_glyph", False),
+        rotate=getattr(cfg, "rotate_stamps", False) and cfg.mode == "stamp",
+    )
+
+
+def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False, jitter: int = 0, centre: bool = False, rotate: bool = False) -> Forward:
+    """Sender draws, receiver reads the drawing as it arrives through ``transmit`` (centring,
+    jitter, rotation); ``Forward.canvas`` is the drawing as drawn."""
     sv = world.to_onehot(ep.sender_view)
     canvas, emb_s = draw(model, sv, key, hard)
-    shown = shift_canvas(canvas, jax.random.fold_in(key, 7), jitter) if jitter > 0 else canvas
+    shown = transmit(canvas, jax.random.fold_in(key, 7), jitter, centre, rotate) if (jitter > 0 or centre or rotate) else canvas
     logits, rv = receive(model, ep.receiver_base, shown, ep.canvas_px, opaque)
     return Forward(logits=logits, canvas=canvas, sender_emb=emb_s, receiver_view=rv)
 

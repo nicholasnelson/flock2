@@ -95,7 +95,7 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
     ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.eval_batch)))
     opaque = cfg.opaque
 
-    fwd = game.forward(model, ep, k_s, opaque, hard=True, jitter=cfg.jitter_px)
+    fwd = game.forward(model, ep, k_s, opaque, hard=True, **game.channel_args(cfg))
     ce, acc = game.success_loss(fwd.logits, ep.target_mask)
     b = cfg.eval_batch
     p_real = jax.nn.softmax(fwd.logits.reshape(b, -1), -1)
@@ -120,6 +120,7 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
         "acc_swapped": float(acc_swap),
         "cic_kl": float(jnp.mean(kl)),
         "ink": float(jnp.mean(fwd.canvas.ink)),
+        "blank_frac": float(jnp.mean(fwd.canvas.ink < 1e-3)),
         "alpha_mean": float(jnp.mean(fwd.canvas.alpha)),
         "chance": 1.0 / cfg.n_candidates,
     }
@@ -136,6 +137,6 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
     if getattr(cfg, "variation", False):
         # the same game on the training variants, for the seen/unseen gap
         ep_seen = envs.make_batch(cfg, jax.random.fold_in(k_ep, 1), cfg.eval_batch, held_out=False)
-        f_seen = game.forward(model, ep_seen, k_s, opaque, hard=True, jitter=cfg.jitter_px)
+        f_seen = game.forward(model, ep_seen, k_s, opaque, hard=True, **game.channel_args(cfg))
         out["acc_seen"] = float(jnp.mean(game.success_loss(f_seen.logits, ep_seen.target_mask)[1]))
     return out

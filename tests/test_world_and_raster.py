@@ -142,3 +142,15 @@ def test_hard_gate_is_all_or_nothing_with_a_gradient():
     assert float(half_on.alpha.max()) > 0.75 and float(half_off.alpha.max()) < 1e-6
     g = jax.grad(lambda g: jnp.sum(f(g).alpha))(jnp.array([0.3]))
     assert float(jnp.abs(g).sum()) > 0
+
+
+def test_min_strokes_keeps_the_strongest_stroke_on():
+    from flock.raster import Strokes, rasterise
+
+    e = jnp.array([[-2.0, 0.0, 2.0, 0.0], [0.0, -2.0, 0.0, 2.0]])
+    st = Strokes(endpoints=e, width=jnp.zeros(2), colour=jnp.zeros((2, 16)), gate=jnp.array([-3.0, -1.0]))  # both "off"
+    off = rasterise(st, size=32, fixed_width=2.0, hard_gate=True)
+    one = rasterise(st, size=32, fixed_width=2.0, hard_gate=True, min_strokes=1)
+    assert float(off.alpha.max()) < 1e-6
+    a = np.asarray(one.alpha)
+    assert a.max() > 0.75 and (a[:, 16] > 0.5).sum() > 10 and (a[16, :] > 0.5).sum() <= 3  # the vertical one (gate -1)

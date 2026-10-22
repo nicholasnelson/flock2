@@ -59,6 +59,11 @@ class Config:
     #   The sheep's own perception is pre-trained without it (strong invariance blinds the receiver).
     variation: bool = False  # instance variation: sprite variants, sub-tile offsets, scales; held-out variants for eval; iso only
     jitter_px: int = 0  # channel noise: the drawing is moved by up to this many px within its frame when read or judged
+    centre_glyph: bool = False  # the channel re-centres each drawing on its ink centroid (before jitter)
+    rotate_stamps: bool = False  # in stamp mode, the channel turns each drawing by a random multiple of 90 degrees
+    min_strokes: int = 0  # with hard_gate: at least this many strokes are always on (no blank drawings)
+    blank_weight: float = 0.0  # penalty weight on drawings with less than blank_ink px of ink
+    blank_ink: float = 8.0  # px of ink below which the blank penalty applies (one short stroke)
     pretrain_steps: int = 1500
     steps: int = 4000
     batch: int = 64
@@ -191,13 +196,17 @@ def make_game_step(cfg: Config):
     @nnx.jit
     def step(model: Agents, judge: Encoder, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array, ink_scale: jax.Array):
         def loss_fn(m: Agents):
-            fwd = game.forward(m, ep, key, cfg.opaque, jitter=cfg.jitter_px)
+            fwd = game.forward(m, ep, key, cfg.opaque, **game.channel_args(cfg))
             ce, acc = game.success_loss(fwd.logits, ep.target_mask)
             loss = jnp.mean(ce)
             aux = {"ce": jnp.mean(ce), "acc": jnp.mean(acc), "ink": jnp.mean(fwd.canvas.ink)}
             loss = loss + ink_scale * cfg.ink_weight * jnp.mean(fwd.canvas.ink)
+            if cfg.blank_weight > 0:
+                blank = jnp.mean(jax.nn.relu(cfg.blank_ink - fwd.canvas.ink))
+                aux["blank"] = blank
+                loss = loss + cfg.blank_weight * blank
             if cfg.perceptual_weight > 0:
-                judged = game.shift_canvas(fwd.canvas, jax.random.fold_in(key, 11), cfg.jitter_px)
+                judged = game.transmit(fwd.canvas, jax.random.fold_in(key, 11), **game.channel_args(cfg))
                 pl = game.perceptual_loss(judge, judged, world.to_onehot(ep.sender_view), ground, envs.probe_px(cfg, ep))
                 aux["perceptual"] = pl
                 loss = loss + cfg.perceptual_weight * pl
@@ -268,6 +277,7 @@ def train(cfg: Config) -> dict:
         stroke_width=cfg.stroke_width or None,
         stroke_cost=cfg.stroke_cost,
         hard_gate=cfg.hard_gate,
+        min_strokes=cfg.min_strokes,
         view=E.VIEW,
         canvas=E.CANVAS,
     )
