@@ -72,8 +72,12 @@ class Decoder(nnx.Module):
 class StrokeSender(nnx.Module):
     """Embedding -> K stroke primitives -> rasterised canvas."""
 
-    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256):
+    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256, res: int = CANVAS):
+        """``res`` < CANVAS draws on a coarser canvas that is enlarged (nearest-neighbour) to
+        CANVAS x CANVAS: same footprint in the view, chunkier pixels."""
+        assert CANVAS % res == 0, (CANVAS, res)
         self.k = k_strokes
+        self.res = res
         self.h1 = nnx.Linear(EMBED, hidden, rngs=rngs)
         self.h2 = nnx.Linear(hidden, hidden, rngs=rngs)
         per = 4 + 1 + N_COLOURS + 1
@@ -93,7 +97,14 @@ class StrokeSender(nnx.Module):
 
     def __call__(self, emb: jax.Array, hard_colour: bool = False) -> Canvas:
         s = self.strokes(emb)
-        return jax.vmap(lambda st: rasterise(st, hard_colour=hard_colour))(s)
+        canvas = jax.vmap(lambda st: rasterise(st, size=self.res, hard_colour=hard_colour))(s)
+        f = CANVAS // self.res
+        if f == 1:
+            return canvas
+        up = lambda x: jnp.repeat(jnp.repeat(x, f, axis=1), f, axis=2)
+        # ink is measured in the coarse canvas's pixels; scale it to displayed pixels so the
+        # ink cost means the same thing at every resolution
+        return Canvas(colour=up(canvas.colour), alpha=up(canvas.alpha), ink=canvas.ink * f)
 
 
 class LatentSender(nnx.Module):
@@ -196,11 +207,13 @@ class Receiver(nnx.Module):
 class Agents(nnx.Module):
     """All M0 parameters in one module so optax can treat them uniformly."""
 
-    def __init__(self, rngs: nnx.Rngs, action_space: str = "strokes", k_strokes: int = 8, shared_encoder: bool = True, width: int = 32):
+    def __init__(self, rngs: nnx.Rngs, action_space: str = "strokes", k_strokes: int = 8, shared_encoder: bool = True, width: int = 32, canvas_res: int = CANVAS):
         self.encoder = Encoder(rngs, width)
         self.decoder = Decoder(rngs, width)
+        if canvas_res != CANVAS and action_space != "strokes":
+            raise ValueError("canvas_res is only implemented for the stroke sender")
         if action_space == "strokes":
-            self.sender = StrokeSender(rngs, k_strokes)
+            self.sender = StrokeSender(rngs, k_strokes, res=canvas_res)
         elif action_space == "latent":
             self.sender = LatentSender(rngs)
         elif action_space == "pixels":

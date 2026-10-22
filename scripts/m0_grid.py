@@ -6,6 +6,7 @@ The grid tests, per the plan:
   2. with vs without the perceptual (resemblance) loss
   3. stroke head vs latent decoder vs pixel head
   4. bubble vs stamp
+  5. drawing resolution: 16x16 vs 8x8 shown 2x enlarged
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -37,6 +38,10 @@ CELLS = {
     "pixels_perc": dict(action_space="pixels", perceptual_weight=1.0),
     "shared_perc_aux": dict(shared_encoder=True, perceptual_weight=1.0, listening_weight=0.1, signalling_weight=0.1),
     "shared_noperc_aux": dict(shared_encoder=True, perceptual_weight=0.0, listening_weight=0.1, signalling_weight=0.1),
+    # coarse drawing: strokes drawn on 8x8 and shown 2x enlarged in the same 16x16 slot
+    "shared_noperc_c8": dict(shared_encoder=True, perceptual_weight=0.0, canvas_res=8),
+    "shared_perc_c8": dict(shared_encoder=True, perceptual_weight=1.0, canvas_res=8),
+    "shared_perc_stamp_c8": dict(shared_encoder=True, perceptual_weight=1.0, mode="stamp", canvas_res=8),
 }
 
 KEYS = ["acc", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]

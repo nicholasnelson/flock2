@@ -35,6 +35,7 @@ class Config:
     # model
     action_space: str = "strokes"  # "strokes" | "latent" | "pixels"
     k_strokes: int = 8
+    canvas_res: int = 16  # strokes are drawn at this resolution, then enlarged to the 16x16 canvas
     shared_encoder: bool = True
     freeze_encoder: bool = True
     width: int = 32
@@ -182,7 +183,7 @@ def train(cfg: Config) -> dict:
     E = envs.get(cfg)
     key = jax.random.PRNGKey(cfg.seed)
     key, k_model, k_pre, k_judge = jax.random.split(key, 4)
-    model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width)
+    model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width, cfg.canvas_res)
 
     # Phase 1
     pretrain(model, cfg, k_pre, log)

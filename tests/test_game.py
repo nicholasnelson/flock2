@@ -49,3 +49,21 @@ def test_signalling_and_listening_losses():
     l0, _ = game.receive(m, ep.receiver_base, blank, ep.canvas_px, True)
     l = game.listening_loss(fwd.logits, l0)
     assert float(l) <= 0.0
+
+
+def test_coarse_canvas_is_blocky_and_trainable():
+    m = Agents(nnx.Rngs(0), action_space="strokes", k_strokes=4, width=8, canvas_res=8)
+    ep = env.make_batch(jax.random.PRNGKey(0), 2, 3, "bubble")
+    fwd = game.forward(m, ep, jax.random.PRNGKey(1), opaque=True)
+    a = np.asarray(fwd.canvas.alpha)
+    assert a.shape == (2, 16, 16)
+    # every 2x2 block is one coarse pixel
+    assert np.allclose(a[:, ::2, ::2], a[:, 1::2, 1::2]) and np.allclose(a[:, ::2, ::2], a[:, ::2, 1::2])
+    assert a.max() > 0.1
+
+    def loss(mm):
+        f = game.forward(mm, ep, jax.random.PRNGKey(1), opaque=True)
+        return jnp.mean(game.success_loss(f.logits, ep.target_mask)[0])
+
+    g = nnx.grad(loss)(m)
+    assert any(float(jnp.abs(x).sum()) > 0 for x in jax.tree_util.tree_leaves(g.sender))
