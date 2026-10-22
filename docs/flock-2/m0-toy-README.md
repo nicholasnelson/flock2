@@ -295,6 +295,63 @@ What this shows:
 
 Galleries: `runs/m0/grid_mono_galleries.png` (local).
 
+### Grid 4 — the 128 × 128 world with line drawings (2026-10-23)
+
+The world was redrawn and the pipeline ported (commits `e175053`, `9ce10b1`): 16×8 px tiles,
+a 128² view (same 16-tile range), referents reduced to four distinct silhouettes (a
+sharp-edged salt-lick cube, a pine, a star flower, the fox), and the drawing is a 32×32 px area
+covering a sprite's footprint. Strokes are now black lines of fixed 2 px width, rasterised
+directly at 32×32. Chance is 0.25 for accuracy and for the probes (four types).
+
+Two loopholes had to be closed first, both found in the galleries, not the numbers (`6a6765f`):
+
+- *Free dots.* With ink = length only, a zero-length stroke still draws a 2 px dot, and the
+  sender drew dot constellations (a position code). Each stroke now costs a pen-lift price of
+  4 px on top of its length (`stroke_cost`).
+- *Faint strokes.* The sender then drew flower and fox as "blank" but separated them with
+  half-on strokes (alpha < 0.5): the receiver could read them, a person could not. Strokes are
+  now fully on or off in the forward pass with a straight-through gradient (`hard_gate`), the
+  on/off gate the plan specified.
+
+Cells: cost weight per px of ink {0.002, 0.01, 0.03} × bubble/stamp × resemblance loss on/off;
+colour-dropout judge; 3 seeds.
+
+| cell | acc | acc_blank | acc_swapped | CIC | judge_probe | ink (px) |
+| --- | --- | --- | --- | --- | --- | --- |
+| line_perc_bubble_ink002 | 1.00±0.00 | 0.25±0.01 | 0.00±0.00 | 5.5±0.8 | **0.80±0.01** | 29.4 |
+| line_noperc_bubble_ink002 | 0.75±0.35 | 0.26±0.01 | 0.09±0.12 | 5.1±3.6 | 0.25±0.02 | 4.3 |
+| line_perc_stamp_ink002 | 1.00±0.00 | 0.25±0.02 | 0.00±0.00 | 8.4±2.0 | **0.76±0.02** | 31.3 |
+| line_noperc_stamp_ink002 | 1.00±0.00 | 0.24±0.01 | 0.00±0.00 | 3.0±0.3 | 0.26±0.03 | 8.8 |
+| line_perc_bubble_ink01 | 0.88±0.15 | 0.24±0.03 | 0.02±0.03 | 4.4±0.5 | 0.27±0.02 | 6.1 |
+| line_noperc_bubble_ink01 | 0.43±0.25 | 0.27±0.03 | 0.22±0.07 | 1.4±1.9 | 0.25±0.02 | 1.2 |
+| line_perc_stamp_ink01 | 0.61±0.28 | 0.25±0.02 | 0.12±0.09 | 1.9±1.6 | 0.25±0.02 | 2.6 |
+| line_noperc_stamp_ink01 | 0.88±0.14 | 0.25±0.02 | 0.03±0.04 | 1.8±0.5 | 0.25±0.01 | 4.5 |
+| line_perc_bubble_ink03 | 0.26±0.01 | 0.26±0.01 | 0.28±0.02 | 0.0±0.0 | 0.25±0.02 | 0.0 |
+| line_noperc_bubble_ink03 | 0.25±0.01 | 0.25±0.01 | 0.26±0.01 | 0.0±0.0 | 0.25±0.02 | 0.0 |
+| line_perc_stamp_ink03 | 0.51±0.34 | 0.27±0.00 | 0.20±0.13 | 0.7±1.1 | 0.24±0.01 | 1.4 |
+| line_noperc_stamp_ink03 | 0.48±0.20 | 0.27±0.01 | 0.20±0.07 | 0.6±0.5 | 0.24±0.01 | 1.1 |
+
+What this shows:
+
+1. **With the resemblance loss and a low cost (0.002), the drawings are line pictographs**,
+   consistent across all four seeds inspected (bubble and stamp, seeds 0 and 1)
+   *(judgement, from the galleries)*: the pine is one long near-vertical line (leaning `/`;
+   one seed adds a branch, a `Y`); the fox is one long low horizontal line along the bottom;
+   the flower is a small tick in the middle; the salt lick is two or three short strokes near
+   the top, often a chevron like the cube's top edges. About 30 px of line per drawing, i.e.
+   three to five strokes. Communication is perfect and causally used (swapped → 0.00).
+2. **Without it, the code is positional**: tiny ticks in type-specific places, judge at chance.
+   With line drawings the shared encoder alone produces no resemblance, in either mode.
+3. **The cost weight is a cliff, not a dial.** At 0.01 senders often give up drawing and
+   communication becomes unreliable; at 0.03 they draw nothing (ink 0) and accuracy is at
+   chance. Likely mechanism *(judgement)*: once every gate is off, a straight-through gate gets
+   no gradient that would turn a stroke back on at a profit, so the drawing cannot recover.
+   The useful range is at or below ~0.005; finer steps there are untested.
+4. **The judge probe is informative again** (0.80 vs 0.25, and at chance where drawings are
+   positional), unlike the saturated 0.99 of the free-width blobs.
+
+Galleries: `runs/m0/grid_line_galleries.png` (local).
+
 ## What the plan predicts
 
 From the literature (see `02-design-questions.md` Q2 and the survey §4): `shared_noperc` will
