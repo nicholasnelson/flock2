@@ -26,8 +26,8 @@ evidence in [`01-research-survey.md`](01-research-survey.md) and [`research/`](r
 | 4 | Ground marks and channel specialisation | Do marks carry information; does sound take urgency? | Persistent glyphs on the meadow; the two-channel experiment | ~20 GPU-h |
 | 5 | Relationships | Do reciprocity, grudges, honesty/deception emerge? | Trust graph; betrayals | ~10 GPU-h |
 | 6 | Generations | Does the language structure and persist across cohorts? | Lamb cohorts learning from elders; dialect plots | ~20–40 GPU-h |
-| 7 | Integration and soak | Does it run for weeks on the installation hardware? | The installation | CPU, weeks of wall-clock |
-| 8 | Optional extras | Narration; frozen learned fox; migrants | — | small |
+| 7 | Long run on the desktop | Does it run unattended for weeks with a viewer window? | The meadow running live on the desktop | GPU, weeks of wall-clock |
+| 8 | Deferred | Installation hardening, documentary camera/curator, narration, frozen learned fox, migrants | — | — |
 
 GPU-hours are on the desktop's RTX 4080 (16 GB), which is within ~20–30% of the RTX 4090 the
 published throughput figures use (**Estimate**; the 4080 has fewer SMs and less bandwidth, and 16
@@ -47,16 +47,18 @@ and the installation host, there is no cloud, and v0.4's Rust/Pi requirements ar
   written once as a batched, pure-functional environment; offline it runs thousands of copies in
   parallel, live it runs one copy at a few Hz with the same code. There is no second
   implementation, no ONNX export and no Rust ML runtime.
-- **Framework: JAX by default** (vmapped gridworld + DreamerV3 lineage), **PyTorch if you prefer
-  it** — a question put to you below. The differentiable rasteriser, auxiliary losses and metrics
-  are fine in either. The choice is made before M0 and not revisited.
+- **Framework: JAX** (decided at plan review). Vmapped gridworld + DreamerV3 lineage; the
+  differentiable rasteriser, auxiliary losses and metrics are all plain JAX.
 - **Perception at 4 px/tile, 64×64 egocentric heading-aligned view, 16×16 canvas** from M0
   onward (Q8, Q9), so every milestone's result transfers. Rendering 64×64 views inside the
   vectorised sim is the throughput bottleneck to budget for; views are rendered from a palette
   index map by gather, not by a rasteriser.
-- **The renderer is a separate process** fed by a state stream (positions, sprites, marks,
-  bubbles, telemetry) over a local socket. It can be a native window on the desktop driving the
-  TV directly, or the Pi/WASM path, or both — a question for you below. Nothing in M0–M6 needs it.
+- **Viewing is a simple desktop window**, not an installation. A viewer process (or an in-process
+  window) draws the meadow from a state stream (positions, headings, sprites, marks, bubbles,
+  bleat parameters, telemetry) and synthesises bleat audio live from the learned parameters. The
+  state stream is kept as the boundary so that an installation renderer, a Pi kiosk or a
+  documentary camera can be added later without re-architecting. Installation concerns
+  (kiosk, secondary display, degradation ladder) are deferred.
 - **Replay and checkpoints on disk.** 64×64 palette views are 2 KB per step; buffers of ~10⁶
   steps per flock in RAM, older data on disk.
 - **Every milestone logs the same telemetry schema** from day one (per-sheep drives, surprise
@@ -412,46 +414,37 @@ GPU work.
 
 ---
 
-## Milestone 7 — integration and soak
+## Milestone 7 — long run on the desktop
 
-**Goal.** Turn the M6 system into the installation: a supervised long-running process on the
-desktop, a decoupled renderer driving the TV, persistence, the documentary camera with an FM
-curator, graceful degradation, and a multi-week soak test.
+**Goal.** The M6 system running live on the desktop for weeks: one meadow at a wall-clock tick,
+a viewer window with audio, persistence with rollback, and a soak test of the learning population.
 
 **Approach.**
 
-- *Process shape.* One Python process (`flock-live`) runs the single live meadow, batched
+- *Process shape.* One Python/JAX process (`flock-live`) runs the single live meadow, batched
   inference for all sheep, the social tables, the lamb imitation step, optional online
-  fine-tuning, telemetry and the camera, under a supervisor (systemd) with periodic checkpoints.
-  It is the same code path as training with batch size 1 meadow and a wall-clock tick.
-- *Renderer.* A separate process consuming a state stream over a local socket: positions,
-  headings, sprites, ground marks, bubbles, bleat parameters (for audio synthesis), camera
-  choice and overlay data (expected-view ghost, surprise, trust graph, caption cards). The
-  display path (native window on the desktop → TV, or Pi/WASM, or a secondary display) is a 2.0
-  design question below and does not affect the brain.
+  fine-tuning and telemetry, with periodic checkpoints. It is the same code path as training with
+  one meadow and a wall-clock tick.
+- *Viewer.* A window drawing the meadow from the state stream, with overlays for the internal
+  scalars (expected-view ghost for a selected sheep, surprise, trust graph, language metrics) and
+  live bleat synthesis from the learned parameters. Whole meadow, no cutting; the documentary
+  camera is deferred and plugs into the same stream later.
 - *Persistence.* Snapshot the whole state (weights, recurrent states, social tables, danger
   buffer, genome archive, marks on the ground, population) on a schedule, with checkpoint
   rollback driven by the behavioural watchdog from M1.
-- *Documentary camera.* Candidate shots scored by a Motif-style distilled interest model over
-  ground-truth captions, with event triggers on the telemetry (surprise spikes, cohort birth,
-  trust drop, dialect split, fox entry); an optional OMNI-style periodic LLM judge. ASAL-style
-  CLIP novelty as one feature among several, not the driver.
-- *Graceful degradation.* The installation must keep running with learning off, with the curator
-  off, with the fox off, and with any single channel disabled; each is a flag.
-- *Soak.* A two- to four-week unattended run on the desktop with learning on, watching the
-  watchdog, plasticity remedies (weight decay + LayerNorm, dormant-unit reinitialisation,
-  periodic head resets with buffer retained) and rollback. This is the only place months-long
-  behaviour of a learning population can be measured; nobody has published it. The desktop is
-  also the training machine, so the soak must coexist with (or be scheduled around) further
-  offline runs; the GPU budget split is decided here.
+- *Soak.* A two- to four-week unattended run with learning on, watching the watchdog,
+  plasticity remedies (weight decay + LayerNorm, dormant-unit reinitialisation, periodic head
+  resets with buffer retained) and rollback. This is the only place months-long behaviour of a
+  learning population can be measured; nobody has published it. The desktop is also the training
+  machine, so the soak coexists with further offline runs.
 
 **Success criteria.**
 
 - Two weeks unattended with no watchdog rollback more than once a week, population within
   bounds, per-channel CIC and topographic similarity not degrading, fox success in band.
 - Process restart from checkpoint loses less than one in-game hour of state.
-- Camera picks shots a viewer agrees are interesting (a small informal study is enough).
-- Every degradation flag exercised.
+- The viewer is watchable for an hour without the viewer feeling they have seen everything
+  (informal, but it is the point).
 
 **Compute.** The desktop GPU, shared with any remaining offline work; wall-clock weeks.
 
@@ -460,21 +453,27 @@ curator, graceful degradation, and a multi-week soak test.
 - Online learning degrades behaviour over weeks: turn the online train ratio down or off; the
   system is designed to work frozen.
 - GPU contention between the live process and offline runs: pin the live process to a fixed
-  memory budget; run offline sweeps at night with the live tick unaffected (it needs a tiny
-  fraction of the GPU).
-- Python process stability over weeks: supervisor + checkpoints; the renderer is separate so a
+  memory budget; the live tick needs a tiny fraction of the GPU.
+- Python process stability over weeks: supervisor + checkpoints; the viewer is separable so a
   brain restart is a brief freeze, not a blank screen.
 
 ---
 
-## Milestone 8 — optional extras
+## Milestone 8 — deferred
 
-- **Grounded narration** via the local small LLM (Q6), fed captions that only assert what the
-  telemetry supports.
+Not planned now; all are additive on top of the state stream and telemetry, none needs
+re-architecting.
+
+- **Installation hardening**: kiosk/TV display path (desktop-direct or Pi), secondary display,
+  graceful-degradation ladder, supervisor.
+- **Documentary camera and curator** (Q6): telemetry-triggered cuts, a Motif-style distilled
+  interest scorer over ground-truth captions, caption cards.
+- **Grounded narration** via a local small LLM, fed captions that only assert what the telemetry
+  supports.
 - **Frozen learned fox**: trained offline against a league of sheep snapshots, then frozen and
   governed like the scripted one.
 - **Migrants and seasons** as scheduled non-stationarity.
-- **A "lab" overlay** showing the live metrics plainly, for the viewer who wants the science.
+- **A "lab" overlay** showing the live metrics plainly.
 
 ---
 
@@ -490,24 +489,15 @@ curator, graceful degradation, and a multi-week soak test.
 5. **M0 referent set.** K ≈ 6 object types × 4 directions; no specific objects requested.
 6. **Human-readability test.** At least two people (you plus one other).
 
-## 2.0 architecture questions still to answer
+7. **Framework.** JAX.
+8. **Scope.** Not an installation for now: it runs on the desktop with a viewer window. Kiosk,
+   Pi, secondary display and degradation ladder are deferred (M8).
+9. **Documentary camera** deferred (M8); the telemetry schema and state stream it needs are built
+   from M0 so it can be added without re-architecting.
+10. **Sound.** Live synthesis of bleats from the learned parameters.
 
-These replace the v0.4 carry-over questions. None blocks M0 except the first.
+## Still open (none blocks M0)
 
-1. **Framework.** JAX (recommended for the vectorised sim and world model) or PyTorch (if you are
-   much more at home there)? Decided once, before M0.
-2. **Display path.** Does the TV hang off the desktop directly (renderer as a native window;
-   simplest, and the Pi is retired), or does the Pi stay as a WASM/Chromium kiosk fed by a
-   state stream over the network (keeps the TV physically separate from the desktop)? Or both?
-3. **Secondary display.** Is an ESP32 (or any) secondary display wanted in 2.0? If so, what should
-   it show — trust graph, language metrics, the "expected view" of the sheep on camera?
-4. **Sound output.** Bleats are rendered for the audience; is there a speaker in the installation,
-   and should bleat audio be synthesised live (a few parameters → a simple synth) or from a bank
-   of samples?
-5. **Persistence expectations.** How long an outage is acceptable on a restart (checkpoint
-   cadence), and should the installation be able to resume mid-night with the fox in the field?
-6. **Documentary camera.** Keep the concept of a camera that picks what to show (shots,
-   follow-cam, caption cards), or show the whole meadow with overlays and no cutting? This
-   decides whether M7 builds the curator at all.
-7. **Graceful degradation.** Which failure modes must the show survive visibly intact — brain
-   restart, learning off, GPU unavailable (CPU fallback at reduced flock size)?
+- **Persistence cadence** for M7: acceptable loss on a restart, and whether the live run should
+  resume mid-night with the fox in the field.
+- **Sprite set and palette**: designed during M0; you may want a say in the look before M1.
