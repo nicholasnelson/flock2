@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
+import functools
+
 import jax
 import jax.numpy as jnp
 
@@ -120,11 +122,13 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
     )
 
 
+@functools.partial(jax.jit, static_argnames=("batch", "n_candidates", "mode", "random_heading"))
 def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "bubble", random_heading: bool = True) -> Episode:
     keys = jax.random.split(key, batch)
     return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading))(keys)
 
 
+@functools.partial(jax.jit, static_argnames=("batch",))
 def object_views(key: jax.Array, batch: int) -> tuple[jax.Array, jax.Array]:
     """Views with a single centred object of a random type on plain ground (for perception
     pre-training and the iconicity probes). Returns (views (B,64,64), types (B,))."""
@@ -143,6 +147,7 @@ def object_views(key: jax.Array, batch: int) -> tuple[jax.Array, jax.Array]:
     return jax.vmap(one)(jax.random.split(key, batch))
 
 
+@jax.jit
 def plain_ground_view(key: jax.Array) -> jax.Array:
     pos = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
     tm = world.random_ground(key, WORLD_TILES, WORLD_TILES)
