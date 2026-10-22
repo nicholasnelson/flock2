@@ -9,6 +9,7 @@ The grid tests, per the plan:
   5. drawing resolution: 16x16 vs 8x8 shown 2x enlarged
   6. black-only drawing, with and without colour-dropout perception pre-training
   7. (128 world) fixed-width lines, sweeping the cost per unit length
+  8. (128 world) instance variation x channel jitter x invariant judge, lines at cost 0.002
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -65,7 +66,20 @@ for _ink, _tag in [(0.002, "002"), (0.01, "01"), (0.03, "03")]:
                 mono=True, stroke_width=2.0, stroke_cost=4.0, hard_gate=True, pretrain_colour_dropout=0.5, perceptual_weight=_pw, mode=_mode, ink_weight=_ink
             )
 
-KEYS = ["acc", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]
+# Instance variation (variants, offsets, scales; eval on held-out variants) x channel jitter x a
+# separate invariant judge. Lines at cost 0.002 with the cost held off for 1,500 steps (without
+# the delay hard-gated strokes die before the receiver learns to read).
+_LINE = dict(mono=True, stroke_width=2.0, stroke_cost=4.0, hard_gate=True, pretrain_colour_dropout=0.5, ink_weight=0.002, ink_delay_steps=1500)
+for _v in (False, True):
+    for _j in (False, True):
+        for _i in (False, True):
+            _name = "inv3_" + ("V" if _v else "v") + ("J" if _j else "j") + ("I" if _i else "i")
+            CELLS[_name] = dict(_LINE, perceptual_weight=1.0, mode="bubble", variation=_v, jitter_px=4 if _j else 0, judge_invariance=1.0 if _i else 0.0)
+CELLS["inv3_VJI_noperc"] = dict(_LINE, perceptual_weight=0.0, mode="bubble", variation=True, jitter_px=4, judge_invariance=1.0)
+CELLS["inv3_VJI_stamp"] = dict(_LINE, perceptual_weight=1.0, mode="stamp", variation=True, jitter_px=4, judge_invariance=1.0)
+
+
+KEYS = ["acc", "acc_seen", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]
 
 
 def main():

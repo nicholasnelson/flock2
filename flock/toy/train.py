@@ -18,7 +18,7 @@ import optax
 from flax import nnx
 
 from flock import world
-from flock.nets import Agents, Encoder
+from flock.nets import Agents, Decoder, Encoder
 from flock.toy import env, envs, game, metrics
 from flock.toy.gallery import export_run_gallery
 
@@ -47,13 +47,16 @@ class Config:
     perceptual_weight: float = 0.0
     ink_weight: float = 0.002
     ink_ramp_steps: int = 1000  # ink cost ramps linearly from 0 to ink_weight over this many steps
+    ink_delay_steps: int = 0  # no ink cost at all for this many game steps, then the ramp (lets reading get started
+    #   before any cost: with Adam even a tiny consistent ink gradient switches hard-gated strokes off)
     sender_warmup_steps: int = 0  # "iconic initialisation": steps of perceptual-only training of the sender before the game
     listening_weight: float = 0.0
     signalling_weight: float = 0.0
     # training
     pretrain_colour_dropout: float = 0.0  # P(an object in a pre-training view is a silhouette); iso only
-    judge_invariance: float = 0.0  # >0: perception pre-training with shift/flip/scale/blur and this weight pulling
-    #   augmented embeddings to the clean one, so the judge (and perception) see shape, not placement; iso only
+    judge_invariance: float = 0.0  # >0: the judge is a separate encoder, pre-trained with shift/flip/scale/blur and
+    #   this weight pulling augmented embeddings to the clean one, so it sees shape, not placement; iso only.
+    #   The sheep's own perception is pre-trained without it (strong invariance blinds the receiver).
     variation: bool = False  # instance variation: sprite variants, sub-tile offsets, scales; held-out variants for eval; iso only
     jitter_px: int = 0  # channel noise: the drawing is moved by up to this many px within its frame when read or judged
     pretrain_steps: int = 1500
@@ -107,18 +110,18 @@ def _image_aug(key: jax.Array, inp: jax.Array, tgt: jax.Array) -> tuple[jax.Arra
     return f(inp, d, flip, blur), f(tgt, d, flip, blur)
 
 
-def pretrain_views(key: jax.Array, batch: int, cfg: Config) -> tuple[jax.Array, jax.Array, jax.Array]:
+def pretrain_views(key: jax.Array, batch: int, cfg: Config, invariant: bool = False) -> tuple[jax.Array, jax.Array, jax.Array]:
     """A mix of single-object views and game views (sender and receiver sides).
 
     Returns (inputs, reconstruction targets, anchors). Inputs and targets differ only under
-    colour dropout (silhouettes in, full colour out). Under ``judge_invariance`` the
-    single-object views are also shifted, flipped, blurred and scaled, and ``anchors`` are the
-    same scenes clean and at scale 1; otherwise ``anchors`` are just the inputs."""
+    colour dropout (silhouettes in, full colour out). With ``invariant`` (the judge's
+    pre-training) the single-object views are also shifted, flipped, blurred and scaled, and
+    ``anchors`` are the same scenes clean and at scale 1; otherwise ``anchors`` are the inputs."""
     E = envs.get(cfg)
     k1, k2, k3 = jax.random.split(key, 3)
     n_obj = batch // 2
     if cfg.renderer == "iso":
-        inv = cfg.judge_invariance > 0
+        inv = invariant
         smin = JUDGE_SCALE_MIN if inv else E.SCALE_MIN
         ov_in, ov_tgt, anchor, _ = E.object_views_pretrain(
             k1, n_obj, cfg.pretrain_colour_dropout, variation=cfg.variation or inv, scale_min=smin, variants=cfg.variation
@@ -155,16 +158,26 @@ def pretrain_step(model: Agents, optimizer: nnx.Optimizer, views: jax.Array, tar
     return loss
 
 
-def pretrain(model: Agents, cfg: Config, key: jax.Array, log) -> None:
+def pretrain(model, cfg: Config, key: jax.Array, log, invariance: float = 0.0, phase: str = "pretrain") -> None:
+    """Autoencoder pre-training of ``model.encoder`` / ``model.decoder`` (the sheep's perception,
+    or the separate judge when ``invariance`` > 0)."""
     tx = optax.adamw(cfg.lr)
     opt = nnx.Optimizer(model, tx, wrt=nnx.Param)
     t0 = time.time()
     for step in range(cfg.pretrain_steps):
         key, k = jax.random.split(key)
-        views, targets, anchors = pretrain_views(k, cfg.batch, cfg)
-        loss = pretrain_step(model, opt, views, targets, anchors, jnp.float32(cfg.judge_invariance))
+        views, targets, anchors = pretrain_views(k, cfg.batch, cfg, invariant=invariance > 0)
+        loss = pretrain_step(model, opt, views, targets, anchors, jnp.float32(invariance))
         if step % cfg.log_every == 0 or step == cfg.pretrain_steps - 1:
-            log({"phase": "pretrain", "step": step, "loss": float(loss), "t": time.time() - t0})
+            log({"phase": phase, "step": step, "loss": float(loss), "t": time.time() - t0})
+
+
+class JudgeAE(nnx.Module):
+    """A separate perception autoencoder whose encoder becomes the invariant judge."""
+
+    def __init__(self, rngs: nnx.Rngs, width: int, view: int):
+        self.encoder = Encoder(rngs, width, view)
+        self.decoder = Decoder(rngs, width, view)
 
 
 # ----------------------------------------------------------------------------------------------
@@ -261,8 +274,16 @@ def train(cfg: Config) -> dict:
 
     # Phase 1
     pretrain(model, cfg, k_pre, log)
-    # The judge: a frozen copy of the pre-trained perception encoder that never sees the game.
-    judge: Encoder = nnx.clone(model.encoder)
+    # The judge: a frozen encoder that never sees the game. By default a copy of the pre-trained
+    # perception encoder; with judge_invariance, a separately pre-trained invariant one.
+    if cfg.judge_invariance > 0:
+        # a separate, invariant observer: same architecture, its own pre-training
+        key, k_jae, k_jpre = jax.random.split(key, 3)
+        jae = JudgeAE(nnx.Rngs(k_jae), cfg.width, E.VIEW)
+        pretrain(jae, cfg, k_jpre, log, invariance=cfg.judge_invariance, phase="pretrain_judge")
+        judge: Encoder = jae.encoder
+    else:
+        judge = nnx.clone(model.encoder)
     probe = metrics.fit_type_probe(judge, k_judge, cfg)
 
     # Optional sender warm-up (iconic initialisation)
@@ -293,7 +314,7 @@ def train(cfg: Config) -> dict:
         key, k_ep, k_g, k_s = jax.random.split(key, 4)
         ep = envs.make_batch(cfg, k_ep, cfg.batch)
         ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
-        ink_scale = jnp.float32(min(1.0, step / max(cfg.ink_ramp_steps, 1)))
+        ink_scale = jnp.float32(min(1.0, max(0, step - cfg.ink_delay_steps) / max(cfg.ink_ramp_steps, 1)))
         aux = step_fn(model, judge, opt, ep, ground, k_s, ink_scale)
         if step % cfg.log_every == 0:
             log({"phase": "game", "step": step, **{k: float(v) for k, v in aux.items()}, "t": time.time() - t0})
