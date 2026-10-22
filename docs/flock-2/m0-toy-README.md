@@ -65,6 +65,37 @@ Chance for accuracy is `1 / n_candidates` (0.25 by default).
 - **Readable.** The quiz. Target from the plan: ≥ 35% correct at 6-way (chance 17%), which is
   roughly what the perceptual loss achieved for humans in Mihai & Hare's study at 10-way.
 
+## First results (CPU sandbox, small scale — not the real grid)
+
+Sizes: 300 pre-training steps, 600 game steps, batch 32, 4 candidates, bubble mode, stroke
+sender, perceptual weight 0.5. Roughly 1/40 of the default budget; indicative only.
+
+| Variant | acc | acc_blank | acc_swapped | CIC (KL) | judge_probe_acc | Note |
+| --- | --- | --- | --- | --- | --- | --- |
+| v1: frozen encoder, no canvas pathway | 0.23 | 0.23 | 0.21 | ~0 | 0.11 | No emergence. Ink shrank 21 → 3. |
+| v2: + receiver reads canvas cells, ink ramp (frozen) | **0.70** | 0.30 | 0.13 | **3.4** | 0.11 | Communication emerges; positional code; not iconic. |
+| v2: same, encoder fine-tuned | 0.29 | 0.29 | 0.27 | ~0 | 0.11 | Collapsed: ink → 0.001. |
+
+What was learned, and what changed because of it:
+
+1. **The receiver needs a path from the canvas to its decision.** With the only route being
+   the frozen encoder's 256-d global embedding, nothing emerged in 600 steps. Pooling the
+   shared feature-map cells under the canvas into the receiver's context ("look at the bubble")
+   fixed it immediately. This keeps the shared encoder as the reading pathway; it only tells
+   the receiver *where* the message is, which a sheep would know.
+2. **Ink cost must ramp from zero.** A constant ink penalty erased the drawing before it was
+   useful (ink 21 → 3 with no accuracy gain). Now ramps linearly over `ink_ramp_steps`.
+3. **The resemblance loss must be measured by a frozen judge.** With the encoder trainable and
+   the perceptual loss computed through it, the encoder minimised the loss by ignoring the
+   canvas and the drawing collapsed to nothing. The loss now uses the frozen pre-trained
+   perception encoder (the judge). That is also the honest meaning of "resemblance as
+   perception sees it".
+4. **The literature's prediction held at this scale:** the v2 drawings are a consistent
+   positional code (the same blobs shifted slightly per referent), causally used, with no
+   referent colours and probe accuracy at chance — Mihai & Hare's game-loss-only result.
+   Whether a stronger resemblance term or a sender warm-up ("first learn to draw what you
+   see") produces iconic marks is the next test; see the log for `v3_*` runs.
+
 ## What the plan predicts
 
 From the literature (see `02-design-questions.md` Q2 and the survey §4): `shared_noperc` will
