@@ -363,7 +363,9 @@ rules, trait vectors), lifetime learning for the fast layer. Expect collapse and
 default and build rails: population floor with archive reseeding, resource regrowth floor,
 tuned minimal criterion, difficulty scheduling, a quality-diversity archive. Use a foundation
 model as *camera curator* fed ground-truth captions, never as agent reward and never as a
-pixel-level state estimator. Pre-training compute is tens of dollars on a rented 4090.
+pixel-level state estimator. Pre-training compute at the scales in the literature is tens of
+GPU-hours — tens of dollars if rented, or a few weeks of overnight runs on the desktop's RTX 4080,
+which is the route taken.
 
 **Verdict:** evolution-outer/learning-inner is the right shape; the real risks are ecological
 collapse and observer boredom, not optimisation.
