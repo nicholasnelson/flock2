@@ -30,8 +30,11 @@ when a design choice comes up.
 - Game loss alone gives a positional code, not iconic drawings (judge probe at chance).
 - A trainable encoder plus a perceptual loss computed through it collapses the drawing to
   nothing; the loss now goes through the frozen judge.
-- Perceptual weight 5 (vs 0.5) gave the first above-chance judge probes (~0.30 at step 200).
-  Finals, if they landed before this note was written, are in `m0-toy-README.md`.
+- With the judge-based perceptual loss, all three variants (weight 5; fine-tuned encoder;
+  300-step sender warm-up) reach judge probes of ~2× chance; the warm-up is best (rank 0.53
+  early, 0.40 final, acc 0.80, CIC 4.6). No gallery is human-readable yet: drawings are one or
+  two non-referent colours with small shape differences. Full table and likely causes in
+  `m0-toy-README.md` §"First results".
 
 **What has not been shown**: anything at the default budget; anything on the isometric
 renderer; the separate-encoder, stamp, latent and pixel cells; human readability.
@@ -39,10 +42,15 @@ renderer; the separate-encoder, stamp, latent and pixel cells; human readability
 ## First things to do on the 4080
 
 1. `pip install -U "jax[cuda12]"`, confirm `jax.devices()` is CUDA, `pytest -q`.
-2. One default-size run on each renderer, same seed, perceptual weight 1.0:
-   `python scripts/m0_run.py --renderer iso --perceptual_weight 1.0 --out_dir runs/m0/iso_perc1`
+2. One default-size run on each renderer, same seed, perceptual weight 1.0 with the sender
+   warm-up (the best CPU variant):
+   `python scripts/m0_run.py --renderer iso --perceptual_weight 1.0 --sender_warmup_steps 1000 --out_dir runs/m0/iso_warm`
    and the same with `--renderer topdown`. Look at `gallery.png` and `views.png` before
    reading numbers. If iso is broken in a way the tests did not catch, the views will show it.
+   If galleries are still single-colour blobs at full budget, the perceptual loss is the
+   first thing to change (see `m0-toy-README.md` §"First results", item 6): try a spatial
+   feature-map loss and/or a colour term at the referent's pixels before touching anything
+   else.
 3. If both learn: run the grid, `python scripts/m0_grid.py --out runs/m0/grid --seeds 3`,
    adding `--renderer iso` to the cells (edit `CELLS` or add a flag — it is a one-line change
    in `scripts/m0_grid.py`).

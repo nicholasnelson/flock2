@@ -98,8 +98,30 @@ What was learned, and what changed because of it:
 4. **The literature's prediction held at this scale:** the v2 drawings are a consistent
    positional code (the same blobs shifted slightly per referent), causally used, with no
    referent colours and probe accuracy at chance — Mihai & Hare's game-loss-only result.
-   Whether a stronger resemblance term or a sender warm-up ("first learn to draw what you
-   see") produces iconic marks is the next test; see the log for `v3_*` runs.
+
+Third round, same sizes, all with the judge-based perceptual loss (finals at step 600):
+
+| Variant | acc | acc_blank | acc_swapped | CIC | judge_probe | judge_rank | Gallery |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| v3 perc5: frozen, perceptual 5.0 | 0.77 | 0.26 | 0.13 | 3.1 | 0.30 | 0.31 | One large orange shape for every type, small variations. |
+| v3 tuned: fine-tuned encoder, perceptual 0.5 | 0.68 | 0.17 | 0.19 | 4.2 | 0.33 | 0.31 | Pond and tree: a blue blob; rock: a dark blob; others near-blank with a blue line. Took off only after step 400. |
+| v3 warm: frozen, perceptual 1.0, 300-step sender warm-up | **0.80** | 0.27 | 0.18 | **4.6** | 0.34 | **0.40** (0.53 at step 200) | Dark-brown shapes; pond/tree get a tall blob, flower a small mark. |
+
+Chance: acc 0.25, probes 0.17.
+
+5. **Iconicity is measurable but weak at this budget, and not human-readable in any cell.**
+   The judge probes sit at roughly 2× chance in all three v3 runs, so the resemblance term
+   does something, but every gallery is dominated by one or two colours that are not the
+   referent's (orange, dark brown, blue) and shapes that differ only slightly by type. The
+   warm-up gives the strongest start (rank 0.53 at step 200) and then erodes under game
+   pressure toward a code — the drift the human and sketch-game literature describes.
+6. **Likely causes, for the GPU session to test:** (a) the judge is weak (300 autoencoder
+   steps); (b) the perceptual loss is a global-embedding cosine, which rewards "looks like
+   that view" only loosely — a feature-map (spatial) loss or an explicit colour term at the
+   referent's pixels would reward colour fidelity directly; (c) 600 steps at batch 32 is
+   1/40 of the budget. None of these is a reason to change the design before the real run.
+7. **Fine-tuning the encoder works once the loss goes through the judge**, but starts
+   later; keep `freeze_encoder=True` as the default and treat fine-tuning as a cell.
 
 ## What the plan predicts
 
