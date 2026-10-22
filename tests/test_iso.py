@@ -54,9 +54,13 @@ def test_sprites_billboarded_and_depth_sorted():
 def test_agent_facing_flips_with_view_rotation():
     tm, objects, agents = _world(jax.random.PRNGKey(1))
     other = iso.Agents(kind=jnp.array([S.SHEEP, S.SHEEP]), pos=jnp.array([[12, 12], [12, 16]]), heading=jnp.array([0, 1]), present=jnp.array([True, True]))
-    f0 = int(iso.facing(jnp.int32(1), jnp.int32(0)))  # E seen from a N-up view: faces right
-    f2 = int(iso.facing(jnp.int32(1), jnp.int32(2)))  # E seen from an S-up view: faces left
-    assert f0 == 0 and f2 == 1
+    f0 = int(iso.facing(jnp.int32(1), jnp.int32(0)))  # E seen from a N-up view: toward, right
+    f2 = int(iso.facing(jnp.int32(1), jnp.int32(2)))  # E seen from an S-up view: away, left
+    assert f0 == 1 and f2 == 3
+    # left-facing sprites are mirrors of right-facing ones; front and back differ
+    st = S.ANIMAL_STACK[S.SHEEP]
+    assert (st[2] == st[1][:, ::-1]).all() and (st[3] == st[0][:, ::-1]).all()
+    assert (st[0] != st[1]).any()
 
 
 def test_out_of_world_is_void_and_night_radius():

@@ -496,8 +496,8 @@ unavoidable with isometric art; that was wrong. The tile *layout* is rotated abo
 its heading before projection and every sprite is drawn upright (billboarded), so the view is
 still heading-aligned (Q9 stands), the human display is the same renderer at rotation 0, and a
 drawing of a tree is the same picture in every frame. "Ahead" projects to the up-right screen
-diagonal. The one cost is that an agent's screen facing depends on the view rotation; with two
-facings (left/right) that is a lossy but legible mapping, and four facings can be added later.
+diagonal. An agent's screen facing depends on the view rotation, so sheep and fox have four facings
+(front/back × left/right), indexed by the heading in the rotated frame.
 Resolution stays at 64×64 for M0/M1 (decision: keep for now; see the plan for the cost table).
 
 Implementation: `flock/iso.py`, `flock/sprites_iso.py`; tests in `tests/test_iso.py`.

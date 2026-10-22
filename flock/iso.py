@@ -34,7 +34,7 @@ TILE_W, TILE_H = S.TILE_W, S.TILE_H
 VIEW = 64
 GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, variants, 4, 8)
 OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, BOX_H, BOX_W)
-ANIMAL_STACK = jnp.asarray(S.ANIMAL_STACK)  # (n_animal, 2, BOX_H, BOX_W)
+ANIMAL_STACK = jnp.asarray(S.ANIMAL_STACK)  # (n_animal, 4, BOX_H, BOX_W)
 BOX_H, BOX_W = S.BOX_H, S.BOX_W
 
 
@@ -86,11 +86,10 @@ def project(d: jax.Array) -> jax.Array:
 
 
 def facing(heading: jax.Array, view_heading: jax.Array) -> jax.Array:
-    """Sprite facing (0 right, 1 left) of an agent with world heading ``heading`` as seen in a
-    view rotated by ``view_heading``. Rotated headings N/E point up-right/down-right on screen
-    (face right); S/W face left."""
-    rel = (heading - view_heading) % 4
-    return jnp.where(rel <= 1, 0, 1)
+    """Sprite facing index of an agent with world heading ``heading`` as seen in a view rotated
+    by ``view_heading``: the heading in the rotated frame (0 N away/up-right, 1 E toward/
+    down-right, 2 S toward/down-left, 3 W away/up-left). See ``sprites_iso``."""
+    return (heading - view_heading) % 4
 
 
 def render_view(

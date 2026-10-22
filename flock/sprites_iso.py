@@ -81,13 +81,13 @@ def tile_variant(r, c):
 OBJECTS = {
     "salt": _parse(
         [
-            "...WW...",
-            ".WWWWWW.",
-            "WWWWWWWW",
-            "WWSWWWSW",
-            "WWSWWWSW",
-            ".SSSWSS.",
-            "...SS...",
+            "..WWWWW.",
+            ".WWWWWWS",
+            ".WWWWWSS",
+            ".WWWWWSS",
+            ".WSWWWSS",
+            ".SSSSSSs",
+            "..DTTTD.",
         ]
     ),
     "tree": _parse(
@@ -115,11 +115,12 @@ OBJECTS = {
     ),
     "rock": _parse(
         [
-            "..SSS...",
-            ".SSSSSs.",
-            "SSSSssss",
-            ".Sssssss",
-            "..ssss..",
+            "...SSS...",
+            "..SSSSSs.",
+            ".SSWSSSss",
+            ".SSSSssss",
+            "..Sssssss",
+            "...sssss.",
         ]
     ),
     "bush": _parse(
@@ -156,9 +157,14 @@ def _pad(s: np.ndarray, h: int, w: int) -> np.ndarray:
     return out
 
 
-# --- animals (single tile, facing right; mirrored for left) ----------------------------------
+# --- animals (single tile; four facings) ----------------------------------------------------
+# Facing index = (world heading - view heading) % 4, i.e. the heading in the rotated frame:
+#   0 = N: away, up-right     1 = E: toward, down-right
+#   2 = S: toward, down-left  3 = W: away, up-left
+# Front views show the face; back views show wool/tail and the ears only. Left-facing sprites
+# are mirrors of right-facing ones.
 
-SHEEP_R = _parse(
+SHEEP_FRONT_R = _parse(
     [
         "..WWWW....",
         ".WWWWWWss.",
@@ -169,7 +175,18 @@ SHEEP_R = _parse(
         "..K...K...",
     ]
 )
-FOX_R = _parse(
+SHEEP_BACK_R = _parse(
+    [
+        ".......s.s",
+        "..WWWWWWWW",
+        ".WWWWWWWW.",
+        "WWWWWWWWW.",
+        "WWWWWWWW..",
+        ".WWWWWW...",
+        "..K.K.K...",
+    ]
+)
+FOX_FRONT_R = _parse(
     [
         "......OO..",
         "WO...OOKO.",
@@ -179,14 +196,31 @@ FOX_R = _parse(
         "..K..K.K..",
     ]
 )
-ANIMALS = {"sheep": SHEEP_R, "fox": FOX_R}
+FOX_BACK_R = _parse(
+    [
+        "......O.O.",
+        ".....OOOO.",
+        "...OOOOOO.",
+        ".OOOOOOO..",
+        "WOOOOOO...",
+        "..K..K.K..",
+    ]
+)
+
+
+def _facings(front_r: np.ndarray, back_r: np.ndarray) -> list[np.ndarray]:
+    return [back_r, front_r, front_r[:, ::-1], back_r[:, ::-1]]
+
+
+ANIMALS = {"sheep": _facings(SHEEP_FRONT_R, SHEEP_BACK_R), "fox": _facings(FOX_FRONT_R, FOX_BACK_R)}
 ANIMAL_NAMES = list(ANIMALS)
 SHEEP = ANIMAL_NAMES.index("sheep")
 FOX = ANIMAL_NAMES.index("fox")
+N_FACINGS = 4
 
 # Common box for everything that is pasted: objects and animals, two facings for animals.
-BOX_H = max(SPRITE_H, max(s.shape[0] for s in ANIMALS.values()))
-BOX_W = max(SPRITE_W, max(s.shape[1] for s in ANIMALS.values()))
+BOX_H = max(SPRITE_H, max(f.shape[0] for fs in ANIMALS.values() for f in fs))
+BOX_W = max(SPRITE_W, max(f.shape[1] for fs in ANIMALS.values() for f in fs))
 OBJECT_STACK = np.stack([_pad(OBJECTS[n], BOX_H, BOX_W) for n in OBJECT_NAMES])  # (n_obj, H, W)
-# (n_animal, 2, H, W): facing 0 = right, 1 = left
-ANIMAL_STACK = np.stack([np.stack([_pad(ANIMALS[n], BOX_H, BOX_W), _pad(ANIMALS[n][:, ::-1], BOX_H, BOX_W)]) for n in ANIMAL_NAMES])
+# (n_animal, 4, H, W): facing index as documented above
+ANIMAL_STACK = np.stack([np.stack([_pad(f, BOX_H, BOX_W) for f in ANIMALS[n]]) for n in ANIMAL_NAMES])

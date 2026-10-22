@@ -16,7 +16,7 @@ when a design choice comes up.
 | --- | --- | --- |
 | Palette | `flock/palette.py` | Done. |
 | Top-down world + sprites (baseline) | `flock/world.py`, `flock/sprites.py` | Done, tested; the CPU results were obtained with it. |
-| Isometric world + sprites (the real one) | `flock/iso.py`, `flock/sprites_iso.py` | Done, tested (projection, rotation, facing); **not yet trained on**. |
+| Isometric world + sprites (the real one) | `flock/iso.py`, `flock/sprites_iso.py` | Done, tested (projection, rotation, four facings, hashed grass variants); **not yet trained on**. |
 | Stroke rasteriser | `flock/raster.py` | Done, tested, gradients verified. |
 | Networks | `flock/nets.py` | Done: encoder/decoder, stroke/latent/pixel senders, message encoder, receiver with canvas pathway. |
 | Toy game | `flock/toy/{env,env_iso,envs,game,train,metrics,gallery}.py` | Done; end-to-end smoke-tested on both renderers. |
@@ -82,8 +82,9 @@ renderer; the separate-encoder, stamp, latent and pixel cells; human readability
 
 ## Open design items (none block M0)
 
-- Sprite sign-off: the isometric set was mocked and accepted "for now"; salt lick and rock
-  are the weakest; water as ground state is new since the mock.
-- Four sheep facings instead of two (cosmetic, later).
+- Sprite set: isometric, accepted "for now". Since the mock: water is a ground state, grass is
+  drawn as stalks with four hashed variants per state, salt lick and rock were redrawn, and
+  sheep and fox have four facings (front/back × left/right; `sprites_iso.py` documents the
+  facing index). Further art changes are purely cosmetic.
 - Persistence cadence for M7.
 - 96² vs 128² resolution, decided from the M1 profile.
