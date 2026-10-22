@@ -41,6 +41,7 @@ class Config:
     perceptual_weight: float = 0.0
     ink_weight: float = 0.002
     ink_ramp_steps: int = 1000  # ink cost ramps linearly from 0 to ink_weight over this many steps
+    sender_warmup_steps: int = 0  # "iconic initialisation": steps of perceptual-only training of the sender before the game
     listening_weight: float = 0.0
     signalling_weight: float = 0.0
     # training
@@ -143,6 +144,25 @@ def make_game_step(cfg: Config):
     return step
 
 
+def make_warmup_step(cfg: Config):
+    """Perceptual-only training of the sender: learn to draw what you see, before the game."""
+    wrt = nnx.All(nnx.Param, nnx.PathContains("sender"))
+
+    @nnx.jit
+    def step(model: Agents, judge: Encoder, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array):
+        def loss_fn(m: Agents):
+            sv = world.to_onehot(ep.sender_view)
+            canvas, _ = game.draw(m, sv, key, False)
+            pl = game.perceptual_loss(judge, canvas, sv, ground)
+            return pl + cfg.ink_weight * jnp.mean(canvas.ink), {"perceptual": pl, "ink": jnp.mean(canvas.ink)}
+
+        (loss, aux), grads = nnx.value_and_grad(loss_fn, has_aux=True, argnums=nnx.DiffState(0, wrt))(model)
+        optimizer.update(model, grads)
+        return aux
+
+    return step
+
+
 def train(cfg: Config) -> dict:
     os.makedirs(cfg.out_dir, exist_ok=True)
     with open(os.path.join(cfg.out_dir, "config.json"), "w") as f:
@@ -164,6 +184,19 @@ def train(cfg: Config) -> dict:
     # The judge: a frozen copy of the pre-trained perception encoder that never sees the game.
     judge: Encoder = nnx.clone(model.encoder)
     probe = metrics.fit_type_probe(judge, k_judge)
+
+    # Optional sender warm-up (iconic initialisation)
+    if cfg.sender_warmup_steps > 0:
+        warm = make_warmup_step(cfg)
+        w_opt = nnx.Optimizer(model, optax.adamw(cfg.lr), wrt=nnx.All(nnx.Param, nnx.PathContains("sender")))
+        t0 = time.time()
+        for step in range(cfg.sender_warmup_steps):
+            key, k_ep, k_g, k_s = jax.random.split(key, 4)
+            ep = env.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
+            ground = world.to_onehot(jax.vmap(env.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
+            aux = warm(model, judge, w_opt, ep, ground, k_s)
+            if step % cfg.log_every == 0 or step == cfg.sender_warmup_steps - 1:
+                log({"phase": "warmup", "step": step, **{k: float(v) for k, v in aux.items()}, "t": time.time() - t0})
 
     # Phase 2
     step_fn = make_game_step(cfg)
