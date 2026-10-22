@@ -1,0 +1,26 @@
+[project]
+name = "flock2"
+version = "0.0.1"
+description = "FLOCK 2.0 — learned sheep: world, drives, communication, generations"
+requires-python = ">=3.11"
+dependencies = [
+    "jax>=0.4.30",
+    "flax>=0.10",
+    "optax>=0.2",
+    "numpy",
+    "pillow",
+]
+
+[project.optional-dependencies]
+cuda = ["jax[cuda12]"]
+dev = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["flock*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
