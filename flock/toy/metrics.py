@@ -24,9 +24,7 @@ from flax import nnx
 
 from flock import world
 from flock.nets import EMBED, Agents, Encoder
-from flock.toy import env, game
-
-N_TYPES = env.N_TYPES
+from flock.toy import envs, game
 
 
 class TypeProbe(NamedTuple):
@@ -43,14 +41,17 @@ def _embed(enc: Encoder, views_onehot: jax.Array, chunk: int = 256) -> jax.Array
     return jnp.concatenate(outs, axis=0)
 
 
-def fit_type_probe(judge: Encoder, key: jax.Array, n: int = 2048, steps: int = 300, lr: float = 0.1) -> TypeProbe:
-    """Logistic-regression probe on judge embeddings of real single-object views."""
-    views, types = env.object_views(key, n)
+def fit_type_probe(judge: Encoder, key: jax.Array, E, n: int = 2048, steps: int = 300, lr: float = 0.1) -> TypeProbe:
+    """Logistic-regression probe on judge embeddings of real single-object views.
+
+    ``E`` is the episode module (``flock.toy.envs.get(cfg)``)."""
+    n_types = E.N_TYPES
+    views, types = E.object_views(key, n)
     x = jax.lax.stop_gradient(_embed(judge, world.to_onehot(views)))
     y = types
-    refs = jnp.stack([jnp.mean(x[y == t], axis=0) for t in range(N_TYPES)])
-    w = jnp.zeros((EMBED, N_TYPES))
-    b = jnp.zeros((N_TYPES,))
+    refs = jnp.stack([jnp.mean(x[y == t], axis=0) for t in range(n_types)])
+    w = jnp.zeros((EMBED, n_types))
+    b = jnp.zeros((n_types,))
 
     def loss(params):
         w_, b_ = params
@@ -64,13 +65,14 @@ def fit_type_probe(judge: Encoder, key: jax.Array, n: int = 2048, steps: int = 3
     return TypeProbe(w=w, b=b, refs=refs)
 
 
-def probe_views_of_drawings(canvas, ground_views_onehot: jax.Array) -> jax.Array:
+def probe_views_of_drawings(canvas, ground_views_onehot: jax.Array, probe_px: jax.Array) -> jax.Array:
     """Drawings stamped on plain ground at the position the object occupies in a sender view."""
-    return jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, env.PROBE_CANVAS_PX, opaque_paper=False))(ground_views_onehot, canvas.colour, canvas.alpha)
+    return jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, probe_px, opaque_paper=False))(ground_views_onehot, canvas.colour, canvas.alpha)
 
 
-def iconicity(enc: Encoder, probe: TypeProbe, canvas, target_type: jax.Array, ground_onehot: jax.Array) -> dict:
-    pv = probe_views_of_drawings(canvas, ground_onehot)
+def iconicity(enc: Encoder, probe: TypeProbe, canvas, target_type: jax.Array, ground_onehot: jax.Array, probe_px: jax.Array) -> dict:
+    n_types = probe.refs.shape[0]
+    pv = probe_views_of_drawings(canvas, ground_onehot, probe_px)
     e = _embed(enc, pv)
     logits = e @ probe.w + probe.b
     probe_acc = jnp.mean(jnp.argmax(logits, -1) == target_type)
@@ -78,7 +80,7 @@ def iconicity(enc: Encoder, probe: TypeProbe, canvas, target_type: jax.Array, gr
     sims = n(e) @ n(probe.refs).T  # (B, N_TYPES)
     rank_acc = jnp.mean(jnp.argmax(sims, -1) == target_type)
     true_sim = sims[jnp.arange(sims.shape[0]), target_type]
-    other = jnp.where(jax.nn.one_hot(target_type, N_TYPES) > 0, -jnp.inf, sims).max(-1)
+    other = jnp.where(jax.nn.one_hot(target_type, n_types) > 0, -jnp.inf, sims).max(-1)
     return {
         "probe_acc": float(probe_acc),
         "rank_acc": float(rank_acc),
@@ -87,9 +89,10 @@ def iconicity(enc: Encoder, probe: TypeProbe, canvas, target_type: jax.Array, gr
 
 
 def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Array) -> dict:
+    E = envs.get(cfg)
     k_ep, k_g, k_s = jax.random.split(key, 3)
-    ep = env.make_batch(k_ep, cfg.eval_batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
-    ground = world.to_onehot(jax.vmap(env.plain_ground_view)(jax.random.split(k_g, cfg.eval_batch)))
+    ep = E.make_batch(k_ep, cfg.eval_batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
+    ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.eval_batch)))
     opaque = cfg.opaque
 
     fwd = game.forward(model, ep, k_s, opaque, hard=True)
@@ -120,14 +123,14 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
         "alpha_mean": float(jnp.mean(fwd.canvas.alpha)),
         "chance": 1.0 / cfg.n_candidates,
     }
-    icon_judge = iconicity(judge, probe, fwd.canvas, ep.target_type, ground)
+    icon_judge = iconicity(judge, probe, fwd.canvas, ep.target_type, ground, E.PROBE_CANVAS_PX)
     out.update({f"judge_{k}": v for k, v in icon_judge.items()})
     # the model's own encoder as a (less honest) judge, with a probe fitted on it
-    own_probe = fit_type_probe(model.encoder, jax.random.PRNGKey(123), n=1024, steps=200)
-    icon_own = iconicity(model.encoder, own_probe, fwd.canvas, ep.target_type, ground)
+    own_probe = fit_type_probe(model.encoder, jax.random.PRNGKey(123), E, n=1024, steps=200)
+    icon_own = iconicity(model.encoder, own_probe, fwd.canvas, ep.target_type, ground, E.PROBE_CANVAS_PX)
     out.update({f"own_{k}": v for k, v in icon_own.items()})
     # per-type accuracy for the gallery / analysis
     tt = np.asarray(ep.target_type)
     a = np.asarray(acc)
-    out["acc_by_type"] = [float(a[tt == t].mean()) if (tt == t).any() else None for t in range(N_TYPES)]
+    out["acc_by_type"] = [float(a[tt == t].mean()) if (tt == t).any() else None for t in range(E.N_TYPES)]
     return out

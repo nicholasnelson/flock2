@@ -25,6 +25,7 @@ from flock import sprites, world
 from flock.world import TILE, VIEW, VIEW_TILES
 
 N_TYPES = sprites.N_OBJECT_TYPES
+OBJECT_NAMES = sprites.OBJECT_NAMES
 WORLD_TILES = 24  # tile side of each toy meadow
 
 

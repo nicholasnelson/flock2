@@ -19,7 +19,7 @@ from flax import nnx
 
 from flock import world
 from flock.nets import Agents, Encoder
-from flock.toy import env, game, metrics
+from flock.toy import env, envs, game, metrics
 from flock.toy.gallery import export_run_gallery
 
 
@@ -28,6 +28,7 @@ class Config:
     seed: int = 0
     out_dir: str = "runs/m0/default"
     # game
+    renderer: str = "topdown"  # "topdown" (tested baseline) | "iso" (isometric, heading-aligned)
     n_candidates: int = 4
     mode: str = "bubble"  # "bubble" | "stamp"
     random_heading: bool = True
@@ -72,9 +73,10 @@ def _encoder_filter(cfg: Config):
 
 def pretrain_views(key: jax.Array, batch: int, cfg: Config) -> jax.Array:
     """A mix of single-object views and game views (sender and receiver sides)."""
+    E = envs.get(cfg)
     k1, k2 = jax.random.split(key)
-    ov, _ = env.object_views(k1, batch // 2)
-    ep = env.make_batch(k2, batch // 4, cfg.n_candidates, cfg.mode, cfg.random_heading)
+    ov, _ = E.object_views(k1, batch // 2)
+    ep = E.make_batch(k2, batch // 4, cfg.n_candidates, cfg.mode, cfg.random_heading)
     return jnp.concatenate([ov, ep.sender_view, ep.receiver_base], axis=0)
 
 
@@ -111,6 +113,7 @@ def pretrain(model: Agents, cfg: Config, key: jax.Array, log) -> None:
 
 def make_game_step(cfg: Config):
     wrt = _encoder_filter(cfg)
+    probe_px = envs.get(cfg).PROBE_CANVAS_PX
 
     @nnx.jit
     def step(model: Agents, judge: Encoder, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array, ink_scale: jax.Array):
@@ -121,7 +124,7 @@ def make_game_step(cfg: Config):
             aux = {"ce": jnp.mean(ce), "acc": jnp.mean(acc), "ink": jnp.mean(fwd.canvas.ink)}
             loss = loss + ink_scale * cfg.ink_weight * jnp.mean(fwd.canvas.ink)
             if cfg.perceptual_weight > 0:
-                pl = game.perceptual_loss(judge, fwd.canvas, world.to_onehot(ep.sender_view), ground)
+                pl = game.perceptual_loss(judge, fwd.canvas, world.to_onehot(ep.sender_view), ground, probe_px)
                 aux["perceptual"] = pl
                 loss = loss + cfg.perceptual_weight * pl
             if cfg.listening_weight > 0:
@@ -147,13 +150,14 @@ def make_game_step(cfg: Config):
 def make_warmup_step(cfg: Config):
     """Perceptual-only training of the sender: learn to draw what you see, before the game."""
     wrt = nnx.All(nnx.Param, nnx.PathContains("sender"))
+    probe_px = envs.get(cfg).PROBE_CANVAS_PX
 
     @nnx.jit
     def step(model: Agents, judge: Encoder, optimizer: nnx.Optimizer, ep: env.Episode, ground: jax.Array, key: jax.Array):
         def loss_fn(m: Agents):
             sv = world.to_onehot(ep.sender_view)
             canvas, _ = game.draw(m, sv, key, False)
-            pl = game.perceptual_loss(judge, canvas, sv, ground)
+            pl = game.perceptual_loss(judge, canvas, sv, ground, probe_px)
             return pl + cfg.ink_weight * jnp.mean(canvas.ink), {"perceptual": pl, "ink": jnp.mean(canvas.ink)}
 
         (loss, aux), grads = nnx.value_and_grad(loss_fn, has_aux=True, argnums=nnx.DiffState(0, wrt))(model)
@@ -175,6 +179,7 @@ def train(cfg: Config) -> dict:
         log_file.flush()
         print(json.dumps(rec), flush=True)
 
+    E = envs.get(cfg)
     key = jax.random.PRNGKey(cfg.seed)
     key, k_model, k_pre, k_judge = jax.random.split(key, 4)
     model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width)
@@ -183,7 +188,7 @@ def train(cfg: Config) -> dict:
     pretrain(model, cfg, k_pre, log)
     # The judge: a frozen copy of the pre-trained perception encoder that never sees the game.
     judge: Encoder = nnx.clone(model.encoder)
-    probe = metrics.fit_type_probe(judge, k_judge)
+    probe = metrics.fit_type_probe(judge, k_judge, E)
 
     # Optional sender warm-up (iconic initialisation)
     if cfg.sender_warmup_steps > 0:
@@ -192,8 +197,8 @@ def train(cfg: Config) -> dict:
         t0 = time.time()
         for step in range(cfg.sender_warmup_steps):
             key, k_ep, k_g, k_s = jax.random.split(key, 4)
-            ep = env.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
-            ground = world.to_onehot(jax.vmap(env.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
+            ep = E.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
+            ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
             aux = warm(model, judge, w_opt, ep, ground, k_s)
             if step % cfg.log_every == 0 or step == cfg.sender_warmup_steps - 1:
                 log({"phase": "warmup", "step": step, **{k: float(v) for k, v in aux.items()}, "t": time.time() - t0})
@@ -211,8 +216,8 @@ def train(cfg: Config) -> dict:
         if step == cfg.steps:
             break
         key, k_ep, k_g, k_s = jax.random.split(key, 4)
-        ep = env.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
-        ground = world.to_onehot(jax.vmap(env.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
+        ep = E.make_batch(k_ep, cfg.batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
+        ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.batch)))
         ink_scale = jnp.float32(min(1.0, step / max(cfg.ink_ramp_steps, 1)))
         aux = step_fn(model, judge, opt, ep, ground, k_s, ink_scale)
         if step % cfg.log_every == 0:

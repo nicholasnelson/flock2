@@ -81,7 +81,7 @@ def success_loss(logits: jax.Array, target_mask: jax.Array) -> tuple[jax.Array, 
     return ce, acc
 
 
-def perceptual_loss(judge, canvas: Canvas, sender_view_onehot: jax.Array, ground_views: jax.Array) -> jax.Array:
+def perceptual_loss(judge, canvas: Canvas, sender_view_onehot: jax.Array, ground_views: jax.Array, probe_px: jax.Array) -> jax.Array:
     """Distance, in a *frozen* perception encoder's embedding space, between the drawing
     stamped on plain ground where the referent was and the sender's actual view of the referent.
 
@@ -90,7 +90,7 @@ def perceptual_loss(judge, canvas: Canvas, sender_view_onehot: jax.Array, ground
     loss by learning to ignore the canvas, and the drawing collapses to nothing — observed in
     the first fine-tuned-encoder run.
     """
-    probe = jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, env.PROBE_CANVAS_PX, opaque_paper=False))(ground_views, canvas.colour, canvas.alpha)
+    probe = jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, probe_px, opaque_paper=False))(ground_views, canvas.colour, canvas.alpha)
     emb_p, _ = judge(probe)
     target, _ = judge(sender_view_onehot)
     target = jax.lax.stop_gradient(target)
