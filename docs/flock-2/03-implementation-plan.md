@@ -40,20 +40,25 @@ only place the single-GPU budget could bite; see that milestone's fallback.
 
 ## Tooling decisions that apply throughout
 
-- **M0–M3 are built in Python/PyTorch** with a small purpose-built gridworld, *not* in the Rust
-  workspace. The differentiable rasteriser, the auxiliary losses and the metrics are all easier
-  to iterate in Python, and nothing in these milestones needs the renderer.
-- **The vectorised meadow question is deferred to the end of M1.** Two routes exist: (A) a JAX
-  port of the meadow (10⁵–10⁶ agent-steps/s on the 4080; a second implementation to keep in
-  sync), or (B) the Rust `flock-sim` exposed via PyO3 with batched stepping on the CPU (one
-  implementation; ≈10⁴–10⁵ agent-steps/s on the 13700KF) with the networks on the 4080. With a
-  local GPU, route B is viable for every milestone except possibly M6's population-scale
-  evolution; the M1 compute profile and the answers about `flock-sim` (below) decide.
-- **Installation inference is Rust via `ort` (ONNX)**, with the recurrent cell exported as a
-  single-step function with hidden state as explicit I/O. If online learning in Rust is wanted,
-  `burn` with safetensors. A half-day benchmark spike precedes M7 (export a ~2M-param cell; time a
-  batch-60 forward and a 512-sample train step on both i7s, and on the 4080 via `ort`'s CUDA
-  provider if the desktop hosts the installation).
+Revised at plan review (see Q10): the desktop (13700KF + RTX 4080) is both the training machine
+and the installation host, there is no cloud, and v0.4's Rust/Pi requirements are discarded.
+
+- **One vectorised GPU simulation, used for training and for the installation.** The meadow is
+  written once as a batched, pure-functional environment; offline it runs thousands of copies in
+  parallel, live it runs one copy at a few Hz with the same code. There is no second
+  implementation, no ONNX export and no Rust ML runtime.
+- **Framework: JAX by default** (vmapped gridworld + DreamerV3 lineage), **PyTorch if you prefer
+  it** — a question put to you below. The differentiable rasteriser, auxiliary losses and metrics
+  are fine in either. The choice is made before M0 and not revisited.
+- **Perception at 4 px/tile, 64×64 egocentric heading-aligned view, 16×16 canvas** from M0
+  onward (Q8, Q9), so every milestone's result transfers. Rendering 64×64 views inside the
+  vectorised sim is the throughput bottleneck to budget for; views are rendered from a palette
+  index map by gather, not by a rasteriser.
+- **The renderer is a separate process** fed by a state stream (positions, sprites, marks,
+  bubbles, telemetry) over a local socket. It can be a native window on the desktop driving the
+  TV directly, or the Pi/WASM path, or both — a question for you below. Nothing in M0–M6 needs it.
+- **Replay and checkpoints on disk.** 64×64 palette views are 2 KB per step; buffers of ~10⁶
+  steps per flock in RAM, older data on disk.
 - **Every milestone logs the same telemetry schema** from day one (per-sheep drives, surprise
   scalars, per-channel CIC, topographic similarity, trust tables, population), because the
   documentary camera in M7 is driven by these and retrofitting is painful.
@@ -70,14 +75,17 @@ resemblance loss.
 
 **Approach.**
 
-- *World.* A 12×12 tile grid, 16-colour palette, with a handful of distinct object types (e.g.
-  grass patch, pond, salt lick, fox, tree, bare ground) drawn as small 2×2 or 3×3 sprites. Both
-  agents see egocentric 16×16 views through one encoder.
+- *World.* A ~24×24 tile grid rendered at 4 px/tile, 16-colour palette, with a handful of
+  distinct object types (e.g. grass patch, pond, salt lick, fox, tree, bare ground) drawn as
+  multi-pixel sprites (≈6×6 px for animals, textured tiles for ground). Both agents see
+  egocentric, heading-aligned 64×64 views through one encoder — the same scale as the eventual
+  meadow (Q8, Q9), so the results transfer. The sprite set is designed here and reused.
 - *Game.* The sender is spawned where it can see the target (one of K referents, or a referent at
   one of D relative directions). The receiver starts elsewhere with the target out of view, sees
-  the sender's canvas (as a 16×16 frame through the shared encoder), and must navigate to the
-  target within T steps. Both are rewarded on success. Distractor objects are present so that
-  "which thing" and "which way" both matter.
+  the sender's 16×16 canvas rendered into its own view at native scale (as a bubble beside the
+  sender, or as a stamp on the ground), and must navigate to the target within T steps. Both are
+  rewarded on success. Distractor objects are present so that "which thing" and "which way" both
+  matter.
 - *Drawing head.* Per Q2: K = 6–8 line primitives with position, 16-colour softmax, on/off gate;
   distance-field rasteriser; ink cost; optional perceptual loss in the shared encoder's feature
   space. Receiver differentiable; sender trained through the rasteriser with straight-through
@@ -89,8 +97,8 @@ resemblance loss.
   2. With vs without the perceptual (resemblance) loss.
   3. Stroke head vs VQ-latent decoder vs pixel-categorical head (the last expected to fail; cheap
      to confirm).
-  4. Receiver sees the canvas at full 16×16 vs downsampled to 8×8 and 4×4 (the Q1 footprint
-     question), with and without rescale augmentation during training.
+  4. Canvas presented as a bubble (transient, beside the sender) vs a stamp (persistent, on the
+     ground, read later) — the first persistent-vs-transient data point, since none is published.
 
 **Success criteria.**
 
@@ -109,9 +117,10 @@ resemblance loss.
   confirmed only if the shared-no-perceptual-loss cell is readable; the literature predicts it
   will not be.
 
-**Compute.** Small CNN (~100k parameters) and ~10⁴–10⁵ episodes per cell; minutes to an hour per
-cell on the 13700KF; the full ablation grid (≈24 cells × 3 seeds) in a day or two of CPU, or an
-hour or two on the 4080. No GPU required, but it is there.
+**Compute.** Small CNN (~0.3–0.5M parameters at 64×64 input) and ~10⁴–10⁵ episodes per cell;
+with the toy vectorised on the 4080, minutes per cell; the full ablation grid (≈24 cells × 3
+seeds) in a few hours. This is also where the vectorised-sim scaffolding (batched env, 64×64
+view rendering by gather, rasteriser) is first built and profiled.
 
 **Risks and fallbacks.**
 
@@ -122,9 +131,10 @@ hour or two on the 4080. No GPU required, but it is there.
   of the referent patch).
 - Readable but not causally used (positive signalling without listening): the Lowe pathology;
   separate the message head from the action head; add the listening loss.
-- Downsampled views unreadable: accept 8×8 footprints instead of 4×4 and record the number.
+- Sprites too small to be drawable at 16×16: enlarge the sprites (the canvas can hold one or two
+  ≈6–8 px icons); the sprite set is a design variable here.
 
-**What a pass buys.** The drawing head, the encoder-sharing decision, the footprint size and the
+**What a pass buys.** The drawing head, the encoder-sharing decision, the sprite set and the
 perceptual-loss weight all become fixed inputs to M4, and the ablation is a publishable result
 because it does not exist in the literature.
 
@@ -145,11 +155,17 @@ looks alive to a viewer and whose "expected view" and surprise are displayable.
   coupling to neighbour state changes.
 - *Curiosity*: hashed counts over static-world features only, routed into the interest drive;
   blind to other sheep.
-- *World model*: shared RSSM, ≈1–2M parameters, per-sheep recurrent state plus a trait embedding
-  (the trait embedding is the first seed of the genome). Categorical decoder with cross-entropy
-  over 16 colours. Pre-trained self-supervised on logged rollouts from scripted/random sheep
-  (Ha & Schmidhuber's recipe), then actor-critic in imagination with short horizons.
-- *Vectorised sim*: the small Python meadow, batched across many instances. Profile it here.
+- *Perception*: 64×64 heading-aligned view at 4 px/tile with a rear blind wedge; night shrinks
+  the lit radius; "head up" extends it (Q9).
+- *World model*: shared RSSM at DreamerV3's native 64×64 input, sized between the repo's
+  `size1m` and the paper's XS (≈2–8M parameters; measure), per-sheep recurrent state plus a trait
+  embedding (the trait embedding is the first seed of the genome). Categorical decoder with
+  cross-entropy over 16 colours. Pre-trained self-supervised on logged rollouts from
+  scripted/random sheep (Ha & Schmidhuber's recipe), then actor-critic in imagination with short
+  horizons.
+- *Vectorised sim*: the full 128×128 meadow, batched across many instances on the 4080, grown
+  from the M0 scaffolding. Profile agent-steps/s with view rendering here; this number sizes
+  every later milestone.
 
 **Success criteria.**
 
@@ -173,8 +189,9 @@ including a hyperparameter sweep); drives and policy tuning mostly CPU.
   unimix; more pretraining data (it is free).
 - Drive gaming (parking on a patch, endless wandering): structural fixes first (norm exponent,
   over-satiation, interest drive cap), never a hand-tuned weight sum.
-- Framework overhead dominates at this model size: measured here; informs the JAX-vs-PyO3
-  decision.
+- View rendering dominates sim throughput (image-observation JAX envs run ~50× slower than
+  symbolic): render by gather from a palette index map, reduce parallel meadows, or drop to
+  3 px/tile (48×48) if the M1 profile demands it.
 
 ---
 
@@ -397,20 +414,21 @@ GPU work.
 
 ## Milestone 7 — integration and soak
 
-**Goal.** Move the trained system into the FLOCK Rust workspace and renderer, add persistence,
-the documentary camera with an FM curator, graceful degradation, and prove it runs for weeks on
-Scarif or the desktop with the Pi rendering.
+**Goal.** Turn the M6 system into the installation: a supervised long-running process on the
+desktop, a decoupled renderer driving the TV, persistence, the documentary camera with an FM
+curator, graceful degradation, and a multi-week soak test.
 
 **Approach.**
 
-- *Crates (provisional — v0.4 code not seen).* `flock-types` and `flock-sim` carry over in role;
-  `flock-sim` gains the fox, injury, marks, drives and population rails if they are not already
-  there. `flock-brain` is rewritten: it loads ONNX/safetensors models and runs batched inference
-  per tick via `ort` (or `burn` if online learning stays in Rust), holds per-sheep recurrent
-  state and the tabular social memory, runs the lamb imitation step, and emits telemetry.
-  `flock-render` carries over, plus the new overlays (expected-view ghost, surprise, trust graph,
-  caption cards). The ESP32 secondary display, if kept, is a natural home for the trust matrix
-  or the language-metric plots.
+- *Process shape.* One Python process (`flock-live`) runs the single live meadow, batched
+  inference for all sheep, the social tables, the lamb imitation step, optional online
+  fine-tuning, telemetry and the camera, under a supervisor (systemd) with periodic checkpoints.
+  It is the same code path as training with batch size 1 meadow and a wall-clock tick.
+- *Renderer.* A separate process consuming a state stream over a local socket: positions,
+  headings, sprites, ground marks, bubbles, bleat parameters (for audio synthesis), camera
+  choice and overlay data (expected-view ghost, surprise, trust graph, caption cards). The
+  display path (native window on the desktop → TV, or Pi/WASM, or a secondary display) is a 2.0
+  design question below and does not affect the brain.
 - *Persistence.* Snapshot the whole state (weights, recurrent states, social tables, danger
   buffer, genome archive, marks on the ground, population) on a schedule, with checkpoint
   rollback driven by the behavioural watchdog from M1.
@@ -420,29 +438,32 @@ Scarif or the desktop with the Pi rendering.
   CLIP novelty as one feature among several, not the driver.
 - *Graceful degradation.* The installation must keep running with learning off, with the curator
   off, with the fox off, and with any single channel disabled; each is a flag.
-- *Soak.* A two- to four-week unattended run on the target hardware with learning on, watching
-  the watchdog, plasticity remedies (weight decay + LayerNorm, dormant-unit reinitialisation,
+- *Soak.* A two- to four-week unattended run on the desktop with learning on, watching the
+  watchdog, plasticity remedies (weight decay + LayerNorm, dormant-unit reinitialisation,
   periodic head resets with buffer retained) and rollback. This is the only place months-long
-  behaviour of a learning population can be measured; nobody has published it.
+  behaviour of a learning population can be measured; nobody has published it. The desktop is
+  also the training machine, so the soak must coexist with (or be scheduled around) further
+  offline runs; the GPU budget split is decided here.
 
 **Success criteria.**
 
-- Benchmark spike passed: batch-60 forward + a train step within budget on the chosen host.
 - Two weeks unattended with no watchdog rollback more than once a week, population within
   bounds, per-channel CIC and topographic similarity not degrading, fox success in band.
+- Process restart from checkpoint loses less than one in-game hour of state.
 - Camera picks shots a viewer agrees are interesting (a small informal study is enough).
 - Every degradation flag exercised.
 
-**Compute.** CPU on the installation host; wall-clock weeks.
+**Compute.** The desktop GPU, shared with any remaining offline work; wall-clock weeks.
 
 **Risks and fallbacks.**
 
-- Framework overhead at ~1M parameters on CPU is worse than estimated: batch everything into one
-  call per tick; drop the decoder from the live path and compute the expected view only for the
-  sheep the camera is watching.
 - Online learning degrades behaviour over weeks: turn the online train ratio down or off; the
   system is designed to work frozen.
-- The GRU ONNX export pitfalls: single-step cell export with explicit hidden state.
+- GPU contention between the live process and offline runs: pin the live process to a fixed
+  memory budget; run offline sweeps at night with the live tick unaffected (it needs a tiny
+  fraction of the GPU).
+- Python process stability over weeks: supervisor + checkpoints; the renderer is separate so a
+  brain restart is a brief freeze, not a blank screen.
 
 ---
 
@@ -457,39 +478,36 @@ Scarif or the desktop with the Pi rendering.
 
 ---
 
-## What carries over from v0.4 (provisional)
-
-The v0.4 design document and code were not available; this is based only on the crate names and
-the brief, and is flagged for your review.
-
-| v0.4 part | 2.0 status (provisional) |
-| --- | --- |
-| Cargo workspace layout (`flock-types`, `flock-sim`, `flock-brain`, `flock-render`) | Keep the layout. `flock-brain` changes from an LLM client to a model runtime; the others extend. |
-| Rendering: Rust → WASM in a Chromium kiosk on the Pi 5 | Carries over unchanged in principle; gains overlays. |
-| ESP32 secondary display | Carries over; a good home for the trust matrix / language metrics. |
-| Persistence | Carries over in role; the state to persist grows (weights, recurrent states, social tables, danger buffer, marks, genome archive). |
-| Documentary camera | Carries over in role; shot selection changes to telemetry triggers + distilled interest scorer. |
-| Graceful degradation | Carries over as a principle; the degradation ladder is now learning → curator → fox → channels. |
-| The sim's world rules (grazing, pond, salt lick, treeline, day/night) | Carry over; add fox, injury, marks, refuge, population rails, drives. |
-| LLM per sheep (Gemma 4 E2B via llama-server) | Removed from the agent loop. The server may be reused for optional narration. |
-
----
-
 ## Decisions taken at plan review
 
-1. **Hardware.** The desktop has an RTX 4080; all training is local, no cloud. Offline work runs
-   on the desktop; the installation runs on Scarif or the desktop with the Pi rendering.
-2. **v0.4 code** is not available to this planning environment; questions about it are answered
-   on request. Specific questions still open are listed below.
+1. **Hardware.** The desktop (13700KF + RTX 4080) is both the training machine and the
+   installation host; all training is local, no cloud; use the GPU as much as possible.
+2. **v0.4 is not a constraint.** Its crate structure, Rust renderer, persistence and camera
+   designs are discarded as requirements; 2.0's architecture is decided on its own merits (Q10).
 3. **Milestone order.** Fox before sound, as planned.
-4. **M0 referent set.** K ≈ 6 object types × 4 directions; no specific objects requested.
-5. **Human-readability test.** At least two people (you plus one other).
+4. **Perception scale.** 4 px/tile, 64×64 heading-aligned view, 16×16 canvas, multi-pixel
+   sprites (Q8, Q9), from M0 onward.
+5. **M0 referent set.** K ≈ 6 object types × 4 directions; no specific objects requested.
+6. **Human-readability test.** At least two people (you plus one other).
 
-## Still open (needed by the end of Milestone 1, not before Milestone 0)
+## 2.0 architecture questions still to answer
 
-- `flock-sim` v0.4: approximate cost per agent-step; whether stepping is deterministic given a
-  seed; whether the world state can be stepped in batch (many meadows) from one process; how
-  observations are produced (is the 16×16 egocentric view already computed in the sim or in the
-  renderer?).
-- Which host runs the installation brain — Scarif (i7-7820X) or the desktop (13700KF + 4080)? If
-  the desktop, online fine-tuning becomes much cheaper and the soak-test design changes.
+These replace the v0.4 carry-over questions. None blocks M0 except the first.
+
+1. **Framework.** JAX (recommended for the vectorised sim and world model) or PyTorch (if you are
+   much more at home there)? Decided once, before M0.
+2. **Display path.** Does the TV hang off the desktop directly (renderer as a native window;
+   simplest, and the Pi is retired), or does the Pi stay as a WASM/Chromium kiosk fed by a
+   state stream over the network (keeps the TV physically separate from the desktop)? Or both?
+3. **Secondary display.** Is an ESP32 (or any) secondary display wanted in 2.0? If so, what should
+   it show — trust graph, language metrics, the "expected view" of the sheep on camera?
+4. **Sound output.** Bleats are rendered for the audience; is there a speaker in the installation,
+   and should bleat audio be synthesised live (a few parameters → a simple synth) or from a bank
+   of samples?
+5. **Persistence expectations.** How long an outage is acceptable on a restart (checkpoint
+   cadence), and should the installation be able to resume mid-night with the fox in the field?
+6. **Documentary camera.** Keep the concept of a camera that picks what to show (shots,
+   follow-cam, caption cards), or show the whole meadow with overlays and no cutting? This
+   decides whether M7 builds the curator at all.
+7. **Graceful degradation.** Which failure modes must the show survive visibly intact — brain
+   restart, learning off, GPU unavailable (CPU fallback at reduced flock size)?

@@ -27,11 +27,17 @@ not borrowed from an LLM. Whether the LLM keeps any role (narration, nothing) is
 
 - **Scarif**: Unraid homelab server, Intel i7-7820X (8C/16T, Skylake-X, AVX-512), no
   discrete GPU assumed.
-- **Desktop**: Intel i7-13700KF (16C/24T) with an **NVIDIA RTX 4080** (16 GB). This is the
-  offline training machine.
-- **Raspberry Pi 5**: rendering only.
+- **Desktop**: Intel i7-13700KF (16C/24T) with an **NVIDIA RTX 4080** (16 GB). This is both the
+  offline training machine and the installation host. Use the GPU as much as possible.
+- **Raspberry Pi 5**: available; whether it stays in the display path is a 2.0 design question.
 - **No cloud resources.** All training and runs are local. (The brief originally allowed rented
   GPU time; that option was withdrawn after the plan was reviewed.)
+
+## v0.4 is not a constraint
+
+After plan review: requirements inherited from v0.4 (crate structure, Rust renderer on the Pi,
+persistence and camera designs) are **discarded**. 2.0's architecture is decided on its own
+merits; see the architecture questions in [`03-implementation-plan.md`](03-implementation-plan.md).
 
 ## Working design
 

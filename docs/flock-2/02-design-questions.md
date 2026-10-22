@@ -12,6 +12,11 @@ Full citations: [`research/`](research/). Synthesis: [`01-research-survey.md`](0
 
 ## Q1. Mark scale — a 16×16 ground mark at 1 px/tile fills the whole view
 
+> **Superseded at plan review by Q8.** The recommendation below assumed 1 px per tile. At 4 px per
+> tile (Q8) a 16×16 canvas stamped at native scale covers a 4×4-tile footprint and is seen at its
+> own resolution, so neither the downsampling nor the "close look" is needed. The capacity
+> reasoning (≈5–8 usable bits) still holds. Kept for the record.
+
 ### Recommendation
 
 Render ground marks into a **4×4-tile footprint by default** (so a mark occupies a 4×4 patch of
@@ -417,14 +422,171 @@ life from the evidence rather than from a performance. *(Judgement.)*
 
 ---
 
+## Q8. Perception scale and sprite legibility — is 1 px per tile enough?
+
+Raised at plan review: for drawings to be interpretable by humans, the things being drawn (grass,
+fox, sheep, pond) need sprites that are simple but recognisable, and a 3–4-pixel sprite probably
+is not.
+
+### Recommendation
+
+**Change the perception scale to 4 px per tile with a 64×64 egocentric view (16-tile range),
+and keep the drawing canvas at 16×16.** Objects become multi-pixel sprites: a sheep ≈ 6×6 px, a
+fox ≈ 6×6, a tree ≈ 8×8 over 2×2 tiles, grass/pond/salt as textured tiles. A 16×16 canvas stamped
+onto the ground at native pixel scale then covers exactly a **4×4-tile footprint and is seen at
+its own resolution** inside the 64×64 view — which dissolves Q1's scale problem: no downsampling,
+no "look closely" action, no second frame. Speech bubbles are also rendered into the view at
+native scale beside the speaker. The "same encoder" idea becomes literal: a drawing is just part
+of the world image.
+
+Cheaper fallback: 3 px/tile, 48×48 view, same canvas (a stamp then covers ~5×5 tiles).
+
+### Reasoning
+
+At 1 px/tile a grass tile is a colour, not a shape, and so is a fox. An "iconic" drawing of a fox
+is then one orange pixel, indistinguishable from any orange thing; iconicity collapses to colour
+plus relative position — a *map*, not a *picture*. Maps are a legitimate iconic convention (and
+sheep may well draw them anyway), but they make the human-readability test weak and the
+shared-encoder hypothesis nearly vacuous, because resemblance has nothing to work with. With
+sprites of ~6×6 px the encoder's features respond to shape, a drawn fox can look like a fox, and
+a 16×16 canvas has room for one or two sprite-sized icons plus a relation (an arrow, a gap).
+*(Judgement.)*
+
+Three things make 64×64 the natural size rather than an arbitrary one:
+
+- It is **DreamerV3's native input resolution**: every published image config, regulariser and
+  hyperparameter is validated at 64×64, so the world model is de-risked rather than extrapolated
+  from the tiny-input regime nobody has published.
+- 16 px / 4 px = 4 tiles: the canvas-to-footprint ratio falls out exactly.
+- Human sprite legibility is well-trodden ground: 8-bit game sprites at 8×8 to 16×16 are
+  recognisable; 3–4 px are not. The 16×16 canvas is the size of a classic icon.
+
+Cost: the encoder needs four stride-2 convolutions instead of two and the decoder reconstructs
+64×64×16 logits; per-step compute rises by roughly an order of magnitude over the 16×16 design
+(to tens of MFLOP per sheep per step), which is nothing on the 4080 and still well under the CPU
+budget if the brain ever moves. *(Estimate.)* The real cost is **replay memory**: 64×64 palette
+indices at 4 bits are 2 KB per step, so 10⁷ steps is 20 GB — store replay on disk or keep buffers
+at ~10⁶ steps per flock. Night vision shrinks the lit radius of the view exactly as before.
+
+What changes elsewhere: Q1's recommendation is superseded (no footprint downsampling, no close
+look); Q2 is unchanged (the rasteriser draws on the 16×16 canvas); M0 must use the same scale so
+results transfer; and the world's visual design — the palette and the sprite set — becomes a
+design task in its own right, since the sprites are the referents the sheep learn to draw.
+
+### Evidence
+
+- DreamerV3 image configs and encoder ("stride 2 convolutions ... until resolution 4×4") are all
+  at 64×64 — [Hafner et al. 2023](https://arxiv.org/abs/2301.04104). **Established.**
+- IRIS small-object erasure at low token counts — [IRIS](https://arxiv.org/abs/2209.00588).
+  **Established.** (Argues for more pixels per object, not fewer.)
+- Shape-biased backbones give more shape-like sketches; readability depends on the encoder having
+  shape features to match — [Mihai & Hare 2021](https://arxiv.org/abs/2106.02067). **Established.**
+- Image-observation JAX envs run ~20k steps/s on one GPU vs ~1M for symbolic —
+  [XLand-MiniGrid](https://arxiv.org/abs/2312.12044). **Established.** (Rendering 64×64 views in
+  the vectorised sim is the throughput cost to budget for.)
+
+---
+
+## Q9. Visibility — whole world, local window, or a cone?
+
+### Recommendation
+
+**A local, heading-aligned window with a wide field of view and a small rear blind wedge; not the
+whole world, and not a narrow cone.** Concretely: the 64×64 view is centred on the sheep and
+rotated so "ahead" is up; a rear wedge of ~60° is masked (sheep have near-panoramic vision, so
+the blind spot is small); night shrinks the lit radius; the "head up" vigilance action extends the
+lit radius at a foraging cost. The **fox** gets a genuine forward cone, because it is a pursuit
+predator and because an asymmetric detection geometry (sheep see wide, fox sees far-but-narrow)
+is what makes flanking, hiding behind trees and the selfish herd meaningful.
+
+### Reasoning
+
+Full-world visibility removes the information asymmetry that communication exists to bridge: if
+every sheep can see every patch and the fox, there is nothing to tell. Every emergent-communication
+result relies on the sender knowing something the receiver does not. Partial observability is
+also what makes the world model do work — anticipation is only interesting when the next frame
+is uncertain — and what makes vigilance a real trade-off. *(Judgement, from Established.)*
+
+A narrow cone is wrong for sheep biologically (prey ungulates have ~270–320° fields with a small
+posterior blind spot) and bad for the installation: a sheep that cannot see a fox beside it
+reads as stupid, not vigilant. But some heading-dependence is valuable: it gives the encoder a
+consistent frame (ahead is always up), makes "turn to look" a visible behaviour, makes directional
+drawings ("that way") meaningful relative to the drawer's heading, and gives the rear wedge a
+dramatic function (the fox approaches from behind).
+
+### Evidence
+
+- Communication needs an information gap; non-emergence base rates when it is weak —
+  [Eccles et al. 2019](https://arxiv.org/abs/1912.05676), [Lazaridou & Baroni 2020](https://arxiv.org/abs/2006.02419). **Established.**
+- Swarming favoured only when predator vision ≥ 120° — [Olson et al. 2013](https://arxiv.org/abs/1209.3330). **Established.**
+  (The fox's cone must not be too narrow or grouping stops paying.)
+- Sheep vigilance behaviour: scanning bouts, group-size effect —
+  [Michelena & Deneubourg 2011](https://pmc.ncbi.nlm.nih.gov/articles/PMC3078120). **Established.**
+- Sheep visual field width: widely reported as ~270–320° with a small rear blind spot; not
+  verified against a primary source in this research. **Unverified.**
+
+---
+
+## Q10. GPU-first architecture — the desktop runs everything
+
+Raised at plan review: the installation runs on the desktop (13700KF + RTX 4080), the GPU should
+be used as much as possible, and v0.4's Rust/Pi requirements no longer constrain the design.
+
+### Recommendation
+
+**One implementation of the meadow, written as a vectorised GPU simulation, used for both
+training and the installation.** Offline, thousands of meadows run in parallel on the 4080;
+live, one meadow runs at a few Hz with the same code, with inference and online learning on the
+same GPU. The renderer is a separate process fed by a state stream, so the display path is
+decoupled from the brain (and can be Rust/WASM on the Pi, a native window on the desktop, or
+both). The installation becomes a supervised Python process rather than a Rust binary.
+
+Framework: **JAX** for the sim and the world model (the vmapped-gridworld and DreamerV3 lineage
+is JAX; Craftax/XLand/NAVIX-class throughput is the proven path), unless you are substantially
+more at home in PyTorch — in which case PyTorch with tensor-batched environments is workable at
+lower throughput and is the better choice for developer speed. This is a question for you below.
+
+### Reasoning
+
+With no cloud and no v0.4 constraint, the two-implementation problem (Rust sim for the
+installation, Python/JAX sim for training, kept in sync) has no remaining justification. The
+things that argued for Rust in the installation — a CPU-only host, a Pi in the loop, an existing
+codebase — are all gone. A single vectorised implementation means the offline-trained models run
+unchanged live, there is no ONNX export and no Rust ML crate risk, online learning is as cheap as
+the GPU allows, and every milestone's test harness *is* the installation code. *(Judgement.)*
+
+The costs are real and should be named: a long-running Python/JAX process needs supervision
+(systemd restart, periodic checkpoints — which the plan already requires), the 64×64 view
+rendering inside the vectorised sim is the throughput bottleneck (image-observation JAX envs run
+~50× slower than symbolic ones), and JAX's pure-functional style is a learning curve if
+unfamiliar.
+
+### Evidence
+
+- Vectorised JAX gridworlds and their throughput — [Craftax](https://arxiv.org/abs/2402.16801),
+  [XLand-MiniGrid](https://arxiv.org/abs/2312.12044), [JaxMARL](https://arxiv.org/abs/2311.10090). **Established.**
+- JAX at batch 1 is no faster than Python; the win is only in batch on an accelerator —
+  [JaxMARL Table 3](https://arxiv.org/abs/2311.10090). **Established.** (Live at a few Hz the
+  framework is irrelevant; the point is sharing code with training.)
+- PureJaxRL meta-evolution of 512 agents × 1024 generations on one GPU in ~9 h —
+  [PureJaxRL](https://chrislu.page/blog/meta-disco/). **Established.** (M6's evolution loop fits a
+  single GPU in this stack.)
+- Rust ML crate status and ONNX GRU export pitfalls that this avoids —
+  [`research/tooling-and-hardware.md` KQ3–4](research/tooling-and-hardware.md).
+
+---
+
 ## Summary table
 
 | # | Question | Recommendation (short) | Confidence | Tested at |
 | --- | --- | --- | --- | --- |
-| 1 | Mark scale | 4×4-tile footprint + automatic full-res close look; bubbles at 16×16; ≈5–8 usable bits | Medium — footprint legibility unstudied | M0, M4 |
+| 1 | Mark scale | Superseded by Q8: at 4 px/tile a 16×16 stamp *is* a 4×4-tile footprint at native resolution; ≈5–8 usable bits | High (given Q8) | M0, M4 |
 | 2 | Drawing action space | Differentiable stroke/stamp rasteriser + ink cost + perceptual loss; VQ-decoder fallback | High that strokes train; medium that iconicity follows | M0 |
 | 3 | Death | Injury first; death on second catch or old age; births track deaths with floor/ceiling; small refuge | High | M2, M7 |
 | 4 | Fox | Scripted parametric fox with confusion rule and governor; offline fox-dense training; frozen fox head live | High | M2 |
 | 5 | Offline vs online | Learn offline, maintain online; genome / lifetime / culture kept separate | High on feasibility; medium on how much online fine-tuning is safe | M1, M7 |
 | 6 | LLM | Camera curator from ground-truth captions; optional grounded narration; never a brain or reward | High | M7 |
 | 7 | Theatre vs science | Open at generation N; show the internal scalars; scripted drama where emergence is unproven; design for the null | — | all |
+| 8 | Perception scale | 4 px/tile, 64×64 view, 16×16 canvas; multi-pixel sprites; DreamerV3-native resolution | Medium-high; replay memory is the cost | M0, M1 |
+| 9 | Visibility | Local heading-aligned window, wide FOV, small rear blind wedge; night shrinks radius; fox gets a cone | High | M1, M2 |
+| 10 | Architecture | One vectorised GPU sim (JAX by default) for training and installation; renderer decoupled by a state stream | High on shape; framework choice is yours | M1, M7 |

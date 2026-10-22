@@ -398,15 +398,18 @@ inference (~12% CPU) but not training (~0.6 s/step) and already runs the rendere
 Rust sim on the 13700KF reaches perhaps 10⁴–10⁵ agent-steps/s with learning — 10–100× below the
 JAX-on-GPU regime for population-scale evolution.
 
-**Judgement.** Keep the Rust sim as the single source of truth and the Pi as renderer only.
-Offline training in Python; PyTorch + PyO3-wrapped batched sim by default, with a JAX port of the
-meadow only if thousands-of-sheep evolution becomes central. Installation inference in Rust via
-`ort` (ONNX) or `burn` (safetensors, if online learning in Rust is wanted). A half-day benchmark
-spike (export a 2M-param cell, time batch-60 forward and a 512-sample train step on both CPUs)
-should precede architecture lock-in.
+**Judgement (as researched, before plan review).** Keep the Rust sim as the single source of
+truth and the Pi as renderer only; offline training in Python; installation inference in Rust via
+`ort` or `burn`.
 
-**Verdict:** the installation side is comfortably feasible on either x86 box; the offline side is
-cheap in dollars and expensive in developer time only if a second (JAX) meadow is built.
+**Revised at plan review.** The installation runs on the desktop with the RTX 4080, there is no
+cloud, and v0.4's Rust/Pi requirements were discarded. That removes every reason for a second
+implementation: one vectorised GPU simulation (JAX by default) serves training and the
+installation, with the renderer decoupled by a state stream. See design question Q10. The Rust
+crate findings above remain valid if a Rust renderer or a CPU fallback is ever wanted.
+
+**Verdict:** with a local GPU and no legacy constraint, a single vectorised implementation is
+both the cheapest and the least risky route.
 
 ---
 

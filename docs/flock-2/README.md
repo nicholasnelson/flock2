@@ -24,6 +24,7 @@ is production code; the first build step is the Milestone 0 toy prototype descri
 - Every claim taken from the literature carries a link (arXiv, DOI or official repository).
 - Established results, estimates and speculation are labelled as such. Where a section is
   the author's own judgement rather than a cited result, it says so.
-- v0.4 (the LLM-driven FLOCK) is referenced only as described in the 2.0 brief; its design
-  document and code were not available when this was written, so statements about what
-  carries over from v0.4 are provisional and flagged for review.
+- v0.4 (the LLM-driven FLOCK) is not a constraint on 2.0. Its design document and code were not
+  available when this was written, and at plan review its requirements (crate structure, Rust
+  renderer on the Pi, persistence and camera designs) were discarded; 2.0's architecture is
+  decided on its own merits (design question Q10 and the architecture questions in the plan).
