@@ -90,14 +90,22 @@ OBJECTS = {
             "..DTTTD.",
         ]
     ),
+    # A pine: three stacked tiers, lit from the left, 14 px tall so it stands well above its
+    # tile. Keep every object within 16 px: the 16x16 drawing must be able to cover it at the
+    # scale the sender sees it (PROBE_CANVAS_PX centres the canvas on the sprite box).
     "tree": _parse(
         [
-            "...DDDD...",
-            ".DDggggDD.",
-            "DgggglgggD",
-            "DgglggglgD",
-            ".DgggggDD.",
-            "..DDgggD..",
+            "....DD....",
+            "...DlgD...",
+            "...DlGD...",
+            "..DlggGD..",
+            "..DDlGDD..",
+            "..DlggGD..",
+            ".DlgggGGD.",
+            ".DDlggGDD.",
+            ".DlgggGGD.",
+            "DlggggGGGD",
+            "DDDDDDDDDD",
             "....TT....",
             "....TT....",
             "...DTTD...",

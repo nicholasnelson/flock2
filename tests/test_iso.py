@@ -43,12 +43,12 @@ def test_sprites_billboarded_and_depth_sorted():
         v = np.asarray(iso.render_view(tm, objects, agents, jnp.array([12, 12]), jnp.int32(h)))
         # the sheep's wool is at the view centre regardless of heading
         assert (v[26:36, 26:38] == 8).sum() > 10, h
-        # the tree's canopy outline colour (15) appears somewhere and is upright: its top row
-        # is a run of 4 outline pixels
-        ys, xs = np.where(v == 15)
-        assert len(ys) > 0, h
-        top = ys.min()
-        assert (v[top] == 15).sum() >= 4, h
+        # the tree is upright: its trunk (bark, colour 6; nothing else in this scene uses it)
+        # sits wholly below the top of its canopy outline (colour 15)
+        ys, _ = np.where(v == 15)
+        bark_ys, _ = np.where(v == 6)
+        assert len(ys) > 0 and len(bark_ys) > 0, h
+        assert bark_ys.min() > ys.min() + 4, h
 
 
 def test_agent_facing_flips_with_view_rotation():
