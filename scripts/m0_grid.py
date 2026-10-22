@@ -10,6 +10,7 @@ The grid tests, per the plan:
   6. black-only drawing, with and without colour-dropout perception pre-training
   7. (128 world) fixed-width lines, sweeping the cost per unit length
   8. (128 world) instance variation x channel jitter x invariant judge, lines at cost 0.002
+  9. (128 world) anti-blank options x bubble/stamp, with centring and stamp rotation
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -73,13 +74,25 @@ _LINE = dict(mono=True, stroke_width=2.0, stroke_cost=4.0, hard_gate=True, pretr
 for _v in (False, True):
     for _j in (False, True):
         for _i in (False, True):
-            _name = "inv3_" + ("V" if _v else "v") + ("J" if _j else "j") + ("I" if _i else "i")
+            _name = f"inv3_var{int(_v)}_jit{int(_j)}_judge{int(_i)}"
             CELLS[_name] = dict(_LINE, perceptual_weight=1.0, mode="bubble", variation=_v, jitter_px=4 if _j else 0, judge_invariance=1.0 if _i else 0.0)
-CELLS["inv3_VJI_noperc"] = dict(_LINE, perceptual_weight=0.0, mode="bubble", variation=True, jitter_px=4, judge_invariance=1.0)
-CELLS["inv3_VJI_stamp"] = dict(_LINE, perceptual_weight=1.0, mode="stamp", variation=True, jitter_px=4, judge_invariance=1.0)
+CELLS["inv3_all_noperc"] = dict(_LINE, perceptual_weight=0.0, mode="bubble", variation=True, jitter_px=4, judge_invariance=1.0)
+CELLS["inv3_all_stamp"] = dict(_LINE, perceptual_weight=1.0, mode="stamp", variation=True, jitter_px=4, judge_invariance=1.0)
+
+# No blank drawings x the channel: drawings are re-centred on their ink (and, as stamps, turned by
+# a random multiple of 90 degrees) before they are read. Tunes the two anti-blank options.
+_ALL = dict(_LINE, perceptual_weight=1.0, variation=True, jitter_px=4, judge_invariance=1.0, centre_glyph=True, rotate_stamps=True)
+for _mode in ("bubble", "stamp"):
+    for _tag, _opts in [("none", {}), ("min1", dict(min_strokes=1)), ("bw005", dict(blank_weight=0.05)), ("bw02", dict(blank_weight=0.2)), ("min1bw005", dict(min_strokes=1, blank_weight=0.05))]:
+        CELLS[f"tune_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, **_opts)
 
 
-KEYS = ["acc", "acc_seen", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]
+# Cell names become directory names; on Windows (and /mnt/c under WSL) those are case-insensitive,
+# so two names differing only in case would share a directory and overwrite each other's files.
+assert len({n.lower() for n in CELLS}) == len(CELLS), "cell names must differ by more than case"
+
+
+KEYS = ["acc", "acc_seen", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink", "blank_frac"]
 
 
 def main():
