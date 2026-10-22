@@ -194,7 +194,54 @@ game loss alone gives drawings humans cannot read; see Q2), and the
 
 Same grid on the taller pine (`14ab226`) plus three cells where strokes are drawn on 8×8 and
 shown 2× enlarged (`canvas_res=8`, commit `35f0986`): the owner's hypothesis that a coarser
-drawing pushes toward simplified pictographs rather than faithful renderings. Results pending.
+drawing pushes toward simplified pictographs rather than faithful renderings.
+
+| cell | acc | acc_blank | acc_swapped | CIC | judge_probe | judge_rank | ink |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| shared_noperc | 0.99±0.00 | 0.22±0.02 | 0.08±0.02 | 7.3±1.5 | 0.17±0.01 | 0.17±0.00 | 7.0 |
+| shared_perc | 0.98±0.01 | 0.22±0.01 | 0.08±0.02 | 11.4±3.6 | 0.73±0.03 | 0.71±0.05 | 15.9 |
+| separate_noperc | 0.99±0.00 | 0.26±0.04 | 0.09±0.02 | 4.6±1.0 | 0.17±0.01 | 0.15±0.02 | 1.3 |
+| separate_perc | 0.99±0.01 | 0.23±0.01 | 0.10±0.01 | 8.8±0.8 | 0.75±0.06 | 0.70±0.03 | 10.5 |
+| shared_perc_stamp | 0.99±0.00 | 0.24±0.01 | 0.09±0.02 | 13.1±0.4 | 0.71±0.09 | 0.71±0.08 | 11.6 |
+| shared_noperc_stamp | 1.00±0.00 | 0.26±0.01 | 0.10±0.04 | 7.9±1.7 | 0.25±0.10 | 0.25±0.09 | 5.7 |
+| latent_noperc | 0.75±0.34 | 0.23±0.06 | 0.15±0.08 | 7.5±5.8 | 0.16±0.01 | 0.16±0.02 | 4.8 |
+| latent_perc | 1.00±0.01 | 0.22±0.00 | 0.09±0.01 | 11.9±2.2 | 0.77±0.01 | 0.77±0.02 | 32.1 |
+| pixels_noperc | 0.99±0.01 | 0.26±0.03 | 0.08±0.01 | 7.8±1.6 | 0.14±0.02 | 0.13±0.01 | 15.4 |
+| pixels_perc | 0.99±0.00 | 0.23±0.02 | 0.08±0.01 | 9.4±1.5 | 0.74±0.01 | 0.70±0.01 | 34.2 |
+| shared_perc_aux | 0.99±0.01 | 0.22±0.01 | 0.10±0.03 | 11.3±3.2 | 0.76±0.03 | 0.73±0.03 | 18.2 |
+| shared_noperc_aux | 0.99±0.00 | 0.23±0.02 | 0.08±0.03 | 7.9±1.0 | 0.13±0.06 | 0.15±0.04 | 7.4 |
+| shared_noperc_c8 | 0.99±0.01 | 0.22±0.01 | 0.09±0.04 | 7.3±4.0 | 0.16±0.01 | 0.15±0.02 | 5.8 |
+| shared_perc_c8 | 0.98±0.01 | 0.22±0.04 | 0.09±0.03 | 10.6±0.9 | 0.76±0.04 | 0.73±0.03 | 16.7 |
+| shared_perc_stamp_c8 | 1.00±0.00 | 0.24±0.01 | 0.09±0.01 | 12.5±0.8 | 0.70±0.12 | 0.70±0.09 | 12.2 |
+
+`latent_noperc`: again one seed (s0) failed to communicate. `shared_perc_stamp_c8`: seeds
+0.87 / 0.63 / 0.61 on the judge probe — the highest single seed of either grid.
+
+What this adds:
+
+1. **Grid 1 replicates on the new tree.** Every conclusion above holds; the pine changes no
+   cell by more than seed noise.
+2. **The stamp-without-resemblance signal is weak.** 0.25 ± 0.10 here (seeds 0.39, 0.17,
+   0.18); pooled over both grids 0.29 (six seeds: 0.45, 0.20, 0.32, 0.39, 0.17, 0.18). Half the
+   seeds show something, half are at chance. Not enough to claim the shared encoder produces
+   iconicity in stamp mode; enough to keep the stamp cell in later grids.
+3. **8×8 drawings: no measurable change, and not more pictographic by eye.** Every 8×8 cell
+   matches its 16×16 counterpart within noise. The galleries are blockier versions of the same
+   content, not simpler ones. Two small differences that go the owner's way: at 8×8 the pine
+   is drawn as a tall vertical block (its silhouette) rather than the 16×16 cell's round brown
+   blob, and the flower becomes a pink block (nearer its red) rather than near-blank.
+   *(Judgement, from one seed's gallery per cell.)* The literature locates simplification in
+   effort cost and interaction feedback, not resolution
+   ([Fay et al. 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2607338/);
+   [Qiu et al. 2022](https://arxiv.org/abs/2111.14210)), and this toy's ink cost is small, so
+   the null result is unsurprising.
+4. **Two referents cannot be drawn in their own colour, by construction.** No cell ever draws
+   the pine or bush green: the resemblance loss pastes the drawing on grass, and stamps are
+   read on grass, so green ink is indistinguishable from the background. In bubble mode the
+   paper is white, so the salt lick's white is likewise unavailable to the receiver. This is a
+   property of the game, not of training, and it caps readability for those types.
+
+Galleries compared: `runs/m0/grid_pine_c8_vs_c16.png` (local, not in the repo).
 
 ## What the plan predicts
 
