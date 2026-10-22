@@ -114,3 +114,17 @@ def test_composite_canvas_bubble_and_stamp():
     assert float(bubble[0, 0, 8]) == 1.0  # paper where no ink
     assert float(stamp[0, 0, 1]) == 1.0  # ground where no ink
     assert float(bubble[5, 5, 12]) == 1.0 and float(stamp[5, 5, 12]) == 1.0
+
+
+def test_fixed_width_lines_are_thin_and_ink_is_length_only():
+    from flock.raster import Strokes, rasterise
+
+    # one horizontal stroke across the middle, gate fully on; the raw width output is huge
+    e = jnp.array([[-2.0, 0.0, 2.0, 0.0]])  # sigmoid -> x from ~0.12 to ~0.88 of the canvas, y = 0.5
+    st = Strokes(endpoints=e, width=jnp.array([10.0]), colour=jnp.zeros((1, 16)), gate=jnp.array([20.0]))
+    c = rasterise(st, size=32, fixed_width=2.0)
+    a = np.asarray(c.alpha)
+    col = a[:, 16]
+    assert 1 <= (col > 0.5).sum() <= 3  # about 2 px thick, whatever the width output says
+    length = 32 * (float(jax.nn.sigmoid(2.0)) - float(jax.nn.sigmoid(-2.0)))
+    assert abs(float(c.ink) - length) < 0.1

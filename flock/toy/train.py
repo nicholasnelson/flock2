@@ -37,6 +37,7 @@ class Config:
     k_strokes: int = 8
     canvas_res: int = 0  # 0: strokes are rasterised at the drawing's own size in the view (16 top-down, 32 iso); else at this coarser resolution, then enlarged
     mono: bool = False  # every stroke is drawn in the outline colour (15); the sender chooses shape only
+    stroke_width: float = 0.0  # >0: every stroke is a line of this width (displayed px) and ink is length only; 0: width is free
     shared_encoder: bool = True
     freeze_encoder: bool = True
     width: int = 32
@@ -203,6 +204,7 @@ def train(cfg: Config) -> dict:
         cfg.width,
         canvas_res=cfg.canvas_res or None,
         mono_colour=15 if cfg.mono else None,
+        stroke_width=cfg.stroke_width or None,
         view=E.VIEW,
         canvas=E.CANVAS,
     )

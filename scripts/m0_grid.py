@@ -8,6 +8,7 @@ The grid tests, per the plan:
   4. bubble vs stamp
   5. drawing resolution: 16x16 vs 8x8 shown 2x enlarged
   6. black-only drawing, with and without colour-dropout perception pre-training
+  7. (128 world) fixed-width lines, sweeping the cost per unit length
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -54,6 +55,14 @@ CELLS = {
     "mono_noperc_stamp_cd": dict(mono=True, perceptual_weight=0.0, mode="stamp", pretrain_colour_dropout=0.5),
     "mono_perc_stamp_cd": dict(mono=True, perceptual_weight=1.0, mode="stamp", pretrain_colour_dropout=0.5),
 }
+# 128 x 128 isometric world (16x8 tiles; referents salt lick, pine, flower, fox): black lines of
+# fixed 2 px width, ink = total line length, colour-dropout judge; sweep the cost per unit length.
+for _ink, _tag in [(0.002, "002"), (0.01, "01"), (0.03, "03")]:
+    for _mode in ("bubble", "stamp"):
+        for _pw, _p in [(1.0, "perc"), (0.0, "noperc")]:
+            CELLS[f"line_{_p}_{_mode}_ink{_tag}"] = dict(
+                mono=True, stroke_width=2.0, pretrain_colour_dropout=0.5, perceptual_weight=_pw, mode=_mode, ink_weight=_ink
+            )
 
 KEYS = ["acc", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]
 

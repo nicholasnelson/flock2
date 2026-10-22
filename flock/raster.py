@@ -58,15 +58,21 @@ def rasterise(
     min_width: float = 0.6,
     temperature: float = 1.0,
     hard_colour: bool = False,
+    fixed_width: float | None = None,
 ) -> Canvas:
     """Render strokes to a soft canvas.
 
     Widths and distances are in pixels. ``edge_softness`` is the sigmoid scale of the stroke
-    edge; smaller is crisper (and harder to optimise).
+    edge; smaller is crisper (and harder to optimise). With ``fixed_width`` every stroke is a
+    line of that width (the network's width output is ignored) and ink is length only; otherwise
+    width is free and ink is length + width.
     """
     pts = _pixel_centres(size) * size  # pixel coordinates
     ends = jax.nn.sigmoid(strokes.endpoints) * size  # (K, 4)
-    width = jax.nn.softplus(strokes.width) + min_width  # (K,)
+    if fixed_width is None:
+        width = jax.nn.softplus(strokes.width) + min_width  # (K,)
+    else:
+        width = jnp.full(strokes.width.shape, fixed_width)
     gate = jax.nn.sigmoid(strokes.gate)  # (K,)
     colour = jax.nn.softmax(strokes.colour / temperature, axis=-1)  # (K, 16)
     if hard_colour:
@@ -96,7 +102,7 @@ def rasterise(
     col = jnp.where(alpha[..., None] > 1e-6, col, 1.0 / N_COLOURS)
 
     length = jnp.linalg.norm(ends[:, 2:] - ends[:, :2] + 1e-9, axis=-1)
-    ink = jnp.sum(gate * (length + width))
+    ink = jnp.sum(gate * (length if fixed_width is not None else length + width))
     return Canvas(colour=col, alpha=alpha, ink=ink)
 
 

@@ -86,7 +86,7 @@ class Decoder(nnx.Module):
 class StrokeSender(nnx.Module):
     """Embedding -> K stroke primitives -> rasterised canvas."""
 
-    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256, size: int = CANVAS, res: int | None = None, mono_colour: int | None = None):
+    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256, size: int = CANVAS, res: int | None = None, mono_colour: int | None = None, stroke_width: float | None = None):
         """Strokes are rasterised directly at ``size`` px, the drawing's size in the view.
         ``res`` < ``size`` draws on a coarser grid that is enlarged (nearest-neighbour) to
         ``size``: same footprint, chunkier pixels. ``mono_colour`` fixes every stroke to one
@@ -97,6 +97,8 @@ class StrokeSender(nnx.Module):
         self.size = size
         self.res = res
         self.mono_colour = mono_colour
+        # fixed line width in displayed px (None: width is the network's choice); ink is then length only
+        self.stroke_width = stroke_width
         self.h1 = nnx.Linear(EMBED, hidden, rngs=rngs)
         self.h2 = nnx.Linear(hidden, hidden, rngs=rngs)
         per = 4 + 1 + N_COLOURS + 1
@@ -120,7 +122,8 @@ class StrokeSender(nnx.Module):
 
     def __call__(self, emb: jax.Array, hard_colour: bool = False) -> Canvas:
         s = self.strokes(emb)
-        canvas = jax.vmap(lambda st: rasterise(st, size=self.res, hard_colour=hard_colour))(s)
+        fw = None if self.stroke_width is None else self.stroke_width * self.res / self.size
+        canvas = jax.vmap(lambda st: rasterise(st, size=self.res, hard_colour=hard_colour, fixed_width=fw))(s)
         f = self.size // self.res
         if f == 1:
             return canvas
@@ -245,6 +248,7 @@ class Agents(nnx.Module):
         width: int = 32,
         canvas_res: int | None = None,
         mono_colour: int | None = None,
+        stroke_width: float | None = None,
         view: int = 64,
         canvas: int = CANVAS,
     ):
@@ -254,10 +258,10 @@ class Agents(nnx.Module):
         self.encoder = Encoder(rngs, width, view)
         self.decoder = Decoder(rngs, width, view)
         self.canvas = canvas
-        if (canvas_res is not None or mono_colour is not None) and action_space != "strokes":
-            raise ValueError("canvas_res and mono_colour are only implemented for the stroke sender")
+        if (canvas_res is not None or mono_colour is not None or stroke_width is not None) and action_space != "strokes":
+            raise ValueError("canvas_res, mono_colour and stroke_width are only implemented for the stroke sender")
         if action_space == "strokes":
-            self.sender = StrokeSender(rngs, k_strokes, size=canvas, res=canvas_res, mono_colour=mono_colour)
+            self.sender = StrokeSender(rngs, k_strokes, size=canvas, res=canvas_res, mono_colour=mono_colour, stroke_width=stroke_width)
         elif action_space == "latent":
             self.sender = LatentSender(rngs, size=canvas)
         elif action_space == "pixels":
