@@ -240,7 +240,7 @@ offline-trained one so the fox is "known" from day one.
 
 ### Recommendation
 
-| Component | Offline (rented GPU / desktop, once per release) | Online (installation, continuous) |
+| Component | Offline (desktop RTX 4080, once per release) | Online (installation, continuous) |
 | --- | --- | --- |
 | Perception encoder + RSSM world model | Self-supervised on logged sim video; then imagination training | Frozen, or fine-tuned at train ratio ≈1–2 with plasticity remedies and rollback |
 | Policy (actor-critic heads) | Pre-trained in imagination / PPO under fox-dense curriculum | Slow per-lineage adaptation; fox-response head frozen |

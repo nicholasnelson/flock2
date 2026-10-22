@@ -29,10 +29,12 @@ evidence in [`01-research-survey.md`](01-research-survey.md) and [`research/`](r
 | 7 | Integration and soak | Does it run for weeks on the installation hardware? | The installation | CPU, weeks of wall-clock |
 | 8 | Optional extras | Narration; frozen learned fox; migrants | — | small |
 
-GPU-hours are at RTX 4090 class (≈$0.35–0.90/h in October 2026, see
-[`research/tooling-and-hardware.md` KQ7](research/tooling-and-hardware.md)); the total offline
-budget for the whole plan is on the order of $50–150 plus sweeps, i.e. not the constraint.
-Developer time is.
+GPU-hours are on the desktop's RTX 4080 (16 GB), which is within ~20–30% of the RTX 4090 the
+published throughput figures use (**Estimate**; the 4080 has fewer SMs and less bandwidth, and 16
+GB vs 24 GB bounds batch size, not feasibility). No cloud resources are used. The whole plan's
+offline compute is on the order of 100–200 GPU-hours, i.e. a few weeks of overnight runs on one
+machine; developer time, not compute, is the constraint. The Milestone 6 evolution sweeps are the
+only place the single-GPU budget could bite; see that milestone's fallback.
 
 ---
 
@@ -42,14 +44,16 @@ Developer time is.
   workspace. The differentiable rasteriser, the auxiliary losses and the metrics are all easier
   to iterate in Python, and nothing in these milestones needs the renderer.
 - **The vectorised meadow question is deferred to the end of M1.** Two routes exist: (A) a JAX
-  port of the meadow (10⁵–10⁶ agent-steps/s on a rented GPU; a second implementation to keep in
-  sync), or (B) the Rust `flock-sim` exposed via PyO3 with batched stepping (one implementation;
-  ≈10⁴–10⁵ agent-steps/s on the 13700KF). The M1 compute profile decides; see the open questions
-  at the end.
+  port of the meadow (10⁵–10⁶ agent-steps/s on the 4080; a second implementation to keep in
+  sync), or (B) the Rust `flock-sim` exposed via PyO3 with batched stepping on the CPU (one
+  implementation; ≈10⁴–10⁵ agent-steps/s on the 13700KF) with the networks on the 4080. With a
+  local GPU, route B is viable for every milestone except possibly M6's population-scale
+  evolution; the M1 compute profile and the answers about `flock-sim` (below) decide.
 - **Installation inference is Rust via `ort` (ONNX)**, with the recurrent cell exported as a
   single-step function with hidden state as explicit I/O. If online learning in Rust is wanted,
   `burn` with safetensors. A half-day benchmark spike precedes M7 (export a ~2M-param cell; time a
-  batch-60 forward and a 512-sample train step on both i7s).
+  batch-60 forward and a 512-sample train step on both i7s, and on the 4080 via `ort`'s CUDA
+  provider if the desktop hosts the installation).
 - **Every milestone logs the same telemetry schema** from day one (per-sheep drives, surprise
   scalars, per-channel CIC, topographic similarity, trust tables, population), because the
   documentary camera in M7 is driven by these and retrofitting is painful.
@@ -107,7 +111,7 @@ resemblance loss.
 
 **Compute.** Small CNN (~100k parameters) and ~10⁴–10⁵ episodes per cell; minutes to an hour per
 cell on the 13700KF; the full ablation grid (≈24 cells × 3 seeds) in a day or two of CPU, or an
-hour on a rented 4090. No GPU required.
+hour or two on the 4080. No GPU required, but it is there.
 
 **Risks and fallbacks.**
 
@@ -158,7 +162,7 @@ looks alive to a viewer and whose "expected view" and surprise are displayable.
 - Stability: a 24-hour continuous run with learning on shows no behavioural-metric regression
   (watchdog thresholds defined here and reused in M7).
 
-**Compute.** World-model pretraining on ~10⁷ logged steps: hours on a 4090 (~5–10 GPU-h
+**Compute.** World-model pretraining on ~10⁷ logged steps: hours on the 4080 (~5–10 GPU-h
 including a hyperparameter sweep); drives and policy tuning mostly CPU.
 
 **Risks and fallbacks.**
@@ -373,7 +377,10 @@ isolation.
 
 **Compute.** Evolution across many meadows: ~20–40 GPU-h for a few hundred generations at
 population 256–1,000 (the Hamon anchor is 1,000 agents × 1M steps in ~20 min on one GPU); the
-in-world cohort mechanism is CPU-cheap.
+in-world cohort mechanism is CPU-cheap. This is the one milestone where a single 4080 could be
+limiting; if sweeps take more than a few overnight runs, shrink the genome (ES is unreliable past
+~100k parameters anyway), reduce population, or run the outer loop on CPU cores in parallel with
+GPU work.
 
 **Risks and fallbacks.**
 
@@ -468,19 +475,21 @@ the brief, and is flagged for your review.
 
 ---
 
-## Open questions for you before Milestone 0 starts
+## Decisions taken at plan review
 
-These are decisions I cannot make from the research, or facts I do not have.
+1. **Hardware.** The desktop has an RTX 4080; all training is local, no cloud. Offline work runs
+   on the desktop; the installation runs on Scarif or the desktop with the Pi rendering.
+2. **v0.4 code** is not available to this planning environment; questions about it are answered
+   on request. Specific questions still open are listed below.
+3. **Milestone order.** Fox before sound, as planned.
+4. **M0 referent set.** K ≈ 6 object types × 4 directions; no specific objects requested.
+5. **Human-readability test.** At least two people (you plus one other).
 
-1. **Does the 13700KF desktop have a GPU?** If it has any 8 GB+ NVIDIA card, most of the offline
-   work runs on-prem and the cloud is optional. The plan assumes no GPU.
-2. **v0.4 code.** If `flock-sim` is reusable as the batched environment (route B), the JAX port
-   (route A) may never be needed. I would like to see the sim's per-step cost and its API before
-   the end of M1.
-3. **Milestone order.** Fox before sound (as planned) or the brief's sound-first order?
-4. **The toy's referent set.** I propose K ≈ 6 object types × 4 directions for M0. Any objects you
-   want in from the start (for the eventual meadow's look)?
-5. **Human-readability test.** M0's readability criterion needs a few people to guess referents
-   from drawings. Just you, or can you rope in a few others?
-6. **Cloud GPU account.** RunPod/Vast/Lambda — do you have a preference or an existing account?
-   Budget for the whole plan is tens of dollars at current prices.
+## Still open (needed by the end of Milestone 1, not before Milestone 0)
+
+- `flock-sim` v0.4: approximate cost per agent-step; whether stepping is deterministic given a
+  seed; whether the world state can be stepped in batch (many meadows) from one process; how
+  observations are produced (is the 16×16 egocentric view already computed in the sim or in the
+  renderer?).
+- Which host runs the installation brain — Scarif (i7-7820X) or the desktop (13700KF + 4080)? If
+  the desktop, online fine-tuning becomes much cheaper and the soak-test design changes.

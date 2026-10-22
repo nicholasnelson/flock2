@@ -27,10 +27,11 @@ not borrowed from an LLM. Whether the LLM keeps any role (narration, nothing) is
 
 - **Scarif**: Unraid homelab server, Intel i7-7820X (8C/16T, Skylake-X, AVX-512), no
   discrete GPU assumed.
-- **Desktop**: Intel i7-13700KF (16C/24T). GPU presence not stated — treated as an open
-  question.
+- **Desktop**: Intel i7-13700KF (16C/24T) with an **NVIDIA RTX 4080** (16 GB). This is the
+  offline training machine.
 - **Raspberry Pi 5**: rendering only.
-- **Rented cloud GPU** time for one-off offline training is acceptable if justified.
+- **No cloud resources.** All training and runs are local. (The brief originally allowed rented
+  GPU time; that option was withdrawn after the plan was reviewed.)
 
 ## Working design
 
