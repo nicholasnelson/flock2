@@ -163,16 +163,32 @@ class MessageEncoder(nnx.Module):
 
 
 class Receiver(nnx.Module):
-    """Tile logits (B, 16, 16) from the feature map and a global context vector."""
+    """Tile logits (B, 16, 16) from the feature map, a global context vector, and the feature
+    cells under the canvas.
+
+    The canvas pathway is the receiver "looking at the bubble": the 4x4 feature-map cells at
+    the canvas position (features from the *shared* perception encoder) are pooled into the
+    context. Without it the only route from canvas pixels to the decision is the global
+    bottleneck embedding, which is too weak a channel for communication to get started.
+    """
 
     def __init__(self, rngs: nnx.Rngs, map_channels: int, hidden: int = 64):
         self.ctx = nnx.Linear(EMBED, hidden, rngs=rngs)
+        self.canvas_read = nnx.Linear(4 * 4 * map_channels, hidden, rngs=rngs)
         self.loc = nnx.Conv(map_channels, hidden, (3, 3), padding="SAME", rngs=rngs)
         self.mix = nnx.Conv(hidden, hidden, (3, 3), padding="SAME", rngs=rngs)
         self.out = nnx.Conv(hidden, 1, (1, 1), rngs=rngs)
 
-    def __call__(self, fmap: jax.Array, context: jax.Array) -> jax.Array:
-        h = _act(self.loc(fmap) + self.ctx(context)[:, None, None, :])
+    def __call__(self, fmap: jax.Array, context: jax.Array, canvas_tile: jax.Array) -> jax.Array:
+        """canvas_tile: (B, 2) top-left tile (row, col) of the canvas in the view."""
+        c = fmap.shape[-1]
+
+        def crop(m, t):
+            return jax.lax.dynamic_slice(m, (t[0], t[1], 0), (4, 4, c)).reshape(-1)
+
+        cells = jax.vmap(crop)(fmap, canvas_tile)
+        ctx = self.ctx(context) + self.canvas_read(cells)
+        h = _act(self.loc(fmap) + ctx[:, None, None, :])
         h = _act(self.mix(h))
         return self.out(h)[..., 0]
 

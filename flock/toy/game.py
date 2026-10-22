@@ -54,7 +54,7 @@ def receive(model: Agents, receiver_base: jax.Array, canvas: Canvas, canvas_px: 
         rv = comp(rb, empty.colour, empty.alpha, canvas_px)
         emb_r, fmap = model.encoder(rv)
         context = emb_r + model.message_encoder(canvas)
-    logits = model.receiver(fmap, context)
+    logits = model.receiver(fmap, context, canvas_px // world.TILE)
     return logits, rv
 
 
