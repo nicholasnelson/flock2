@@ -180,14 +180,14 @@ SHEEP_FRONT_R = _parse(
 )
 SHEEP_BACK_R = _parse(
     [
-        "....WWWW.sPs",
+        "....WWWWWsPs",
         "..WWWWWWWWss",
         ".WWWWWWWWWWs",
         ".WWWWWWWWWW.",
+        "WWWWWWWWWWW.",
         "WWWWWWWWWW..",
-        "WWWWWWWWW...",
-        "sSWWWWWWW...",
-        "..SSSSSSS...",
+        "sSWWWWWWWW..",
+        "..SSSSSSSS..",
         "...K...K.K..",
         "...K...K....",
     ]
