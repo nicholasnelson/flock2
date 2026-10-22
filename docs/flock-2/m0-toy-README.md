@@ -18,8 +18,13 @@ pytest -q                           # ~2 min on CPU
 ## One run
 
 ```bash
-python scripts/m0_run.py --out_dir runs/m0/shared_perc --perceptual_weight 1.0
+python scripts/m0_run.py --out_dir runs/m0/shared_perc --perceptual_weight 1.0 --renderer iso
 ```
+
+`--renderer iso` is the isometric world (the one the project will use); `--renderer topdown`
+is the original top-down renderer, kept because it is the one the CPU results below were
+obtained with. Both expose the same game; only the pixels differ. Run both on the first GPU
+session and keep whichever is not broken if they disagree.
 
 Defaults: 4 candidates, bubble mode, stroke sender with 8 strokes, shared frozen encoder, 1,500
 pre-training steps then 4,000 game steps at batch 64, eval every 500. `--help` lists every

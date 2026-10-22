@@ -487,6 +487,21 @@ design task in its own right, since the sprites are the referents the sheep lear
 
 ---
 
+### Addendum: isometric rendering (after plan review)
+
+The world is rendered **isometrically** (2:1 diamond tiles, 8×4 px at the current scale) with
+four grass growth states as ground tiles, water as a ground state, single-tile camera-facing
+objects, and sheep/fox facing left or right. An earlier note here claimed a fixed camera was
+unavoidable with isometric art; that was wrong. The tile *layout* is rotated about the sheep by
+its heading before projection and every sprite is drawn upright (billboarded), so the view is
+still heading-aligned (Q9 stands), the human display is the same renderer at rotation 0, and a
+drawing of a tree is the same picture in every frame. "Ahead" projects to the up-right screen
+diagonal. The one cost is that an agent's screen facing depends on the view rotation; with two
+facings (left/right) that is a lossy but legible mapping, and four facings can be added later.
+Resolution stays at 64×64 for M0/M1 (decision: keep for now; see the plan for the cost table).
+
+Implementation: `flock/iso.py`, `flock/sprites_iso.py`; tests in `tests/test_iso.py`.
+
 ## Q9. Visibility — whole world, local window, or a cone?
 
 ### Recommendation

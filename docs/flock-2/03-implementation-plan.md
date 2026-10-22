@@ -49,10 +49,13 @@ and the installation host, there is no cloud, and v0.4's Rust/Pi requirements ar
   implementation, no ONNX export and no Rust ML runtime.
 - **Framework: JAX** (decided at plan review). Vmapped gridworld + DreamerV3 lineage; the
   differentiable rasteriser, auxiliary losses and metrics are all plain JAX.
-- **Perception at 4 px/tile, 64×64 egocentric heading-aligned view, 16×16 canvas** from M0
-  onward (Q8, Q9), so every milestone's result transfers. Rendering 64×64 views inside the
-  vectorised sim is the throughput bottleneck to budget for; views are rendered from a palette
-  index map by gather, not by a rasteriser.
+- **Perception: 64×64 egocentric heading-aligned view, 16×16 canvas**, rendered
+  **isometrically** (8×4 px diamond tiles; Q8 addendum) from M0 onward, so every milestone's
+  result transfers. Ground is rendered by gather (inverse projection per pixel), sprites by
+  depth-sorted pastes; this is the throughput bottleneck to budget for. The top-down renderer
+  (`flock/world.py`) is kept as the tested baseline behind `--renderer topdown`. Resolution
+  stays at 64×64 for M0/M1; 96² (12×6 tiles) or 128² (16×8) costs ≈2.25× / 4× in the
+  pixel-bound parts and 4× in replay memory at 128², and is decided from the M1 profile.
 - **Viewing is a simple desktop window**, not an installation. A viewer process (or an in-process
   window) draws the meadow from a state stream (positions, headings, sprites, marks, bubbles,
   bleat parameters, telemetry) and synthesises bleat audio live from the learned parameters. The
