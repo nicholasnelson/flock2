@@ -72,12 +72,14 @@ class Decoder(nnx.Module):
 class StrokeSender(nnx.Module):
     """Embedding -> K stroke primitives -> rasterised canvas."""
 
-    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256, res: int = CANVAS):
+    def __init__(self, rngs: nnx.Rngs, k_strokes: int = 8, hidden: int = 256, res: int = CANVAS, mono_colour: int | None = None):
         """``res`` < CANVAS draws on a coarser canvas that is enlarged (nearest-neighbour) to
-        CANVAS x CANVAS: same footprint in the view, chunkier pixels."""
+        CANVAS x CANVAS: same footprint in the view, chunkier pixels. ``mono_colour`` fixes
+        every stroke to one palette colour (the sender still chooses position, width and gate)."""
         assert CANVAS % res == 0, (CANVAS, res)
         self.k = k_strokes
         self.res = res
+        self.mono_colour = mono_colour
         self.h1 = nnx.Linear(EMBED, hidden, rngs=rngs)
         self.h2 = nnx.Linear(hidden, hidden, rngs=rngs)
         per = 4 + 1 + N_COLOURS + 1
@@ -88,10 +90,14 @@ class StrokeSender(nnx.Module):
         h = _act(self.h1(emb))
         h = _act(self.h2(h))
         p = self.out(h).reshape(emb.shape[0], self.k, self.per)
+        colour = p[..., 5 : 5 + N_COLOURS]
+        if self.mono_colour is not None:
+            # logits so peaked the softmax is one-hot to float precision
+            colour = jnp.broadcast_to(50.0 * jax.nn.one_hot(self.mono_colour, N_COLOURS), colour.shape)
         return Strokes(
             endpoints=p[..., 0:4],
             width=p[..., 4] - 1.0,
-            colour=p[..., 5 : 5 + N_COLOURS],
+            colour=colour,
             gate=p[..., 5 + N_COLOURS] + 2.0,  # start mostly "on"
         )
 
@@ -207,13 +213,13 @@ class Receiver(nnx.Module):
 class Agents(nnx.Module):
     """All M0 parameters in one module so optax can treat them uniformly."""
 
-    def __init__(self, rngs: nnx.Rngs, action_space: str = "strokes", k_strokes: int = 8, shared_encoder: bool = True, width: int = 32, canvas_res: int = CANVAS):
+    def __init__(self, rngs: nnx.Rngs, action_space: str = "strokes", k_strokes: int = 8, shared_encoder: bool = True, width: int = 32, canvas_res: int = CANVAS, mono_colour: int | None = None):
         self.encoder = Encoder(rngs, width)
         self.decoder = Decoder(rngs, width)
-        if canvas_res != CANVAS and action_space != "strokes":
-            raise ValueError("canvas_res is only implemented for the stroke sender")
+        if (canvas_res != CANVAS or mono_colour is not None) and action_space != "strokes":
+            raise ValueError("canvas_res and mono_colour are only implemented for the stroke sender")
         if action_space == "strokes":
-            self.sender = StrokeSender(rngs, k_strokes, res=canvas_res)
+            self.sender = StrokeSender(rngs, k_strokes, res=canvas_res, mono_colour=mono_colour)
         elif action_space == "latent":
             self.sender = LatentSender(rngs)
         elif action_space == "pixels":

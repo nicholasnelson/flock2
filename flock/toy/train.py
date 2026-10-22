@@ -36,6 +36,7 @@ class Config:
     action_space: str = "strokes"  # "strokes" | "latent" | "pixels"
     k_strokes: int = 8
     canvas_res: int = 16  # strokes are drawn at this resolution, then enlarged to the 16x16 canvas
+    mono: bool = False  # every stroke is drawn in the outline colour (15); the sender chooses shape only
     shared_encoder: bool = True
     freeze_encoder: bool = True
     width: int = 32
@@ -47,6 +48,7 @@ class Config:
     listening_weight: float = 0.0
     signalling_weight: float = 0.0
     # training
+    pretrain_colour_dropout: float = 0.0  # P(an object in a pre-training view is a silhouette); iso only
     pretrain_steps: int = 1500
     steps: int = 4000
     batch: int = 64
@@ -72,22 +74,30 @@ def _encoder_filter(cfg: Config):
 # ----------------------------------------------------------------------------------------------
 
 
-def pretrain_views(key: jax.Array, batch: int, cfg: Config) -> jax.Array:
-    """A mix of single-object views and game views (sender and receiver sides)."""
+def pretrain_views(key: jax.Array, batch: int, cfg: Config) -> tuple[jax.Array, jax.Array]:
+    """A mix of single-object views and game views (sender and receiver sides).
+
+    Returns (inputs, reconstruction targets). They differ only under colour dropout, where some
+    objects in the single-object views are shown as silhouettes and the target is full colour."""
     E = envs.get(cfg)
     k1, k2 = jax.random.split(key)
-    ov, _ = E.object_views(k1, batch // 2)
+    if cfg.pretrain_colour_dropout > 0:
+        ov_in, ov_tgt, _ = E.object_views_dropout(k1, batch // 2, cfg.pretrain_colour_dropout)
+    else:
+        ov_in, _ = E.object_views(k1, batch // 2)
+        ov_tgt = ov_in
     ep = E.make_batch(k2, batch // 4, cfg.n_candidates, cfg.mode, cfg.random_heading)
-    return jnp.concatenate([ov, ep.sender_view, ep.receiver_base], axis=0)
+    rest = jnp.concatenate([ep.sender_view, ep.receiver_base], axis=0)
+    return jnp.concatenate([ov_in, rest], axis=0), jnp.concatenate([ov_tgt, rest], axis=0)
 
 
 @nnx.jit
-def pretrain_step(model: Agents, optimizer: nnx.Optimizer, views: jax.Array):
+def pretrain_step(model: Agents, optimizer: nnx.Optimizer, views: jax.Array, targets: jax.Array):
     def loss_fn(m: Agents):
         x = world.to_onehot(views)
         emb, _ = m.encoder(x)
         logits = m.decoder(emb)
-        ce = optax.softmax_cross_entropy_with_integer_labels(logits, views)
+        ce = optax.softmax_cross_entropy_with_integer_labels(logits, targets)
         return jnp.mean(ce)
 
     loss, grads = nnx.value_and_grad(loss_fn)(model)
@@ -101,8 +111,8 @@ def pretrain(model: Agents, cfg: Config, key: jax.Array, log) -> None:
     t0 = time.time()
     for step in range(cfg.pretrain_steps):
         key, k = jax.random.split(key)
-        views = pretrain_views(k, cfg.batch, cfg)
-        loss = pretrain_step(model, opt, views)
+        views, targets = pretrain_views(k, cfg.batch, cfg)
+        loss = pretrain_step(model, opt, views, targets)
         if step % cfg.log_every == 0 or step == cfg.pretrain_steps - 1:
             log({"phase": "pretrain", "step": step, "recon_ce": float(loss), "t": time.time() - t0})
 
@@ -169,6 +179,8 @@ def make_warmup_step(cfg: Config):
 
 
 def train(cfg: Config) -> dict:
+    if cfg.pretrain_colour_dropout > 0 and cfg.renderer != "iso":
+        raise ValueError("pretrain_colour_dropout is implemented for the iso renderer only")
     os.makedirs(cfg.out_dir, exist_ok=True)
     with open(os.path.join(cfg.out_dir, "config.json"), "w") as f:
         json.dump(dataclasses.asdict(cfg), f, indent=2)
@@ -183,7 +195,7 @@ def train(cfg: Config) -> dict:
     E = envs.get(cfg)
     key = jax.random.PRNGKey(cfg.seed)
     key, k_model, k_pre, k_judge = jax.random.split(key, 4)
-    model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width, cfg.canvas_res)
+    model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width, cfg.canvas_res, 15 if cfg.mono else None)
 
     # Phase 1
     pretrain(model, cfg, k_pre, log)

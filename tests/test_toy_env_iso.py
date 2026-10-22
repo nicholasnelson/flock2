@@ -58,3 +58,18 @@ def test_probe_canvas_centres_on_ahead_sprite():
     a = np.asarray(env.AHEAD_SPRITE_PX)
     assert p[0] <= a[0] and p[0] + 16 >= a[0] + iso.BOX_H
     assert p[1] <= a[1] and p[1] + 16 >= a[1] + iso.BOX_W
+
+
+def test_colour_dropout_views_differ_only_at_the_object():
+    aug, clean, t = env.object_views_dropout(jax.random.PRNGKey(4), 32, 0.5)
+    aug, clean = np.asarray(aug), np.asarray(clean)
+    diff = aug != clean
+    changed = diff.reshape(32, -1).any(-1)
+    # roughly half the scenes are silhouetted; the rest are pixel-identical to the clean render
+    assert 4 < changed.sum() < 28
+    # every changed pixel became the outline colour, and it sits inside the ahead sprite box
+    assert (aug[diff] == 15).all()
+    r, c = map(int, env.AHEAD_SPRITE_PX)
+    outside = diff.copy()
+    outside[:, r : r + iso.BOX_H, c : c + iso.BOX_W] = False
+    assert not outside.any()

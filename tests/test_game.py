@@ -67,3 +67,14 @@ def test_coarse_canvas_is_blocky_and_trainable():
 
     g = nnx.grad(loss)(m)
     assert any(float(jnp.abs(x).sum()) > 0 for x in jax.tree_util.tree_leaves(g.sender))
+
+
+def test_mono_sender_draws_only_the_mono_colour():
+    m = Agents(nnx.Rngs(0), action_space="strokes", k_strokes=4, width=8, mono_colour=15)
+    ep = env.make_batch(jax.random.PRNGKey(0), 2, 3, "bubble")
+    fwd = game.forward(m, ep, jax.random.PRNGKey(1), opaque=True)
+    a = np.asarray(fwd.canvas.alpha)
+    col = np.asarray(fwd.canvas.colour)
+    inked = a > 0.05
+    assert inked.any()
+    assert np.allclose(col[inked].argmax(-1), 15) and col[inked][:, 15].min() > 0.99

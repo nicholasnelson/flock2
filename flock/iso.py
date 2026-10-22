@@ -99,8 +99,14 @@ def render_view(
     pos: jax.Array,
     heading: jax.Array,
     radius_px: int | None = None,
+    silhouette: jax.Array | None = None,
+    silhouette_colour: int = 15,
 ) -> jax.Array:
-    """64x64 palette view centred on tile ``pos``, heading-aligned."""
+    """64x64 palette view centred on tile ``pos``, heading-aligned.
+
+    ``silhouette`` (N,) bool, per object: draw that object's sprite as a solid
+    ``silhouette_colour`` shape (used for colour-dropout augmentation in perception
+    pre-training). Agents are never silhouetted."""
     hh, ww = tile_map.shape
     # Screen position of the reference (agent) tile's box top-left inside the view: the view
     # centre sits on the diamond centre.
@@ -134,7 +140,8 @@ def render_view(
     img = jnp.where(inside, ground, 0).astype(jnp.uint8)
 
     # --- sprites, back to front -----------------------------------------------------------
-    def paste(im, sprite, d_rot_item, present):
+    def paste(im, sprite, d_rot_item, present, sil):
+        sprite = jnp.where(sil & (sprite != TRANSPARENT), jnp.uint8(silhouette_colour), sprite)
         scr = project(d_rot_item)
         x0 = ox + scr[0] + TILE_W // 2 - BOX_W // 2
         y0 = oy + scr[1] + TILE_H - BOX_H
@@ -156,6 +163,8 @@ def render_view(
     sprites = jnp.concatenate([o_spr, a_spr], 0)
     d_all = jnp.concatenate([o_d, a_d], 0)
     present = jnp.concatenate([objects.present, agents.present], 0)
+    sil_obj = jnp.zeros(objects.kind.shape, bool) if silhouette is None else silhouette
+    sil = jnp.concatenate([sil_obj, jnp.zeros(agents.kind.shape, bool)], 0)
     # only things near the view matter; mark distant ones absent to keep the paste a no-op
     near = (jnp.abs(d_all[:, 0]) + jnp.abs(d_all[:, 1])) <= (VIEW // TILE_H) + 2
     present = present & near
@@ -164,7 +173,7 @@ def render_view(
 
     def body(im, i):
         j = order[i]
-        return paste(im, sprites[j], d_all[j], present[j]), None
+        return paste(im, sprites[j], d_all[j], present[j], sil[j]), None
 
     img, _ = jax.lax.scan(body, img, jnp.arange(sprites.shape[0]))
     if radius_px is not None:

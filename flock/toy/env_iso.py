@@ -104,20 +104,33 @@ def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "b
     return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading))(keys)
 
 
+def _object_view(k: jax.Array, silhouette: jax.Array) -> tuple[jax.Array, jax.Array]:
+    k1, k2, k3 = jax.random.split(k, 3)
+    t = jax.random.randint(k1, (), 0, N_TYPES)
+    h = jax.random.randint(k3, (), 0, 4)
+    centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
+    obj = iso.Objects(kind=t[None], pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :], present=jnp.array([True]))
+    ag = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h[None], present=jnp.array([False]))
+    return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None]), t
+
+
 @functools.partial(jax.jit, static_argnames=("batch",))
 def object_views(key: jax.Array, batch: int) -> tuple[jax.Array, jax.Array]:
     """Views with a single object ahead of an (invisible) viewer on grass, random heading."""
+    return jax.vmap(lambda k: _object_view(k, jnp.bool_(False)))(jax.random.split(key, batch))
 
-    def one(k):
-        k1, k2, k3 = jax.random.split(k, 3)
-        t = jax.random.randint(k1, (), 0, N_TYPES)
-        h = jax.random.randint(k3, (), 0, 4)
-        centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
-        obj = iso.Objects(kind=t[None], pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :], present=jnp.array([True]))
-        ag = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h[None], present=jnp.array([False]))
-        return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h), t
 
-    return jax.vmap(one)(jax.random.split(key, batch))
+@functools.partial(jax.jit, static_argnames=("batch",))
+def object_views_dropout(key: jax.Array, batch: int, p: float) -> tuple[jax.Array, jax.Array, jax.Array]:
+    """Colour dropout for perception pre-training: each object is drawn, with probability
+    ``p``, as a solid outline-colour silhouette on its normal ground. Returns (augmented views,
+    the same scenes in full colour, types); the autoencoder is trained to reconstruct the
+    full-colour scene, so it must recognise objects by shape."""
+    keys = jax.random.split(key, batch + 1)
+    sil = jax.random.bernoulli(keys[0], p, (batch,))
+    aug, t = jax.vmap(_object_view)(keys[1:], sil)
+    clean, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False)))(keys[1:])
+    return aug, clean, t
 
 
 @jax.jit

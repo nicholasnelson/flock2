@@ -7,6 +7,7 @@ The grid tests, per the plan:
   3. stroke head vs latent decoder vs pixel head
   4. bubble vs stamp
   5. drawing resolution: 16x16 vs 8x8 shown 2x enlarged
+  6. black-only drawing, with and without colour-dropout perception pre-training
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -42,6 +43,16 @@ CELLS = {
     "shared_noperc_c8": dict(shared_encoder=True, perceptual_weight=0.0, canvas_res=8),
     "shared_perc_c8": dict(shared_encoder=True, perceptual_weight=1.0, canvas_res=8),
     "shared_perc_stamp_c8": dict(shared_encoder=True, perceptual_weight=1.0, mode="stamp", canvas_res=8),
+    # black-only drawing (outline colour), with the plain judge and with a judge pre-trained
+    # with colour dropout (objects sometimes shown as silhouettes); iso only
+    "mono_noperc": dict(mono=True, perceptual_weight=0.0),
+    "mono_perc": dict(mono=True, perceptual_weight=1.0),
+    "mono_noperc_stamp": dict(mono=True, perceptual_weight=0.0, mode="stamp"),
+    "mono_perc_stamp": dict(mono=True, perceptual_weight=1.0, mode="stamp"),
+    "mono_noperc_cd": dict(mono=True, perceptual_weight=0.0, pretrain_colour_dropout=0.5),
+    "mono_perc_cd": dict(mono=True, perceptual_weight=1.0, pretrain_colour_dropout=0.5),
+    "mono_noperc_stamp_cd": dict(mono=True, perceptual_weight=0.0, mode="stamp", pretrain_colour_dropout=0.5),
+    "mono_perc_stamp_cd": dict(mono=True, perceptual_weight=1.0, mode="stamp", pretrain_colour_dropout=0.5),
 }
 
 KEYS = ["acc", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink"]
