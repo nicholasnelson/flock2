@@ -78,3 +78,24 @@ def test_mono_sender_draws_only_the_mono_colour():
     inked = a > 0.05
     assert inked.any()
     assert np.allclose(col[inked].argmax(-1), 15) and col[inked][:, 15].min() > 0.99
+
+
+def test_iso_forward_at_128_with_32px_mono_strokes():
+    from flock.toy import env_iso
+
+    ep = env_iso.make_batch(jax.random.PRNGKey(0), 3, 4, "bubble")
+    m = Agents(nnx.Rngs(0), action_space="strokes", k_strokes=4, width=8, mono_colour=15, view=env_iso.VIEW, canvas=env_iso.CANVAS)
+    fwd = game.forward(m, ep, jax.random.PRNGKey(1), opaque=True)
+    assert fwd.logits.shape == (3, 16, 16)
+    assert fwd.canvas.alpha.shape == (3, 32, 32)
+    assert fwd.receiver_view.shape == (3, 128, 128, 16)
+    ground = world.to_onehot(jax.vmap(env_iso.plain_ground_view)(jax.random.split(jax.random.PRNGKey(2), 3)))
+
+    def loss(mm):
+        f = game.forward(mm, ep, jax.random.PRNGKey(1), opaque=True)
+        pl = game.perceptual_loss(mm.encoder, f.canvas, world.to_onehot(ep.sender_view), ground, env_iso.PROBE_CANVAS_PX)
+        return jnp.mean(game.success_loss(f.logits, ep.target_mask)[0]) + pl
+
+    g = nnx.grad(loss)(m)
+    assert all(np.isfinite(np.asarray(x)).all() for x in jax.tree_util.tree_leaves(g))
+    assert any(float(jnp.abs(x).sum()) > 0 for x in jax.tree_util.tree_leaves(g.sender))

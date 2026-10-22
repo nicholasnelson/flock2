@@ -22,10 +22,10 @@ def test_inverse_projection_matches_diamond_sprites():
     agents = iso.Agents(kind=jnp.array([S.SHEEP]), pos=jnp.array([[12, 12]]), heading=jnp.array([0]), present=jnp.array([False]))
     for h in range(4):
         v = np.asarray(iso.render_view(tm, objects, agents, jnp.array([12, 12]), jnp.int32(h)))
-        assert v.shape == (64, 64)
+        assert v.shape == (iso.VIEW, iso.VIEW)
         centre = np.asarray(iso.tile_screen_centre(jnp.array([-2, 2]), jnp.int32(h)))
         x, y = int(centre[0]), int(centre[1])
-        box = v[y - 2 : y + 2, x - 4 : x + 4]
+        box = v[y - iso.TILE_H // 2 : y + iso.TILE_H // 2, x - iso.TILE_W // 2 : x + iso.TILE_W // 2]
         water = S.GROUND_VARIANTS["water"][S.tile_variant(10, 14)]
         m = S.DIAMOND
         assert (box[m] == water[m]).all(), h
@@ -42,9 +42,13 @@ def test_sprites_billboarded_and_depth_sorted():
     for h in range(4):
         v = np.asarray(iso.render_view(tm, objects, agents, jnp.array([12, 12]), jnp.int32(h)))
         # the sheep's wool is at the view centre regardless of heading
-        assert (v[26:36, 26:38] == 8).sum() > 10, h
-        # the tree is upright: its trunk (bark, colour 6; nothing else in this scene uses it)
-        # sits wholly below the top of its canopy outline (colour 15)
+        c = iso.VIEW // 2
+        assert (v[c - 14 : c + 2, c - 12 : c + 12] == 8).sum() > 40, h
+        # the tree is upright: its trunk (bark, colour 6; nothing else uses it) sits wholly
+        # below the top of its outline (colour 15). Every sprite is outlined, so look at the
+        # tree alone.
+        hidden = agents._replace(present=jnp.zeros_like(agents.present))
+        v = np.asarray(iso.render_view(tm, objects, hidden, jnp.array([12, 12]), jnp.int32(h)))
         ys, _ = np.where(v == 15)
         bark_ys, _ = np.where(v == 6)
         assert len(ys) > 0 and len(bark_ys) > 0, h

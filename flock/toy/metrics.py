@@ -101,7 +101,7 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
     p_real = jax.nn.softmax(fwd.logits.reshape(b, -1), -1)
 
     # causal tests
-    blank = game.blank_canvas(b)
+    blank = game.blank_canvas(b, model.canvas)
     logits_blank, _ = game.receive(model, ep.receiver_base, blank, ep.canvas_px, opaque)
     _, acc_blank = game.success_loss(logits_blank, ep.target_mask)
     p_blank = jax.nn.softmax(logits_blank.reshape(b, -1), -1)

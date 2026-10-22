@@ -35,7 +35,7 @@ class Config:
     # model
     action_space: str = "strokes"  # "strokes" | "latent" | "pixels"
     k_strokes: int = 8
-    canvas_res: int = 16  # strokes are drawn at this resolution, then enlarged to the 16x16 canvas
+    canvas_res: int = 0  # 0: strokes are rasterised at the drawing's own size in the view (16 top-down, 32 iso); else at this coarser resolution, then enlarged
     mono: bool = False  # every stroke is drawn in the outline colour (15); the sender chooses shape only
     shared_encoder: bool = True
     freeze_encoder: bool = True
@@ -139,7 +139,7 @@ def make_game_step(cfg: Config):
                 aux["perceptual"] = pl
                 loss = loss + cfg.perceptual_weight * pl
             if cfg.listening_weight > 0:
-                blank = game.blank_canvas(ep.target_type.shape[0])
+                blank = game.blank_canvas(ep.target_type.shape[0], m.canvas)
                 logits0, _ = game.receive(m, ep.receiver_base, blank, ep.canvas_px, cfg.opaque)
                 ll = game.listening_loss(fwd.logits, logits0)
                 aux["listening"] = ll
@@ -195,7 +195,17 @@ def train(cfg: Config) -> dict:
     E = envs.get(cfg)
     key = jax.random.PRNGKey(cfg.seed)
     key, k_model, k_pre, k_judge = jax.random.split(key, 4)
-    model = Agents(nnx.Rngs(k_model), cfg.action_space, cfg.k_strokes, cfg.shared_encoder, cfg.width, cfg.canvas_res, 15 if cfg.mono else None)
+    model = Agents(
+        nnx.Rngs(k_model),
+        cfg.action_space,
+        cfg.k_strokes,
+        cfg.shared_encoder,
+        cfg.width,
+        canvas_res=cfg.canvas_res or None,
+        mono_colour=15 if cfg.mono else None,
+        view=E.VIEW,
+        canvas=E.CANVAS,
+    )
 
     # Phase 1
     pretrain(model, cfg, k_pre, log)

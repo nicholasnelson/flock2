@@ -29,13 +29,15 @@ from flock.world import TILE, VIEW, VIEW_TILES
 N_TYPES = sprites.N_OBJECT_TYPES
 OBJECT_NAMES = sprites.OBJECT_NAMES
 WORLD_TILES = 24  # tile side of each toy meadow
+CELL = TILE  # px per receiver decision cell
+CANVAS = 16  # px side of the drawing as it appears in the view
 
 
 class Episode(NamedTuple):
     target_type: jax.Array  # () int
     sender_heading: jax.Array  # () int
-    sender_view: jax.Array  # (64, 64) palette indices
-    receiver_base: jax.Array  # (64, 64) palette indices, before the canvas is composited
+    sender_view: jax.Array  # (V, V) palette indices (V = 64 top-down, 128 isometric)
+    receiver_base: jax.Array  # (V, V) palette indices, before the canvas is composited
     canvas_px: jax.Array  # (2,) top-left pixel of the canvas in the receiver's view
     target_mask: jax.Array  # (16, 16) bool: the target's footprint in receiver view tiles
     candidate_types: jax.Array  # (n_candidates,) types shown to the receiver (first = target)

@@ -1,14 +1,15 @@
 """Rotatable isometric rendering of the tile world, vectorised in JAX.
 
-Projection (rotation 0). Tile (r, c) has a 2:1 diamond whose bounding box is 8x4 px with
-top-left corner at
+Projection (rotation 0). Tile (r, c) has a 2:1 diamond whose bounding box is W x H px
+(TILE_W x TILE_H, currently 16x8) with top-left corner at
 
-    X = (c - r) * 4 - 4,   Y = (c + r) * 2
+    X = (c - r) * W/2 - W/2,   Y = (c + r) * H/2
 
-in world-screen coordinates (origin arbitrary). Its centre is (X + 4, Y + 2). Inverse: for a
-pixel centre (x, y) measured from a reference diamond centre,  u = x/4 + y/2,  v = y/2 - x/4,
-c = floor((u + 1) / 2),  r = floor((v + 1) / 2), which is exactly the L1-diamond tiling the
-8x4 ground sprites discretise (the diamond is the L-inf unit square in (u, v)).
+in world-screen coordinates (origin arbitrary). Its centre is (X + W/2, Y + H/2). Inverse: for
+a pixel centre (x, y) measured from a reference diamond centre,  u = x/(W/2) + y/(H/2),
+v = y/(H/2) - x/(W/2),  c = floor((u + 1) / 2),  r = floor((v + 1) / 2), which is exactly the
+L1-diamond tiling the ground sprites discretise (the diamond is the L-inf unit square in (u, v);
+``sprites_iso.DIAMOND`` is the same rule).
 
 Heading-aligned view. The view is centred on an agent and the tile *layout* is rotated about the
 agent by its heading before projection; every sprite is drawn upright (billboarded), so the art
@@ -31,9 +32,9 @@ from flock import sprites_iso as S
 from flock.palette import N_COLOURS, TRANSPARENT
 
 TILE_W, TILE_H = S.TILE_W, S.TILE_H
-VIEW = 64
-GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, variants, 4, 8)
-OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, BOX_H, BOX_W)
+VIEW = 128  # 16 tiles across at 16x8 px tiles
+GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, variants, TILE_H, TILE_W)
+OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, 4, BOX_H, BOX_W)
 ANIMAL_STACK = jnp.asarray(S.ANIMAL_STACK)  # (n_animal, 4, BOX_H, BOX_W)
 BOX_H, BOX_W = S.BOX_H, S.BOX_W
 
@@ -42,6 +43,7 @@ class Objects(NamedTuple):
     kind: jax.Array  # (N,)
     pos: jax.Array  # (N, 2) tile (row, col)
     present: jax.Array  # (N,) bool
+    heading: jax.Array | None = None  # (N,) world heading; only the fox's sprite depends on it
 
 
 class Agents(NamedTuple):
@@ -102,7 +104,7 @@ def render_view(
     silhouette: jax.Array | None = None,
     silhouette_colour: int = 15,
 ) -> jax.Array:
-    """64x64 palette view centred on tile ``pos``, heading-aligned.
+    """VIEW x VIEW palette view centred on tile ``pos``, heading-aligned.
 
     ``silhouette`` (N,) bool, per object: draw that object's sprite as a solid
     ``silhouette_colour`` shape (used for colour-dropout augmentation in perception
@@ -129,7 +131,7 @@ def render_view(
     tc = pos[1] + d_world[..., 1]
     inside = (tr >= 0) & (tr < hh) & (tc >= 0) & (tc < ww)
     state = tile_map[jnp.clip(tr, 0, hh - 1), jnp.clip(tc, 0, ww - 1)]
-    # offset of the pixel inside its diamond's 8x4 box
+    # offset of the pixel inside its diamond's box
     box = project(d_rot)
     bx = xs - ox - box[..., 0]
     by = ys - oy - box[..., 1]
@@ -158,7 +160,8 @@ def render_view(
     # gather all pasteables: objects then agents, with rotated offsets and depth
     o_d = rotate_offset(objects.pos - pos[None, :], heading)
     a_d = rotate_offset(agents.pos - pos[None, :], heading)
-    o_spr = OBJECT_STACK[objects.kind]
+    o_head = jnp.zeros_like(objects.kind) if objects.heading is None else objects.heading
+    o_spr = OBJECT_STACK[objects.kind, facing(o_head, heading)]
     a_spr = ANIMAL_STACK[agents.kind, facing(agents.heading, heading)]
     sprites = jnp.concatenate([o_spr, a_spr], 0)
     d_all = jnp.concatenate([o_d, a_d], 0)
@@ -210,9 +213,10 @@ def render_world(tile_map: jax.Array, objects: Objects, agents: Agents, pad: int
             m = spr != TRANSPARENT
             img[y : y + TILE_H, x : x + TILE_W][m] = spr[m]
     items = []
-    for k, p, pr in zip(np.asarray(objects.kind), np.asarray(objects.pos), np.asarray(objects.present)):
+    o_head = np.zeros_like(np.asarray(objects.kind)) if objects.heading is None else np.asarray(objects.heading)
+    for k, p, h, pr in zip(np.asarray(objects.kind), np.asarray(objects.pos), o_head, np.asarray(objects.present)):
         if pr:
-            items.append((int(p[0] + p[1]), np.asarray(OBJECT_STACK[k]), p))
+            items.append((int(p[0] + p[1]), np.asarray(OBJECT_STACK[k, int(facing(h, 0))]), p))
     for k, p, h, pr in zip(np.asarray(agents.kind), np.asarray(agents.pos), np.asarray(agents.heading), np.asarray(agents.present)):
         if pr:
             items.append((int(p[0] + p[1]), np.asarray(ANIMAL_STACK[k, int(facing(h, 0))]), p))

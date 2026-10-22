@@ -22,10 +22,10 @@ class Forward(NamedTuple):
     receiver_view: jax.Array  # (B, 64, 64, 16) the receiver's view with the canvas in it
 
 
-def blank_canvas(batch: int) -> Canvas:
+def blank_canvas(batch: int, size: int = CANVAS) -> Canvas:
     return Canvas(
-        colour=jnp.full((batch, CANVAS, CANVAS, 16), 1.0 / 16),
-        alpha=jnp.zeros((batch, CANVAS, CANVAS)),
+        colour=jnp.full((batch, size, size, 16), 1.0 / 16),
+        alpha=jnp.zeros((batch, size, size)),
         ink=jnp.zeros((batch,)),
     )
 
@@ -50,11 +50,12 @@ def receive(model: Agents, receiver_base: jax.Array, canvas: Canvas, canvas_px: 
     else:
         # The perception encoder sees the view with the paper (or ground) but no ink; a
         # separate CNN reads the canvas. Same information, different pathway.
-        empty = blank_canvas(rb.shape[0])
+        empty = blank_canvas(rb.shape[0], canvas.alpha.shape[1])
         rv = comp(rb, empty.colour, empty.alpha, canvas_px)
         emb_r, fmap = model.encoder(rv)
         context = emb_r + model.message_encoder(canvas)
-    logits = model.receiver(fmap, context, canvas_px // world.TILE)
+    cell = rb.shape[1] // VIEW_TILES  # px per receiver cell: 4 at a 64 view, 8 at 128
+    logits = model.receiver(fmap, context, canvas_px // cell)
     return logits, rv
 
 

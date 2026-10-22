@@ -1,7 +1,8 @@
 """Select the episode generator by config: the top-down baseline or the isometric renderer.
 
 Both modules expose the same surface: ``Episode``, ``make_batch``, ``object_views``,
-``plain_ground_view``, ``PROBE_CANVAS_PX``, ``N_TYPES``, ``OBJECT_NAMES``, ``object_thumbnail``.
+``plain_ground_view``, ``PROBE_CANVAS_PX``, ``N_TYPES``, ``OBJECT_NAMES``, ``object_thumbnail``,
+``CELL`` (px per receiver cell) and ``CANVAS`` (px side of the drawing in the view).
 """
 
 from __future__ import annotations

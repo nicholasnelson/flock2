@@ -4,8 +4,8 @@ Same ``Episode`` interface as ``flock.toy.env`` (the top-down baseline), rendere
 ``flock.iso``. Differences:
 
 - Views are heading-aligned isometric; "ahead" is the up-right screen diagonal.
-- The receiver chooses one of the 16x16 cells of 4x4 px in its view; the target footprint is
-  the cells covering the target sprite's tile.
+- The receiver chooses one of the 16x16 cells of 8x8 px in its 128x128 view; the target is
+  the cells around the target tile's diamond centre.
 - The canvas (bubble or stamp) sits at a fixed screen position at the bottom-centre of the
   receiver's view, in front of the sender sprite (bubble mode) or on bare ground (stamp mode).
 """
@@ -26,26 +26,27 @@ from flock.toy.env import Episode
 N_TYPES = S.N_OBJECT_TYPES
 OBJECT_NAMES = S.OBJECT_NAMES
 WORLD_TILES = 24
-CELL = 4  # px per receiver decision cell
-CELLS = VIEW // CELL  # 16
+CELLS = 16  # the receiver chooses one of CELLS x CELLS cells
+CELL = VIEW // CELLS  # px per receiver decision cell (8 at a 128 view)
+CANVAS = 32  # px side of the drawing as it appears in the view (covers a sprite's footprint)
 
 # Receiver layout, as (row, col) tile offsets in the *rotated* (heading-aligned) frame, chosen so
-# that every slot's sprite is inside the 64x64 view and clear of the canvas block.
+# that every slot's sprite is inside the view and clear of the canvas block.
 _SLOTS = jnp.array([[-3, -3], [-3, 3], [3, -3], [-5, 0], [0, -5], [0, 5], [5, 0]])
 MAX_CANDIDATES = _SLOTS.shape[0]
 _BUBBLE_SENDER = jnp.array([3, 3])  # rotated offset: directly below the receiver on screen
-CANVAS_PX = jnp.array([VIEW - 16, VIEW // 2 - 8])  # (row, col) top-left: bottom-centre
+CANVAS_PX = jnp.array([VIEW - CANVAS, VIEW // 2 - CANVAS // 2])  # (row, col) top-left: bottom-centre
 _AHEAD = jnp.array([-3, 0])  # rotated offset of the sender's target
 
 
 def _cell_mask_for_tile(d_rot: jax.Array, heading_zero: jax.Array = jnp.int32(0)) -> jax.Array:
-    """(16,16) bool mask of the cells covering an 8x8 px square centred on a tile's diamond
-    centre (already in the rotated frame, so heading 0 for the projection)."""
+    """(CELLS, CELLS) bool mask of the cells covering a 2*CELL px square centred on a tile's
+    diamond centre (already in the rotated frame, so heading 0 for the projection)."""
     centre = iso.tile_screen_centre(iso.unrotate_offset(d_rot, heading_zero), heading_zero)
     x, y = centre[0], centre[1]
     rows = jnp.arange(CELLS)
-    r0, r1 = (y - 4) // CELL, (y + 3) // CELL
-    c0, c1 = (x - 4) // CELL, (x + 3) // CELL
+    r0, r1 = (y - CELL) // CELL, (y + CELL - 1) // CELL
+    c0, c1 = (x - CELL) // CELL, (x + CELL - 1) // CELL
     rm = (rows >= r0) & (rows <= r1)
     cm = (rows >= c0) & (rows <= c1)
     return rm[:, None] & cm[None, :]
@@ -57,13 +58,14 @@ def _random_ground(key: jax.Array, n: int) -> jax.Array:
 
 
 def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: bool = True) -> Episode:
-    k_t, k_g1, k_g2, k_c, k_slot, k_h1, k_h2 = jax.random.split(key, 7)
+    k_t, k_g1, k_g2, k_c, k_slot, k_h1, k_h2, k_f = jax.random.split(key, 8)
+    k_f1, k_f2 = jax.random.split(k_f)
     target = jax.random.randint(k_t, (), 0, N_TYPES)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
 
     # --- sender ------------------------------------------------------------------------
     h_s = jax.random.randint(k_h1, (), 0, 4) if random_heading else jnp.int32(0)
-    obj_s = iso.Objects(kind=target[None], pos=(centre + iso.unrotate_offset(_AHEAD, h_s))[None, :], present=jnp.array([True]))
+    obj_s = iso.Objects(kind=target[None], pos=(centre + iso.unrotate_offset(_AHEAD, h_s))[None, :], present=jnp.array([True]), heading=jax.random.randint(k_f1, (1,), 0, 4))
     ag_s = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h_s[None], present=jnp.array([True]))
     sender_view = iso.render_view(_random_ground(k_g1, WORLD_TILES), obj_s, ag_s, centre, h_s)
 
@@ -75,7 +77,7 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
     slot_idx = jax.random.permutation(k_slot, MAX_CANDIDATES)[:n_candidates]
     slots_rot = _SLOTS[slot_idx]
     cand_pos = centre[None, :] + jax.vmap(lambda d: iso.unrotate_offset(d, h_r))(slots_rot)
-    obj_r = iso.Objects(kind=cand_types, pos=cand_pos, present=jnp.ones((n_candidates,), bool))
+    obj_r = iso.Objects(kind=cand_types, pos=cand_pos, present=jnp.ones((n_candidates,), bool), heading=jax.random.randint(k_f2, (n_candidates,), 0, 4))
     sender_here = jnp.array(mode == "bubble")
     ag_r = iso.Agents(
         kind=jnp.array([S.SHEEP, S.SHEEP]),
@@ -105,11 +107,11 @@ def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "b
 
 
 def _object_view(k: jax.Array, silhouette: jax.Array) -> tuple[jax.Array, jax.Array]:
-    k1, k2, k3 = jax.random.split(k, 3)
+    k1, k2, k3, k4 = jax.random.split(k, 4)
     t = jax.random.randint(k1, (), 0, N_TYPES)
     h = jax.random.randint(k3, (), 0, 4)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
-    obj = iso.Objects(kind=t[None], pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :], present=jnp.array([True]))
+    obj = iso.Objects(kind=t[None], pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :], present=jnp.array([True]), heading=jax.random.randint(k4, (1,), 0, 4))
     ag = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h[None], present=jnp.array([False]))
     return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None]), t
 
@@ -141,26 +143,27 @@ def plain_ground_view(key: jax.Array) -> jax.Array:
     return iso.render_view(_random_ground(key, WORLD_TILES), obj, ag, centre, jnp.int32(0))
 
 
-# Where the "ahead" object's sprite sits in a sender/object view (heading-aligned, so fixed):
-# tile centre of rotated offset (-3, 0) -> screen (44, 26); the sprite box (9x10) sits with its
-# bottom at the diamond bottom (y = 28), so rows 19..27, cols 39..48.
+# Where the "ahead" object's sprite box sits in a sender/object view (heading-aligned, so
+# fixed): its bottom on the bottom vertex of the diamond at rotated offset _AHEAD.
 _ahead_centre = iso.tile_screen_centre(_AHEAD, jnp.int32(0))
 AHEAD_SPRITE_PX = jnp.array([int(_ahead_centre[1]) + iso.TILE_H // 2 - iso.BOX_H, int(_ahead_centre[0]) - iso.BOX_W // 2])
-# A 16x16 canvas centred on that sprite box.
-PROBE_CANVAS_PX = jnp.array([int(AHEAD_SPRITE_PX[0]) + iso.BOX_H // 2 - 8, int(AHEAD_SPRITE_PX[1]) + iso.BOX_W // 2 - 8])
+# A CANVAS x CANVAS canvas centred on that sprite box.
+PROBE_CANVAS_PX = jnp.array([int(AHEAD_SPRITE_PX[0]) + iso.BOX_H // 2 - CANVAS // 2, int(AHEAD_SPRITE_PX[1]) + iso.BOX_W // 2 - CANVAS // 2])
 
 
 def object_thumbnail(t: int, bg: int = 1) -> np.ndarray:
-    """16x16 palette tile showing object type ``t`` on a grass diamond, for galleries."""
-    cell = np.full((16, 16), bg, np.uint8)
+    """CANVAS x CANVAS palette tile showing object type ``t`` on a grass diamond, for galleries
+    (the fox facing toward the viewer, down-right)."""
+    cell = np.full((CANVAS, CANVAS), bg, np.uint8)
     g = S.GROUND["short"]
     m = g != TRANSPARENT
-    cell[11:15, 4:12][m] = g[m]
-    spr = S.OBJECT_STACK[t]
+    gy, gx = CANVAS - iso.TILE_H - 1, CANVAS // 2 - iso.TILE_W // 2
+    cell[gy : gy + iso.TILE_H, gx : gx + iso.TILE_W][m] = g[m]
+    spr = S.OBJECT_STACK[t, 1]
     h, w = spr.shape
-    x0 = 8 - w // 2
-    y0 = 15 - h
-    sub = cell[y0 : y0 + h, x0 : x0 + w]
+    y0, x0 = CANVAS - 1 - h, CANVAS // 2 - w // 2
+    sub = cell[max(y0, 0) : y0 + h, x0 : x0 + w]
+    spr = spr[h - sub.shape[0] :]
     sm = spr != TRANSPARENT
     sub[sm] = spr[sm]
     return cell
