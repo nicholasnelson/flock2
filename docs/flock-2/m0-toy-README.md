@@ -243,6 +243,58 @@ What this adds:
 
 Galleries compared: `runs/m0/grid_pine_c8_vs_c16.png` (local, not in the repo).
 
+### Grid 3 — black-only drawing, with and without a colour-dropout judge
+
+Owner's proposal: let the sheep draw only in black, so they must draw shape rather than colour.
+`mono=True` fixes every stroke to the outline colour (15; palette 0 means void/unlit). The
+literature's readable sketches were black lines on white
+([Mihai & Hare 2021](https://arxiv.org/html/2106.02067v2)), and its shape-biased encoder gave
+more shape-like sketches. Because our perception CNN reads each palette colour as a separate
+channel, it may not see a black shape as resembling a coloured object, so each mono cell is run
+twice: with the plain judge and with perception pre-trained with *colour dropout*
+(`pretrain_colour_dropout=0.5`: each object in a pre-training view is, with probability 0.5, a
+solid outline-colour silhouette, and the autoencoder reconstructs the full-colour scene).
+Commit `33a40f6`; pine tree; 3 seeds.
+
+| cell | acc | acc_blank | acc_swapped | CIC | judge_probe | judge_rank | ink |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| mono_noperc | 0.99±0.01 | 0.23±0.03 | 0.09±0.03 | 9.8±1.6 | 0.33±0.07 | 0.34±0.07 | 7.3 |
+| mono_perc | 0.99±0.01 | 0.23±0.01 | 0.09±0.02 | 12.7±1.7 | 0.76±0.02 | 0.69±0.03 | 13.4 |
+| mono_noperc_stamp | 1.00±0.00 | 0.26±0.02 | 0.09±0.03 | 5.9±1.1 | 0.16±0.10 | 0.14±0.08 | 4.7 |
+| mono_perc_stamp | 0.99±0.00 | 0.24±0.01 | 0.08±0.01 | 12.3±0.9 | **0.83±0.02** | 0.72±0.01 | 10.9 |
+| mono_noperc_cd | 0.99±0.01 | 0.23±0.03 | 0.08±0.05 | 9.5±0.9 | 0.30±0.20 | 0.34±0.21 | 7.8 |
+| mono_perc_cd | 0.99±0.00 | 0.24±0.01 | 0.10±0.02 | 13.3±0.7 | 0.70±0.02 | 0.69±0.01 | 14.6 |
+| mono_noperc_stamp_cd | 0.98±0.01 | 0.24±0.01 | 0.08±0.02 | 4.5±0.6 | 0.15±0.07 | 0.16±0.05 | 5.2 |
+| mono_perc_stamp_cd | 0.98±0.01 | 0.23±0.02 | 0.08±0.02 | 11.8±1.3 | 0.74±0.01 | 0.75±0.03 | 10.9 |
+
+Judge probes are **not comparable between the `_cd` and plain cells**: each column's judge is a
+different encoder. Compare within a judge, and use the galleries across judges.
+
+What this shows:
+
+1. **Black-only costs nothing in communication** (acc ≈ 1.0 everywhere) and, with the
+   resemblance loss, matches or beats colour on the plain judge: `mono_perc_stamp` at 0.83 ±
+   0.02 is the highest and tightest stroke cell of all three grids.
+2. **Without the resemblance loss, black-only bubble drawings carry some resemblance**:
+   `mono_noperc` 0.33 ± 0.07 (seeds 0.40, 0.23, 0.36), where the colour equivalent
+   (`shared_noperc`) sits exactly at chance in both earlier grids. Removing colour removes the
+   arbitrary colour-code shortcut, and the shared-encoder route then shows something. The stamp
+   version is at chance, the reverse of the colour pattern. Tentative: 3 seeds, judge-measured.
+   One dropout-judge seed (`mono_noperc_cd` s0) scores 0.02, well *below* chance: its drawings
+   systematically resemble a different type than intended.
+3. **The colour-dropout judge gives the most glyph-like galleries so far** *(judgement, seed 0
+   of each cell)*: one solid, consistent black shape per type — salt lick and rock as wide
+   domes or bars (the rock's low and wide, like its sprite), the tree as a round blob, bush and
+   stump as small dashes or ticks, the flower left blank. The plain judge's drawings are more
+   fragmented but occasionally more specific (in stamp mode the pine is a tall vertical blob).
+   No cell draws the pine as a triangle, although it is the most distinctive silhouette.
+4. **Shape alone cannot separate every type.** As silhouettes, salt lick, rock, bush and stump
+   are similar dark ovals and bush ≈ stump almost exactly (`runs/sil_preview.png`), so
+   black-only drawings can separate those only by size and proportion. A ceiling on human
+   readability set by the sprite set, not by training.
+
+Galleries: `runs/m0/grid_mono_galleries.png` (local).
+
 ## What the plan predicts
 
 From the literature (see `02-design-questions.md` Q2 and the survey §4): `shared_noperc` will
