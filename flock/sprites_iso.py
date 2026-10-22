@@ -181,15 +181,15 @@ SHEEP_FRONT_R = _parse(
 SHEEP_BACK_R = _parse(
     [
         ".........sPs",
-        "........WWss",
-        "......WWWWWW",
-        "....WWWWWWWW",
-        "..WWWWWWWWW.",
+        "....WWWWWsss",
+        "..WWWWWWWWWs",
+        ".WWWWWWWWWW.",
         ".WWWWWWWWWW.",
         "WWWWWWWWWW..",
-        "WSSSSSSSS...",
-        ".K...K..K...",
-        ".K...K..K...",
+        "WWWWWWWWW...",
+        "sWWWWWWWW...",
+        "..SSSSSSS...",
+        "...K...K.K..",
     ]
 )
 FOX_FRONT_R = _parse(
