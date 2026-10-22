@@ -34,7 +34,7 @@ from flock.palette import N_COLOURS, TRANSPARENT
 TILE_W, TILE_H = S.TILE_W, S.TILE_H
 VIEW = 128  # 16 tiles across at 16x8 px tiles
 GROUND_STACK = jnp.asarray(S.GROUND_STACK)  # (n_ground, variants, TILE_H, TILE_W)
-OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, 4, BOX_H, BOX_W)
+OBJECT_STACK = jnp.asarray(S.OBJECT_STACK)  # (n_obj, n_variants, 4, BOX_H, BOX_W)
 ANIMAL_STACK = jnp.asarray(S.ANIMAL_STACK)  # (n_animal, 4, BOX_H, BOX_W)
 BOX_H, BOX_W = S.BOX_H, S.BOX_W
 
@@ -44,6 +44,9 @@ class Objects(NamedTuple):
     pos: jax.Array  # (N, 2) tile (row, col)
     present: jax.Array  # (N,) bool
     heading: jax.Array | None = None  # (N,) world heading; only the fox's sprite depends on it
+    variant: jax.Array | None = None  # (N,) sprite variant within the type (default 0)
+    offset: jax.Array | None = None  # (N, 2) float sub-tile offset (row, col) in tiles, world frame
+    scale: jax.Array | None = None  # (N,) sprite scale (nearest, anchored at the base; default 1)
 
 
 class Agents(NamedTuple):
@@ -85,6 +88,18 @@ def project(d: jax.Array) -> jax.Array:
     corner, relative to the reference tile's top-left corner."""
     r, c = d[..., 0], d[..., 1]
     return jnp.stack([(c - r) * (TILE_W // 2), (c + r) * (TILE_H // 2)], -1)
+
+
+def scale_sprite(sprite: jax.Array, s: jax.Array) -> jax.Array:
+    """Nearest-neighbour rescale of a (BOX_H, BOX_W) sprite by ``s`` <= 1, anchored at the
+    bottom-centre (where it stands), aspect ratio kept; the freed border is transparent."""
+    y = jnp.arange(BOX_H)[:, None]
+    x = jnp.arange(BOX_W)[None, :]
+    src_yb = jnp.floor(((BOX_H - 1 - y) + 0.5) / s).astype(jnp.int32)  # rows up from the base
+    src_x = jnp.floor((x + 0.5 - BOX_W / 2) / s + BOX_W / 2).astype(jnp.int32)
+    ok = (src_yb < BOX_H) & (src_x >= 0) & (src_x < BOX_W)
+    out = sprite[jnp.clip(BOX_H - 1 - src_yb, 0, BOX_H - 1), jnp.clip(src_x, 0, BOX_W - 1)]
+    return jnp.where(ok, out, jnp.uint8(TRANSPARENT)).astype(sprite.dtype)
 
 
 def facing(heading: jax.Array, view_heading: jax.Array) -> jax.Array:
@@ -142,11 +157,11 @@ def render_view(
     img = jnp.where(inside, ground, 0).astype(jnp.uint8)
 
     # --- sprites, back to front -----------------------------------------------------------
-    def paste(im, sprite, d_rot_item, present, sil):
+    def paste(im, sprite, d_rot_item, pix, present, sil):
         sprite = jnp.where(sil & (sprite != TRANSPARENT), jnp.uint8(silhouette_colour), sprite)
         scr = project(d_rot_item)
-        x0 = ox + scr[0] + TILE_W // 2 - BOX_W // 2
-        y0 = oy + scr[1] + TILE_H - BOX_H
+        x0 = ox + scr[0] + TILE_W // 2 - BOX_W // 2 + pix[0]
+        y0 = oy + scr[1] + TILE_H - BOX_H + pix[1]
         # Clip into the view: sprites partly outside are cropped via a padded buffer.
         pad_im = jnp.pad(im, ((BOX_H, BOX_H), (BOX_W, BOX_W)))
         r = jnp.clip(y0 + BOX_H, 0, VIEW + BOX_H)
@@ -160,23 +175,32 @@ def render_view(
     # gather all pasteables: objects then agents, with rotated offsets and depth
     o_d = rotate_offset(objects.pos - pos[None, :], heading)
     a_d = rotate_offset(agents.pos - pos[None, :], heading)
+    n_obj = objects.kind.shape[0]
     o_head = jnp.zeros_like(objects.kind) if objects.heading is None else objects.heading
-    o_spr = OBJECT_STACK[objects.kind, facing(o_head, heading)]
+    o_var = jnp.zeros_like(objects.kind) if objects.variant is None else objects.variant
+    o_spr = OBJECT_STACK[objects.kind, o_var, facing(o_head, heading)]
+    if objects.scale is not None:
+        o_spr = jax.vmap(scale_sprite)(o_spr, objects.scale)
+    # sub-tile offsets: rotate with the view like tile offsets, project to whole pixels
+    o_off = jnp.zeros((n_obj, 2)) if objects.offset is None else rotate_offset(objects.offset, heading)
+    o_pix = jnp.round(jnp.stack([(o_off[:, 1] - o_off[:, 0]) * (TILE_W // 2), (o_off[:, 1] + o_off[:, 0]) * (TILE_H // 2)], -1)).astype(jnp.int32)
     a_spr = ANIMAL_STACK[agents.kind, facing(agents.heading, heading)]
     sprites = jnp.concatenate([o_spr, a_spr], 0)
     d_all = jnp.concatenate([o_d, a_d], 0)
+    pix_all = jnp.concatenate([o_pix, jnp.zeros((agents.kind.shape[0], 2), jnp.int32)], 0)
+    off_all = jnp.concatenate([o_off, jnp.zeros((agents.kind.shape[0], 2))], 0)
     present = jnp.concatenate([objects.present, agents.present], 0)
     sil_obj = jnp.zeros(objects.kind.shape, bool) if silhouette is None else silhouette
     sil = jnp.concatenate([sil_obj, jnp.zeros(agents.kind.shape, bool)], 0)
     # only things near the view matter; mark distant ones absent to keep the paste a no-op
     near = (jnp.abs(d_all[:, 0]) + jnp.abs(d_all[:, 1])) <= (VIEW // TILE_H) + 2
     present = present & near
-    depth = d_all[:, 0] + d_all[:, 1]
+    depth = d_all[:, 0] + d_all[:, 1] + off_all[:, 0] + off_all[:, 1]
     order = jnp.argsort(depth)
 
     def body(im, i):
         j = order[i]
-        return paste(im, sprites[j], d_all[j], present[j], sil[j]), None
+        return paste(im, sprites[j], d_all[j], pix_all[j], present[j], sil[j]), None
 
     img, _ = jax.lax.scan(body, img, jnp.arange(sprites.shape[0]))
     if radius_px is not None:
@@ -216,7 +240,7 @@ def render_world(tile_map: jax.Array, objects: Objects, agents: Agents, pad: int
     o_head = np.zeros_like(np.asarray(objects.kind)) if objects.heading is None else np.asarray(objects.heading)
     for k, p, h, pr in zip(np.asarray(objects.kind), np.asarray(objects.pos), o_head, np.asarray(objects.present)):
         if pr:
-            items.append((int(p[0] + p[1]), np.asarray(OBJECT_STACK[k, int(facing(h, 0))]), p))
+            items.append((int(p[0] + p[1]), np.asarray(OBJECT_STACK[k, 0, int(facing(h, 0))]), p))
     for k, p, h, pr in zip(np.asarray(agents.kind), np.asarray(agents.pos), np.asarray(agents.heading), np.asarray(agents.present)):
         if pr:
             items.append((int(p[0] + p[1]), np.asarray(ANIMAL_STACK[k, int(facing(h, 0))]), p))

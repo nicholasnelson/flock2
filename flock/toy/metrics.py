@@ -41,12 +41,11 @@ def _embed(enc: Encoder, views_onehot: jax.Array, chunk: int = 256) -> jax.Array
     return jnp.concatenate(outs, axis=0)
 
 
-def fit_type_probe(judge: Encoder, key: jax.Array, E, n: int = 2048, steps: int = 300, lr: float = 0.1) -> TypeProbe:
-    """Logistic-regression probe on judge embeddings of real single-object views.
-
-    ``E`` is the episode module (``flock.toy.envs.get(cfg)``)."""
-    n_types = E.N_TYPES
-    views, types = E.object_views(key, n)
+def fit_type_probe(judge: Encoder, key: jax.Array, cfg, n: int = 2048, steps: int = 300, lr: float = 0.1) -> TypeProbe:
+    """Logistic-regression probe on judge embeddings of real single-object views (training
+    variants, offsets and scales when ``cfg.variation``)."""
+    n_types = envs.get(cfg).N_TYPES
+    views, types = envs.object_views(cfg, key, n)
     x = jax.lax.stop_gradient(_embed(judge, world.to_onehot(views)))
     y = types
     refs = jnp.stack([jnp.mean(x[y == t], axis=0) for t in range(n_types)])
@@ -91,11 +90,12 @@ def iconicity(enc: Encoder, probe: TypeProbe, canvas, target_type: jax.Array, gr
 def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Array) -> dict:
     E = envs.get(cfg)
     k_ep, k_g, k_s = jax.random.split(key, 3)
-    ep = E.make_batch(k_ep, cfg.eval_batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
+    # evaluated on held-out variants when there is instance variation
+    ep = envs.make_batch(cfg, k_ep, cfg.eval_batch, held_out=True)
     ground = world.to_onehot(jax.vmap(E.plain_ground_view)(jax.random.split(k_g, cfg.eval_batch)))
     opaque = cfg.opaque
 
-    fwd = game.forward(model, ep, k_s, opaque, hard=True)
+    fwd = game.forward(model, ep, k_s, opaque, hard=True, jitter=cfg.jitter_px)
     ce, acc = game.success_loss(fwd.logits, ep.target_mask)
     b = cfg.eval_batch
     p_real = jax.nn.softmax(fwd.logits.reshape(b, -1), -1)
@@ -126,11 +126,16 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
     icon_judge = iconicity(judge, probe, fwd.canvas, ep.target_type, ground, E.PROBE_CANVAS_PX)
     out.update({f"judge_{k}": v for k, v in icon_judge.items()})
     # the model's own encoder as a (less honest) judge, with a probe fitted on it
-    own_probe = fit_type_probe(model.encoder, jax.random.PRNGKey(123), E, n=1024, steps=200)
+    own_probe = fit_type_probe(model.encoder, jax.random.PRNGKey(123), cfg, n=1024, steps=200)
     icon_own = iconicity(model.encoder, own_probe, fwd.canvas, ep.target_type, ground, E.PROBE_CANVAS_PX)
     out.update({f"own_{k}": v for k, v in icon_own.items()})
     # per-type accuracy for the gallery / analysis
     tt = np.asarray(ep.target_type)
     a = np.asarray(acc)
     out["acc_by_type"] = [float(a[tt == t].mean()) if (tt == t).any() else None for t in range(E.N_TYPES)]
+    if getattr(cfg, "variation", False):
+        # the same game on the training variants, for the seen/unseen gap
+        ep_seen = envs.make_batch(cfg, jax.random.fold_in(k_ep, 1), cfg.eval_batch, held_out=False)
+        f_seen = game.forward(model, ep_seen, k_s, opaque, hard=True, jitter=cfg.jitter_px)
+        out["acc_seen"] = float(jnp.mean(game.success_loss(f_seen.logits, ep_seen.target_mask)[1]))
     return out

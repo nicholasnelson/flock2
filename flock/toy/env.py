@@ -42,6 +42,7 @@ class Episode(NamedTuple):
     target_mask: jax.Array  # (16, 16) bool: the target's footprint in receiver view tiles
     candidate_types: jax.Array  # (n_candidates,) types shown to the receiver (first = target)
     candidate_masks: jax.Array  # (n_candidates, 16, 16) bool footprints
+    probe_px: jax.Array | None = None  # (2,) where the sender's referent's sprite box is, if not fixed (iso with variation)
 
 
 # Layout around the receiver, as (row, col) tile offsets from the receiver's top-left tile in

@@ -39,11 +39,24 @@ CANVAS_PX = jnp.array([VIEW - CANVAS, VIEW // 2 - CANVAS // 2])  # (row, col) to
 _AHEAD = jnp.array([-3, 0])  # rotated offset of the sender's target
 
 
-def _cell_mask_for_tile(d_rot: jax.Array, heading_zero: jax.Array = jnp.int32(0)) -> jax.Array:
+# Instance variation (``variation=True``): each object independently gets a sprite variant (from
+# the training set, or the held-out set for evaluation), a sub-tile offset and a scale, so a
+# drawing cannot lean on one remembered example, its exact place, or its size.
+OFFSET_MAX = 0.3  # tiles, each axis, world frame
+SCALE_MIN = 0.6
+
+
+def _pixel_offset(off_world: jax.Array, heading: jax.Array) -> jax.Array:
+    """Whole-pixel screen offset (x, y) of a world-frame sub-tile offset, as the renderer does it."""
+    o = iso.rotate_offset(off_world, heading)
+    return jnp.round(jnp.stack([(o[..., 1] - o[..., 0]) * (iso.TILE_W // 2), (o[..., 1] + o[..., 0]) * (iso.TILE_H // 2)], -1)).astype(jnp.int32)
+
+
+def _cell_mask_for_tile(d_rot: jax.Array, pix: jax.Array = jnp.zeros(2, jnp.int32)) -> jax.Array:
     """(CELLS, CELLS) bool mask of the cells covering a 2*CELL px square centred on a tile's
-    diamond centre (already in the rotated frame, so heading 0 for the projection)."""
-    centre = iso.tile_screen_centre(iso.unrotate_offset(d_rot, heading_zero), heading_zero)
-    x, y = centre[0], centre[1]
+    diamond centre (rotated frame), moved by the object's pixel offset ``pix`` (x, y)."""
+    centre = iso.tile_screen_centre(d_rot, jnp.int32(0))
+    x, y = centre[0] + pix[0], centre[1] + pix[1]
     rows = jnp.arange(CELLS)
     r0, r1 = (y - CELL) // CELL, (y + CELL - 1) // CELL
     c0, c1 = (x - CELL) // CELL, (x + CELL - 1) // CELL
@@ -57,17 +70,46 @@ def _random_ground(key: jax.Array, n: int) -> jax.Array:
     return jax.random.choice(key, 4, (n, n), p=jnp.array([0.05, 0.55, 0.25, 0.15])).astype(jnp.int32)
 
 
-def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: bool = True) -> Episode:
-    k_t, k_g1, k_g2, k_c, k_slot, k_h1, k_h2, k_f = jax.random.split(key, 8)
+def _instances(key: jax.Array, types: jax.Array, variation: bool, held_out: bool, scale_min: float = SCALE_MIN, variants: bool = True):
+    """(variant, offset (n, 2), scale) for objects of ``types``; the plain world if not
+    ``variation``. ``variants=False`` keeps offsets and scales but always uses variant 0."""
+    n = types.shape[0]
+    if not variation:
+        return jnp.zeros((n,), jnp.int32), jnp.zeros((n, 2)), jnp.ones((n,))
+    kv, ko, ks = jax.random.split(key, 3)
+    n_train = jnp.asarray(S.N_TRAIN_VARIANTS)[types]
+    n_all = jnp.asarray(S.N_OBJECT_VARIANTS)[types]
+    lo, hi = (n_train, n_all) if held_out else (jnp.zeros_like(n_train), n_train)
+    variant = lo + jnp.floor(jax.random.uniform(kv, (n,)) * (hi - lo)).astype(jnp.int32)
+    if not variants:
+        variant = jnp.zeros((n,), jnp.int32)
+    offset = jax.random.uniform(ko, (n, 2), minval=-OFFSET_MAX, maxval=OFFSET_MAX)
+    scale = jax.random.uniform(ks, (n,), minval=scale_min, maxval=1.0)
+    return variant, offset, scale
+
+
+def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: bool = True, variation: bool = False, held_out: bool = False) -> Episode:
+    k_t, k_g1, k_g2, k_c, k_slot, k_h1, k_h2, k_f, k_i = jax.random.split(key, 9)
     k_f1, k_f2 = jax.random.split(k_f)
+    k_i1, k_i2 = jax.random.split(k_i)
     target = jax.random.randint(k_t, (), 0, N_TYPES)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
 
     # --- sender ------------------------------------------------------------------------
     h_s = jax.random.randint(k_h1, (), 0, 4) if random_heading else jnp.int32(0)
-    obj_s = iso.Objects(kind=target[None], pos=(centre + iso.unrotate_offset(_AHEAD, h_s))[None, :], present=jnp.array([True]), heading=jax.random.randint(k_f1, (1,), 0, 4))
+    v_s, o_s, sc_s = _instances(k_i1, target[None], variation, held_out)
+    obj_s = iso.Objects(
+        kind=target[None],
+        pos=(centre + iso.unrotate_offset(_AHEAD, h_s))[None, :],
+        present=jnp.array([True]),
+        heading=jax.random.randint(k_f1, (1,), 0, 4),
+        variant=v_s,
+        offset=o_s,
+        scale=sc_s,
+    )
     ag_s = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h_s[None], present=jnp.array([True]))
     sender_view = iso.render_view(_random_ground(k_g1, WORLD_TILES), obj_s, ag_s, centre, h_s)
+    pix_s = _pixel_offset(o_s[0], h_s)
 
     # --- receiver ----------------------------------------------------------------------
     h_r = jax.random.randint(k_h2, (), 0, 4) if random_heading else jnp.int32(0)
@@ -77,7 +119,16 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
     slot_idx = jax.random.permutation(k_slot, MAX_CANDIDATES)[:n_candidates]
     slots_rot = _SLOTS[slot_idx]
     cand_pos = centre[None, :] + jax.vmap(lambda d: iso.unrotate_offset(d, h_r))(slots_rot)
-    obj_r = iso.Objects(kind=cand_types, pos=cand_pos, present=jnp.ones((n_candidates,), bool), heading=jax.random.randint(k_f2, (n_candidates,), 0, 4))
+    v_r, o_r, sc_r = _instances(k_i2, cand_types, variation, held_out)
+    obj_r = iso.Objects(
+        kind=cand_types,
+        pos=cand_pos,
+        present=jnp.ones((n_candidates,), bool),
+        heading=jax.random.randint(k_f2, (n_candidates,), 0, 4),
+        variant=v_r,
+        offset=o_r,
+        scale=sc_r,
+    )
     sender_here = jnp.array(mode == "bubble")
     ag_r = iso.Agents(
         kind=jnp.array([S.SHEEP, S.SHEEP]),
@@ -87,7 +138,11 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
     )
     receiver_base = iso.render_view(_random_ground(k_g2, WORLD_TILES), obj_r, ag_r, centre, h_r)
 
-    masks = jax.vmap(_cell_mask_for_tile)(slots_rot)
+    pix_r = jax.vmap(lambda o: _pixel_offset(o, h_r))(o_r)
+    masks = jax.vmap(_cell_mask_for_tile)(slots_rot, pix_r)
+    # Two slots sit close on screen ([3, -3] and [5, 0]); with sub-tile offsets their squares can
+    # touch. A cell claimed by more than one candidate counts for none, so no click can hedge.
+    masks = masks & ~(masks.sum(0) > 1)[None]
     return Episode(
         target_type=target,
         sender_heading=h_s,
@@ -97,42 +152,62 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
         target_mask=masks[0],
         candidate_types=cand_types,
         candidate_masks=masks,
+        probe_px=PROBE_CANVAS_PX + pix_s[::-1],
     )
 
 
-@functools.partial(jax.jit, static_argnames=("batch", "n_candidates", "mode", "random_heading"))
-def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "bubble", random_heading: bool = True) -> Episode:
+@functools.partial(jax.jit, static_argnames=("batch", "n_candidates", "mode", "random_heading", "variation", "held_out"))
+def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "bubble", random_heading: bool = True, variation: bool = False, held_out: bool = False) -> Episode:
     keys = jax.random.split(key, batch)
-    return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading))(keys)
+    return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading, variation, held_out))(keys)
 
 
-def _object_view(k: jax.Array, silhouette: jax.Array) -> tuple[jax.Array, jax.Array]:
-    k1, k2, k3, k4 = jax.random.split(k, 4)
+def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, scale_min: float = SCALE_MIN, scale: jax.Array | None = None, variants: bool = True):
+    """One single-object view; returns (view, type). ``scale`` overrides the sampled scale."""
+    k1, k2, k3, k4, k5 = jax.random.split(k, 5)
     t = jax.random.randint(k1, (), 0, N_TYPES)
     h = jax.random.randint(k3, (), 0, 4)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
-    obj = iso.Objects(kind=t[None], pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :], present=jnp.array([True]), heading=jax.random.randint(k4, (1,), 0, 4))
+    v, o, sc = _instances(k5, t[None], variation, False, scale_min, variants)
+    if scale is not None:
+        sc = scale[None]
+    obj = iso.Objects(
+        kind=t[None],
+        pos=(centre + iso.unrotate_offset(_AHEAD, h))[None, :],
+        present=jnp.array([True]),
+        heading=jax.random.randint(k4, (1,), 0, 4),
+        variant=v,
+        offset=o,
+        scale=sc,
+    )
     ag = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h[None], present=jnp.array([False]))
     return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None]), t
 
 
-@functools.partial(jax.jit, static_argnames=("batch",))
-def object_views(key: jax.Array, batch: int) -> tuple[jax.Array, jax.Array]:
-    """Views with a single object ahead of an (invisible) viewer on grass, random heading."""
-    return jax.vmap(lambda k: _object_view(k, jnp.bool_(False)))(jax.random.split(key, batch))
+@functools.partial(jax.jit, static_argnames=("batch", "variation"))
+def object_views(key: jax.Array, batch: int, variation: bool = False) -> tuple[jax.Array, jax.Array]:
+    """Views with a single object ahead of an (invisible) viewer on grass, random heading
+    (training variants, offsets and scales if ``variation``)."""
+    return jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation))(jax.random.split(key, batch))
 
 
-@functools.partial(jax.jit, static_argnames=("batch",))
-def object_views_dropout(key: jax.Array, batch: int, p: float) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """Colour dropout for perception pre-training: each object is drawn, with probability
-    ``p``, as a solid outline-colour silhouette on its normal ground. Returns (augmented views,
-    the same scenes in full colour, types); the autoencoder is trained to reconstruct the
-    full-colour scene, so it must recognise objects by shape."""
+@functools.partial(jax.jit, static_argnames=("batch", "variation", "scale_min", "variants"))
+def object_views_pretrain(key: jax.Array, batch: int, p_silhouette: float, variation: bool = False, scale_min: float = SCALE_MIN, variants: bool = True):
+    """Single-object views for perception pre-training, three renders of each scene:
+
+    - ``inp``: the input; the object is a solid outline-colour silhouette with probability
+      ``p_silhouette`` (colour dropout), at the sampled scale;
+    - ``tgt``: the same scene in full colour (the reconstruction target);
+    - ``anchor``: the same scene in full colour at scale 1 (the reference an invariant judge's
+      embedding is pulled towards).
+
+    Returns (inp, tgt, anchor, types)."""
     keys = jax.random.split(key, batch + 1)
-    sil = jax.random.bernoulli(keys[0], p, (batch,))
-    aug, t = jax.vmap(_object_view)(keys[1:], sil)
-    clean, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False)))(keys[1:])
-    return aug, clean, t
+    sil = jax.random.bernoulli(keys[0], p_silhouette, (batch,))
+    inp, t = jax.vmap(lambda k, s: _object_view(k, s, variation, scale_min, None, variants))(keys[1:], sil)
+    tgt, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, None, variants))(keys[1:])
+    anchor, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, jnp.float32(1.0), variants))(keys[1:])
+    return inp, tgt, anchor, t
 
 
 @jax.jit
@@ -159,7 +234,7 @@ def object_thumbnail(t: int, bg: int = 1) -> np.ndarray:
     m = g != TRANSPARENT
     gy, gx = CANVAS - iso.TILE_H - 1, CANVAS // 2 - iso.TILE_W // 2
     cell[gy : gy + iso.TILE_H, gx : gx + iso.TILE_W][m] = g[m]
-    spr = S.OBJECT_STACK[t, 1]
+    spr = S.OBJECT_STACK[t, 0, 1]
     h, w = spr.shape
     y0, x0 = CANVAS - 1 - h, CANVAS // 2 - w // 2
     sub = cell[max(y0, 0) : y0 + h, x0 : x0 + w]

@@ -102,38 +102,46 @@ def tile_variant(r, c):
     return ((r * 73856093) ^ (c * 19349663) ^ ((r + c) * 83492791)) % N_VARIANTS
 
 
-# --- objects -------------------------------------------------------------------------------
+# --- objects: parameterised generators --------------------------------------------------
+# Each referent type has several variants that share what defines the type and differ in what
+# is incidental (size, proportions, petal count, colour, species), so a drawing has to capture
+# the type rather than one remembered example. The last ``HELD_OUT`` variants of each type are
+# never shown in training; evaluation, galleries and the quiz use them.
 
 
-def _salt_cube(h_side: int = 10) -> np.ndarray:
-    """An isometric cube whose base is exactly one tile diamond: lit white top, light-grey left
-    face, dark-grey right face, white highlight on the near vertical edge and on the top's two
-    front edges."""
-    H = TILE_H + h_side
-    s = np.full((H, TILE_W), TRANSPARENT, np.uint8)
+def _salt_cube(w: int = TILE_W, h_side: int = 10) -> np.ndarray:
+    """An isometric cube of base width ``w`` (``w`` = TILE_W fills the tile diamond): lit white
+    top, light-grey left face, dark-grey right face, white highlight on the near vertical edge
+    and on the top's two front edges."""
+    th = w // 2
+    H = th + h_side
+    s = np.full((H, w), TRANSPARENT, np.uint8)
     for y in range(H):
-        for x in range(TILE_W):
-            xc, yc = x + 0.5 - TILE_W / 2, y + 0.5
-            top = abs(xc) / (TILE_W / 2) + abs(yc - TILE_H / 2) / (TILE_H / 2) <= 1
-            ye = TILE_H / 2 + (TILE_H / 2) * (1 - abs(xc) / (TILE_W / 2))  # lower edge of the top
+        for x in range(w):
+            xc, yc = x + 0.5 - w / 2, y + 0.5
+            top = abs(xc) / (w / 2) + abs(yc - th / 2) / (th / 2) <= 1
+            ye = th / 2 + (th / 2) * (1 - abs(xc) / (w / 2))  # lower edge of the top
             if top:
                 s[y, x] = C["W"]
             elif ye <= yc <= ye + h_side:
                 s[y, x] = C["S"] if xc < 0 else C["s"]
     for y in range(H):
-        if s[y, TILE_W // 2 - 1] in (C["S"], C["s"]):
-            s[y, TILE_W // 2 - 1] = C["W"]
-    for x in range(TILE_W):
+        if s[y, w // 2 - 1] in (C["S"], C["s"]):
+            s[y, w // 2 - 1] = C["W"]
+    for x in range(w):
         sides = np.where((s[:, x] == C["S"]) | (s[:, x] == C["s"]))[0]
         if len(sides):
             s[sides[0], x] = C["W"]
     return _outline(s)
 
 
-def _pine() -> np.ndarray:
-    """Three stacked tiers, lit from the left; dark line under each upper tier."""
-    tiers = [(0, 10, 2, 10), (7, 17, 4, 16), (13, 25, 6, 20)]  # (top, bottom, w_top, w_bottom)
-    W, H = 20, 30
+def _pine(tiers: list[tuple[int, int, int, int]] | None = None, trunk_h: int = 5) -> np.ndarray:
+    """Stacked triangular tiers (top, bottom, w_top, w_bottom), lit from the left; dark line
+    under each upper tier; bark trunk below."""
+    tiers = tiers or [(0, 10, 2, 10), (7, 17, 4, 16), (13, 25, 6, 20)]
+    W = max(t[3] for t in tiers)
+    top_h = max(t[1] for t in tiers)
+    H = top_h + trunk_h
     s = np.full((H, W), TRANSPARENT, np.uint8)
     for i, (t, b, w0, w1) in enumerate(tiers):
         for y in range(t, b):
@@ -144,31 +152,60 @@ def _pine() -> np.ndarray:
         if i < len(tiers) - 1:
             row = np.where(s[b - 1] != TRANSPARENT)[0]
             s[b - 1, row] = C["D"]
-    s[25:30, 8:12] = C["T"]
-    s[25:30, 8] = C["t"]
+    c = W // 2
+    s[top_h:H, c - 2 : c + 2] = C["T"]
+    s[top_h:H, c - 2] = C["t"]
     return _outline(s)
 
 
-def _flower() -> np.ndarray:
-    """A five-pointed red star with a yellow centre on a short stem with a pair of leaves;
-    shorter than a sheep."""
-    R, N, H = 5.8, 12, 17
+def _round_tree(r: float = 8.5, trunk_h: int = 8, squash: float = 1.0) -> np.ndarray:
+    """A broadleaf tree: a round canopy (lit upper-left, shaded lower-right, a few highlight
+    leaves) on a bark trunk."""
+    W = int(2 * r) + 2
+    ch = int(2 * r * squash) + 2
+    H = ch + trunk_h - 2
+    s = np.full((H, W), TRANSPARENT, np.uint8)
+    cx, cy = W / 2, ch / 2
+    c = W // 2
+    s[ch - 3 : H, c - 2 : c + 2] = C["T"]
+    s[ch - 3 : H, c - 2] = C["t"]
+    for y in range(ch):
+        for x in range(W):
+            dx, dy = (x + 0.5 - cx) / r, (y + 0.5 - cy) / (r * squash)
+            d = dx * dx + dy * dy
+            if d <= 1.0:
+                shade = dx + dy
+                s[y, x] = C["l"] if shade < -0.9 else C["g"] if shade < 0.4 else C["G"]
+                if (x * 7 + y * 3) % 11 == 0 and shade < 0.2:
+                    s[y, x] = C["l"]
+    return _outline(s)
+
+
+def _flower(petals: int = 5, petal: str = "R", centre: str = "Y", R: float = 5.8, stem: int = 5) -> np.ndarray:
+    """A star flower: ``petals`` points of colour ``petal`` round a ``centre`` disc, on a short
+    stem with a pair of leaves; shorter than a sheep."""
+    N = int(np.ceil(2 * R)) + 1
+    H = N + stem
     s = np.full((H, N), TRANSPARENT, np.uint8)
     cx = cy = N / 2
     for y in range(N):
         for x in range(N):
             dx, dy = x + 0.5 - cx, y + 0.5 - cy
             r, th = np.hypot(dx, dy), np.arctan2(dy, dx)
-            if r <= 1.8:
-                s[y, x] = C["Y"]
-            elif r <= R * (0.55 + 0.45 * np.cos(5 * (th + np.pi / 2))):
-                s[y, x] = C["R"]
-    s[N - 1 : H, 5:7] = C["g"]
+            if r <= 0.31 * R:
+                s[y, x] = C[centre]
+            elif r <= R * (0.55 + 0.45 * np.cos(petals * (th + np.pi / 2))):
+                s[y, x] = C[petal]
+    m = N // 2
+    s[N - 1 : H, m - 1 : m + 1] = C["g"]
+    ly = H - 2
     for k in range(2):  # leaves
-        s[15 - k, 7 + k] = C["l"]
-        s[15 - k, 8 + k] = C["g"]
-        s[15 - k, 4 - k] = C["g"]
-        s[15 - k, 3 - k] = C["l"]
+        s[ly - k, m + 1 + k] = C["l"]
+        if m + 2 + k < N:
+            s[ly - k, m + 2 + k] = C["g"]
+        s[ly - k, m - 2 - k] = C["g"]
+        if m - 3 - k >= 0:
+            s[ly - k, m - 3 - k] = C["l"]
     return _outline(s)
 
 
@@ -229,8 +266,20 @@ FOX_BACK_R = _parse(
 )
 
 
-def _facings(front_r: np.ndarray, back_r: np.ndarray) -> list[np.ndarray]:
+def _facings(front_r: np.ndarray, back_r: np.ndarray, tail_tip: bool = True) -> list[np.ndarray]:
+    if not tail_tip:  # the white tail tip coloured like the body
+        front_r, back_r = _recolour(front_r, "W", "O"), _recolour(back_r, "W", "O")
     f, b = _outline(_up2(front_r)), _outline(_up2(back_r))
+    return [b, f, f[:, ::-1], b[:, ::-1]]
+
+
+def _recolour(s: np.ndarray, a: str, b: str) -> np.ndarray:
+    return np.where(s == C[a], C[b], s).astype(np.uint8)
+
+
+def _small_fox_facings(body: str = "O") -> list[np.ndarray]:
+    """The fox at its original 1x pixel scale (half size), for size variants."""
+    f, b = _recolour(FOX_FRONT_R, "O", body), _recolour(FOX_BACK_R, "O", body)
     return [b, f, f[:, ::-1], b[:, ::-1]]
 
 
@@ -240,16 +289,50 @@ SHEEP = ANIMAL_NAMES.index("sheep")
 FOX = ANIMAL_NAMES.index("fox")
 N_FACINGS = 4
 
-# Referents, each as four facings (static objects repeat one sprite).
-OBJECTS = {
-    "salt": [_salt_cube()] * N_FACINGS,
-    "tree": [_pine()] * N_FACINGS,
-    "flower": [_flower()] * N_FACINGS,
-    "fox": ANIMALS["fox"],
+# Referent variants. Each entry is a list of four facings (static objects repeat one sprite).
+# Order matters: the last HELD_OUT of each type are evaluation-only.
+_static = lambda spr: [spr] * N_FACINGS
+OBJECT_VARIANTS = {
+    "salt": [
+        _static(_salt_cube(16, 10)),  # the signed-off cube
+        _static(_salt_cube(16, 6)),  # a flat slab
+        _static(_salt_cube(12, 10)),
+        _static(_salt_cube(14, 14)),  # tall
+        _static(_salt_cube(10, 6)),  # held out: small
+        _static(_salt_cube(16, 14)),  # held out: big
+    ],
+    "tree": [
+        _static(_pine()),  # the signed-off pine
+        _static(_pine([(0, 9, 2, 10), (7, 18, 4, 16)], trunk_h=5)),  # two tiers
+        _static(_pine([(0, 8, 2, 8), (6, 14, 4, 12), (11, 20, 4, 14), (17, 26, 6, 16)], trunk_h=4)),  # tall, narrow
+        _static(_round_tree(8.5, 8)),  # broadleaf
+        _static(_pine([(0, 9, 2, 12), (7, 17, 4, 18), (13, 23, 6, 22)], trunk_h=4)),  # held out: wide pine
+        _static(_round_tree(7.0, 10, squash=1.2)),  # held out: tall-crowned broadleaf
+    ],
+    "flower": [
+        _static(_flower(5, "R", "Y")),  # the signed-off star flower
+        _static(_flower(4, "Y", "D", R=5.2)),
+        _static(_flower(6, "P", "Y", R=6.2, stem=4)),
+        _static(_flower(5, "W", "Y", R=5.0, stem=6)),
+        _static(_flower(6, "R", "Y", R=5.5, stem=6)),  # held out
+        _static(_flower(4, "b", "Y", R=6.0, stem=4)),  # held out: blue
+    ],
+    "fox": [
+        ANIMALS["fox"],  # the signed-off fox
+        _facings(_recolour(FOX_FRONT_R, "O", "T"), _recolour(FOX_BACK_R, "O", "T")),  # brown fox
+        [_outline(f) for f in _small_fox_facings()],  # small fox (1x art)
+        _facings(FOX_FRONT_R, FOX_BACK_R, tail_tip=False),
+        _facings(_recolour(FOX_FRONT_R, "O", "R"), _recolour(FOX_BACK_R, "O", "R")),  # held out: red
+        [_outline(f) for f in _small_fox_facings("T")],  # held out: small brown
+    ],
 }
-OBJECT_NAMES = list(OBJECTS)
+HELD_OUT = 2
+OBJECT_NAMES = list(OBJECT_VARIANTS)
 N_OBJECT_TYPES = len(OBJECT_NAMES)
 FOX_OBJECT = OBJECT_NAMES.index("fox")
+N_OBJECT_VARIANTS = np.array([len(OBJECT_VARIANTS[n]) for n in OBJECT_NAMES])
+N_TRAIN_VARIANTS = N_OBJECT_VARIANTS - HELD_OUT
+OBJECTS = {n: v[0] for n, v in OBJECT_VARIANTS.items()}  # first variant, as signed off
 
 
 def _pad(s: np.ndarray, h: int, w: int) -> np.ndarray:
@@ -262,9 +345,13 @@ def _pad(s: np.ndarray, h: int, w: int) -> np.ndarray:
 
 
 # Common box for everything that is pasted.
-_all = [f for fs in OBJECTS.values() for f in fs] + [f for fs in ANIMALS.values() for f in fs]
+_all = [f for vs in OBJECT_VARIANTS.values() for fs in vs for f in fs] + [f for fs in ANIMALS.values() for f in fs]
 BOX_H = max(f.shape[0] for f in _all)
 BOX_W = max(f.shape[1] for f in _all)
-# (n_obj, 4, H, W) and (n_animal, 4, H, W): facing index as documented above
-OBJECT_STACK = np.stack([np.stack([_pad(f, BOX_H, BOX_W) for f in OBJECTS[n]]) for n in OBJECT_NAMES])
+_MAXV = int(N_OBJECT_VARIANTS.max())
+# (n_obj, n_variants, 4, H, W): a type with fewer variants repeats its last one
+OBJECT_STACK = np.stack(
+    [np.stack([np.stack([_pad(f, BOX_H, BOX_W) for f in OBJECT_VARIANTS[n][min(v, len(OBJECT_VARIANTS[n]) - 1)]]) for v in range(_MAXV)]) for n in OBJECT_NAMES]
+)
+# (n_animal, 4, H, W): facing index as documented above
 ANIMAL_STACK = np.stack([np.stack([_pad(f, BOX_H, BOX_W) for f in ANIMALS[n]]) for n in ANIMAL_NAMES])

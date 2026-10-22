@@ -40,7 +40,7 @@ def export_run_gallery(model, cfg, key: jax.Array, n: int = 192) -> None:
     out = cfg.out_dir
     E = envs.get(cfg)
     k_ep, k_s = jax.random.split(key)
-    ep = E.make_batch(k_ep, n, cfg.n_candidates, cfg.mode, cfg.random_heading)
+    ep = envs.make_batch(cfg, k_ep, n, held_out=True)  # held-out variants when there is variation
     fwd = game.forward(model, ep, k_s, cfg.opaque, hard=True)
     bg = 8 if cfg.opaque else 1
     idx = np.asarray(jax.vmap(lambda c, a: canvas_to_indices(type(fwd.canvas)(c, a, 0.0), background=bg))(fwd.canvas.colour, fwd.canvas.alpha))

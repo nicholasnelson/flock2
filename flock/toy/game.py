@@ -59,10 +59,33 @@ def receive(model: Agents, receiver_base: jax.Array, canvas: Canvas, canvas_px: 
     return logits, rv
 
 
-def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False) -> Forward:
+def shift_canvas(canvas: Canvas, key: jax.Array, jitter: int) -> Canvas:
+    """Channel noise: move each drawing by a random whole-pixel offset in [-jitter, jitter]
+    within its frame (what leaves the frame is lost, the freed border is blank), so where in
+    the frame a mark sits can carry no information. Ink is unchanged."""
+    if jitter <= 0:
+        return canvas
+    b, s = canvas.alpha.shape[0], canvas.alpha.shape[1]
+    d = jax.random.randint(key, (b, 2), -jitter, jitter + 1)
+    J = jitter
+
+    def one(col, a, dd):
+        colp = jnp.pad(col, ((J, J), (J, J), (0, 0)), constant_values=1.0 / col.shape[-1])
+        ap = jnp.pad(a, J)
+        r, c = J - dd[0], J - dd[1]
+        return jax.lax.dynamic_slice(colp, (r, c, 0), (s, s, col.shape[-1])), jax.lax.dynamic_slice(ap, (r, c), (s, s))
+
+    col, a = jax.vmap(one)(canvas.colour, canvas.alpha, d)
+    return Canvas(colour=col, alpha=a, ink=canvas.ink)
+
+
+def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False, jitter: int = 0) -> Forward:
+    """Sender draws, receiver reads. With ``jitter`` the drawing the receiver sees is moved
+    within its frame (channel noise); ``Forward.canvas`` is the drawing as drawn."""
     sv = world.to_onehot(ep.sender_view)
     canvas, emb_s = draw(model, sv, key, hard)
-    logits, rv = receive(model, ep.receiver_base, canvas, ep.canvas_px, opaque)
+    shown = shift_canvas(canvas, jax.random.fold_in(key, 7), jitter) if jitter > 0 else canvas
+    logits, rv = receive(model, ep.receiver_base, shown, ep.canvas_px, opaque)
     return Forward(logits=logits, canvas=canvas, sender_emb=emb_s, receiver_view=rv)
 
 
@@ -91,7 +114,8 @@ def perceptual_loss(judge, canvas: Canvas, sender_view_onehot: jax.Array, ground
     loss by learning to ignore the canvas, and the drawing collapses to nothing — observed in
     the first fine-tuned-encoder run.
     """
-    probe = jax.vmap(lambda v, c, a: world.composite_canvas(v, c, a, probe_px, opaque_paper=False))(ground_views, canvas.colour, canvas.alpha)
+    probe_px = jnp.broadcast_to(probe_px, (canvas.alpha.shape[0], 2))  # one position, or one per episode
+    probe = jax.vmap(lambda v, c, a, p: world.composite_canvas(v, c, a, p, opaque_paper=False))(ground_views, canvas.colour, canvas.alpha, probe_px)
     emb_p, _ = judge(probe)
     target, _ = judge(sender_view_onehot)
     target = jax.lax.stop_gradient(target)

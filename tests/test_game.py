@@ -99,3 +99,18 @@ def test_iso_forward_at_128_with_32px_mono_strokes():
     g = nnx.grad(loss)(m)
     assert all(np.isfinite(np.asarray(x)).all() for x in jax.tree_util.tree_leaves(g))
     assert any(float(jnp.abs(x).sum()) > 0 for x in jax.tree_util.tree_leaves(g.sender))
+
+
+def test_channel_jitter_moves_the_drawing_and_keeps_ink():
+    from flock.raster import Canvas
+
+    a = jnp.zeros((2, 32, 32)).at[:, 10, 10].set(1.0)
+    c = Canvas(colour=jnp.full((2, 32, 32, 16), 1.0 / 16), alpha=a, ink=jnp.array([3.0, 4.0]))
+    moved = game.shift_canvas(c, jax.random.PRNGKey(0), 4)
+    m = np.asarray(moved.alpha)
+    assert np.allclose(m.sum((1, 2)), 1.0)  # the mark is still there, once
+    for b in range(2):
+        y, x = np.argwhere(m[b] > 0.5)[0]
+        assert abs(y - 10) <= 4 and abs(x - 10) <= 4
+    assert np.allclose(np.asarray(moved.ink), [3.0, 4.0])
+    assert game.shift_canvas(c, jax.random.PRNGKey(0), 0) is c
