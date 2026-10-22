@@ -11,7 +11,7 @@ Not every combination is run; the cells below cover the questions. Each cell run
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
 default sizes a cell takes a few minutes; on CPU, a lot longer — pass ``--quick`` to shrink.
 
-    python scripts/m0_grid.py --out runs/m0/grid --seeds 3
+    python scripts/m0_grid.py --out runs/m0/grid --seeds 3 --renderer iso
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ def main():
     p.add_argument("--quick", action="store_true", help="tiny sizes for a smoke run")
     p.add_argument("--steps", type=int, default=None)
     p.add_argument("--pretrain_steps", type=int, default=None)
+    p.add_argument("--renderer", default="topdown", help="'topdown' or 'iso'; applied to every cell")
     args = p.parse_args()
 
     names = list(CELLS) if args.cells == "all" else args.cells.split(",")
@@ -62,7 +63,7 @@ def main():
             key = f"{name}/s{seed}"
             if key in results:
                 continue
-            over = dict(CELLS[name])
+            over = dict(CELLS[name], renderer=args.renderer)
             if args.quick:
                 over.update(pretrain_steps=50, steps=100, batch=16, eval_batch=64, eval_every=50)
             if args.steps is not None:
