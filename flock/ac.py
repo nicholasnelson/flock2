@@ -23,9 +23,9 @@ from flax import nnx
 
 from flock import wm
 
-HORIZON = 15
+HORIZON = 32  # DreamerV3 uses 15; too short here for a thirsty sheep to reach water (M1 run 2)
 GAMMA, LAMBDA = 0.997, 0.95
-ENTROPY = 3e-3  # DreamerV3 uses 3e-4; at that the first agent run's policy collapsed in ~1,600 updates
+ENTROPY = 3e-4  # as DreamerV3 (3e-3 kept M1 run 2's policy uniform for 530 iterations)
 SLOW_DECAY = 0.98
 RETURN_DECAY = 0.99
 UNIMIX = 0.01
