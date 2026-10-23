@@ -49,13 +49,13 @@ and the installation host, there is no cloud, and v0.4's Rust/Pi requirements ar
   implementation, no ONNX export and no Rust ML runtime.
 - **Framework: JAX** (decided at plan review). Vmapped gridworld + DreamerV3 lineage; the
   differentiable rasteriser, auxiliary losses and metrics are all plain JAX.
-- **Perception: 64×64 egocentric heading-aligned view, 16×16 canvas**, rendered
-  **isometrically** (8×4 px diamond tiles; Q8 addendum) from M0 onward, so every milestone's
-  result transfers. Ground is rendered by gather (inverse projection per pixel), sprites by
-  depth-sorted pastes; this is the throughput bottleneck to budget for. The top-down renderer
-  (`flock/world.py`) is kept as the tested baseline behind `--renderer topdown`. Resolution
-  stays at 64×64 for M0/M1; 96² (12×6 tiles) or 128² (16×8) costs ≈2.25× / 4× in the
-  pixel-bound parts and 4× in replay memory at 128², and is decided from the M1 profile.
+- **Perception (revised 2026-10-23).** M0 ran on an isometric 128×128 heading-aligned view at
+  16×8 px tiles with 32×32 drawings (`flock/iso.py`). **From M1 the sheep see a first-person
+  view**: a cylindrical ~300° strip, 256×64, billboard sprites that shrink with distance, a
+  ~60° blind wedge behind (`flock/fpv.py`; Q9 addendum, owner's decision). It rendered 0.44–0.70×
+  the cost of the isometric view in the spike benchmark, so rendering is not the budget
+  constraint; the world model is. Humans keep the isometric display, drawn from the state
+  stream. The top-down renderer (`flock/world.py`) remains as M0's old baseline.
 - **Viewing is a simple desktop window**, not an installation. A viewer process (or an in-process
   window) draws the meadow from a state stream (positions, headings, sprites, marks, bubbles,
   bleat parameters, telemetry) and synthesises bleat audio live from the learned parameters. The
@@ -161,44 +161,84 @@ worth noting: the pixel sender trained fine.
 
 ## Milestone 1 — meadow, drives and world model
 
-**Goal.** A single flock (20–40 sheep) on the 128×128 meadow with grazing patches, pond, salt
-lick, treeline and day/night, driven by homeostatic drives and a shared RSSM world model, that
-looks alive to a viewer and whose "expected view" and surprise are displayable.
+*Revised 2026-10-23 after M0 closed and the owner adopted the first-person view (Q9 addendum).
+Items marked "decision for review" are proposals awaiting the owner's sign-off before code.*
+
+**Goal.** A single flock (20–40 sheep) on the 128×128 meadow with grazing patches, water, salt
+lick, trees and huts and a day/night cycle, driven by homeostatic drives and a shared RSSM world
+model; it looks alive to a viewer, its "expected view" and surprise are displayable, and the
+information gaps that will later make communication worth having are built in and measured
+from the start. No communication yet.
 
 **Approach.**
 
-- *Drives* per Q-section 2 of the survey: HRRL drive-difference reward over hunger, thirst,
-  warmth, social, interest (fear added in M2); continuous decay; non-substitutable norm;
-  over-satiation penalties; warmth decays faster at night and away from cover and recovers only
-  while resting; social set-point saturating at ~6–10 visible conspecifics with allelomimetic
-  coupling to neighbour state changes.
+- *Perception (changed).* Each sheep sees the first-person strip of `flock/fpv.py`: 256×64, a
+  cylindrical ~300° field with the ~60° blind wedge behind, billboard sprites that shrink with
+  distance, real occlusion (painted far to near), a range of 16 tiles. Night shortens the range
+  and darkens the strip; "head up" extends the range at a foraging cost (Q9). Far objects are a
+  few pixels tall by geometry, which replaces the two-scale far view (Q8 addendum). The isometric
+  view is kept, tested, as the agents' fallback.
+- *Movement (decision for review).* A first-person view needs smooth turning, so positions and
+  headings become continuous: sheep turn in small steps and walk or trot forward, colliding with
+  objects and each other as circles; the ground stays a tile grid (grass growth states, water).
+  Proposed actions: turn left/right, walk, trot, stop, graze, drink, rest, head up. Fallback if
+  continuous movement complicates learning: positions snapped to tiles with 8 headings, rendered
+  with the same first-person view.
+- *The meadow.* M0's sprite set carries over: grass is the ground (hunger; regrows by state);
+  water tiles (thirst); trees and huts (cover: warmth recovers faster when resting beside them,
+  and they block sight); the salt lick (a slow mineral need — decision for review: include now
+  or later); flowers and mushrooms as scenery and future referents (the mushroom's "not to eat"
+  role is deferred).
+- *Drives* per the survey: HRRL drive-difference reward over hunger, thirst, warmth, social,
+  interest (fear added in M2); continuous decay; non-substitutable norm; over-satiation
+  penalties; warmth decays faster at night and in the open and recovers only while resting;
+  social set-point saturating at ~6–10 visible conspecifics with allelomimetic coupling to
+  neighbour state changes.
 - *Curiosity*: hashed counts over static-world features only, routed into the interest drive;
   blind to other sheep.
-- *Perception*: 64×64 heading-aligned view at 4 px/tile with a rear blind wedge; night shrinks
-  the lit radius; "head up" extends it (Q9).
-- *World model*: shared RSSM at DreamerV3's native 64×64 input, sized between the repo's
-  `size1m` and the paper's XS (≈2–8M parameters; measure), per-sheep recurrent state plus a trait
-  embedding (the trait embedding is the first seed of the genome). Categorical decoder with
-  cross-entropy over 16 colours. Pre-trained self-supervised on logged rollouts from
-  scripted/random sheep (Ha & Schmidhuber's recipe), then actor-critic in imagination with short
-  horizons.
-- *Vectorised sim*: the full 128×128 meadow, batched across many instances on the 4080, grown
-  from the M0 scaffolding. Profile agent-steps/s with view rendering here; this number sizes
-  every later milestone.
+- *Information gaps, built in and logged from day one* (Q9 addendum, item 4a). Occlusion,
+  the blind wedge, the range limit and night already create them; M1 measures them: per step, a
+  visibility record of which sheep see which resources and which other sheep, and an
+  "information gap" metric — how often a resource one sheep can see is unseen by a neighbour
+  that needs it. This is the baseline M3/M4 communication is measured against, and it says
+  whether the meadow gives sheep anything worth telling each other *(judgement)*.
+- *World model*: shared RSSM sized between the repo's `size1m` and the paper's XS (≈2–8M
+  parameters; measure), per-sheep recurrent state plus a trait embedding (the first seed of the
+  genome), a categorical decoder over the 16 colours. The input is 256×64 — the pixel count of
+  128×128 and four times DreamerV3's native 64×64 — so the CNN gets one more stride-2 stage (a
+  16×4 bottom map); DreamerV3 learned from first-person DMLab views
+  ([Hafner et al. 2023](https://arxiv.org/abs/2301.04104)). Pre-trained self-supervised on logged
+  rollouts from scripted sheep, then actor-critic in imagination with short horizons.
+- *Replay*: a 256×64 palette frame is 8 KB at 4 bits per pixel (4× the old 64×64 estimate), so
+  10⁶ steps are 8 GB: disk-backed replay from the start.
+- *Viewer*: a desktop window drawing the meadow isometrically from the state stream, with a
+  selected sheep's first-person strip, its expected strip and its drives beside it.
+- *Vectorised sim*: the full meadow batched across many instances on the 4080. First number to
+  measure: agent-steps/s with first-person rendering for 40 sheep (the renderer alone did
+  ~140,000 views/s at batch 512 with 120 objects in the spike).
+
+**Order of work** *(judgement)*, each step watchable before the next: (1) the meadow sim with
+continuous movement, the first-person views and the isometric viewer, driven by scripted sheep;
+profile. (2) Logged rollouts and world-model pretraining; check the expected strip. (3) Drives
+and the actor-critic. (4) The behavioural and stability evaluation.
 
 **Success criteria.**
 
 - Behavioural: a dawn/dusk grazing rhythm with rest at night emerges without a night penalty
   (the ethological target: ~2-hour rest/graze alternation at night); no sheep stands still > X%
   of the time; no corner-standing; no sheep-chasing.
-- World model: decoded expected frame keeps single-pixel objects (no IRIS-style erasure);
-  posterior‖prior KL spikes on genuinely novel events and not on routine neighbour motion.
-- Displayable: a side-by-side of actual vs expected view that a viewer can read.
+- World model: the decoded expected strip keeps small, distant objects (a few pixels tall; no
+  IRIS-style erasure); posterior‖prior KL spikes on genuinely novel events and not on routine
+  neighbour motion.
+- Displayable: a side-by-side of actual vs expected strip that a viewer can read.
+- Information gaps: the visibility record and the gap metric are logged and non-trivial — sheep
+  routinely know things their neighbours do not.
 - Stability: a 24-hour continuous run with learning on shows no behavioural-metric regression
   (watchdog thresholds defined here and reused in M7).
 
 **Compute.** World-model pretraining on ~10⁷ logged steps: hours on the 4080 (~5–10 GPU-h
-including a hyperparameter sweep); drives and policy tuning mostly CPU.
+including a hyperparameter sweep; the 256×64 input roughly quadruples the encoder/decoder cost
+over 64×64 — **Estimate**); drives and policy tuning mostly CPU.
 
 **Risks and fallbacks.**
 
@@ -208,9 +248,11 @@ including a hyperparameter sweep); drives and policy tuning mostly CPU.
   unimix; more pretraining data (it is free).
 - Drive gaming (parking on a patch, endless wandering): structural fixes first (norm exponent,
   over-satiation, interest drive cap), never a hand-tuned weight sum.
-- View rendering dominates sim throughput (image-observation JAX envs run ~50× slower than
-  symbolic): render by gather from a palette index map, reduce parallel meadows, or drop to
-  3 px/tile (48×48) if the M1 profile demands it.
+- The first-person view is harder to model or act from than the isometric one: fall back to the
+  isometric view, which is tested and costs the same order.
+- Continuous movement complicates learning or collisions: snap to tiles with 8 headings.
+- Simulation throughput, not rendering, limits sheep count: reduce parallel meadows or flock size
+  for pretraining; cull distant objects before rendering.
 
 ---
 

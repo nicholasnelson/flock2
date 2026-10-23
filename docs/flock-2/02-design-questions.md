@@ -595,6 +595,8 @@ direction, not yet tested; item 1 needs a benchmark before it is adopted.
      shrinks objects as intended — something 8 tiles away is a few pixels tall, so far
      objects lose detail without a separate far view; ground right in front of the viewer is
      blocky (the tile art magnified), a cosmetic issue for later.
+     **Decision (owner, 2026-10-23): adopted for M1 onward.** The isometric view stays for
+     humans (the display) and as the tested fallback for agents.
    - Relevant M0 finding: a perception encoder that must recognise objects at several scales
      is what a first-person view forces; M0 had to add scale variation by hand
      (`m0-toy-README.md`, the instance-variation work).
