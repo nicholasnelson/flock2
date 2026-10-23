@@ -13,11 +13,10 @@ import jax
 import jax.numpy as jnp
 
 from flock import fpv, iso, sprites_iso as S
-from flock.meadow.sim import is_night
+from flock.meadow.sim import RANGE_DAY, RANGE_DAY_UP, RANGE_NIGHT, RANGE_NIGHT_UP, is_night
 from flock.meadow.world import State, ground_state
 
 K_NEAREST = 48
-RANGE_DAY, RANGE_DAY_UP, RANGE_NIGHT, RANGE_NIGHT_UP = 12.0, 16.0, 5.0, 8.0
 SKY_DAY, SKY_NIGHT = 5, 0  # water_light; void
 FAR_DAY, FAR_NIGHT = 1, 0  # grass_dark; void
 

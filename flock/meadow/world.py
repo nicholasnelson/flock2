@@ -48,8 +48,9 @@ class Flock(NamedTuple):
     heading: jax.Array  # (S,) float radians
     resting: jax.Array  # (S,) bool
     head_up: jax.Array  # (S,) bool
-    thirst: jax.Array  # (S,) float — scripted-flock bookkeeping only (the learned drives come in step 3)
-    hunger: jax.Array  # (S,) float
+    levels: jax.Array  # (S, N_DRIVES) homeostatic levels, set-point 1 (``flock.meadow.drives``)
+    visits: jax.Array  # (S, 16, 16) int: each sheep's visits to the interest cells (hashed counts)
+    reward: jax.Array  # (S,) the drive-reduction reward of the last step
 
 
 class State(NamedTuple):
@@ -120,8 +121,9 @@ def generate(key: jax.Array, n_sheep: int = 40) -> State:
         heading=heading,
         resting=jnp.zeros((n_sheep,), bool),
         head_up=jnp.zeros((n_sheep,), bool),
-        thirst=jax.random.uniform(jax.random.fold_in(k_s, 2), (n_sheep,), maxval=0.5),
-        hunger=jax.random.uniform(jax.random.fold_in(k_s, 3), (n_sheep,), maxval=0.5),
+        levels=jnp.concatenate([jax.random.uniform(jax.random.fold_in(k_s, 2), (n_sheep, 3), minval=0.6, maxval=0.9), jnp.full((n_sheep, 2), 0.8)], -1),
+        visits=jnp.zeros((n_sheep, N_TILES // 8, N_TILES // 8), jnp.int32),
+        reward=jnp.zeros((n_sheep,)),
     )
     meadow = Meadow(water=water, grass=grass, obj_kind=obj_kind, obj_variant=obj_variant, obj_pos=obj_pos, obj_present=obj_present)
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))

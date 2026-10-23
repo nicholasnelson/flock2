@@ -22,8 +22,9 @@ def _empty(n_sheep=2, pos=((64.0, 64.0), (64.0, 70.0)), heading=(0.0, 0.0)):
         heading=jnp.array(heading[:n_sheep]),
         resting=jnp.zeros(n_sheep, bool),
         head_up=jnp.zeros(n_sheep, bool),
-        thirst=jnp.full(n_sheep, 0.5),
-        hunger=jnp.full(n_sheep, 0.5),
+        levels=jnp.full((n_sheep, 5), 0.5),
+        visits=jnp.zeros((n_sheep, 16, 16), jnp.int32),
+        reward=jnp.zeros(n_sheep),
     )
     return State(meadow=m, flock=f, t=jnp.int32(0))
 
@@ -47,9 +48,9 @@ def test_water_blocks_and_drinking_works_at_the_edge():
         s = sim.step(s, jnp.array([sim.TROT]))
     c = float(s.flock.pos[0, 1])
     assert c >= 53.0  # never entered the water
-    before = float(s.flock.thirst[0])
+    before = float(s.flock.levels[0, 1])
     s = sim.step(s, jnp.array([sim.DRINK]))
-    assert float(s.flock.thirst[0]) < before
+    assert float(s.flock.levels[0, 1]) > before  # hydration restored
 
 
 def test_grazing_eats_and_separation_pushes_apart():
@@ -99,3 +100,31 @@ def test_pack_roundtrip_and_a_tiny_rollout(tmp_path):
     full = np.asarray(rollouts.unpack(views))
     assert full.max() < 16  # palette indices
     assert acts.max() < 9
+
+
+def test_drive_reward_signs():
+    from flock.meadow import drives as D
+
+    hungry = jnp.array([[0.3, 0.9, 0.9, 1.0, 0.9]])
+    after = D.update(hungry, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
+    assert float(D.reward(hungry, after)[0]) > 0  # eating when hungry pays
+    full = jnp.array([[1.1, 0.9, 0.9, 1.0, 0.9]])
+    over = D.update(full, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
+    assert float(D.reward(full, over)[0]) < 0  # over-eating past the set-point costs
+    # warmth at night: the open chills faster than cover
+    h = jnp.full((2, 5), 0.8)
+    n = D.update(h, grazed=jnp.zeros(2, bool), drank=jnp.zeros(2, bool), resting=jnp.zeros(2, bool), night=jnp.bool_(True), near_cover=jnp.array([False, True]), n_visible=jnp.zeros(2), novelty=jnp.zeros(2))
+    assert float(n[0, D.WARMTH]) < float(n[1, D.WARMTH]) < 0.8
+
+
+def test_social_counts_only_sheep_in_view_and_interest_rewards_new_cells():
+    pos = jnp.array([[64.0, 64.0], [60.0, 64.0], [68.0, 64.0]])  # one ahead (north), one behind
+    heading = jnp.zeros(3)
+    nv = np.asarray(sim.n_visible(pos, heading, jnp.full(3, 12.0)))
+    assert nv[0] == 1  # the sheep behind is in the blind wedge
+    s = _empty(n_sheep=1, pos=((63.9, 63.9),), heading=(np.pi / 2,))  # east, about to cross into a new 8-tile cell
+    s = s._replace(flock=s.flock._replace(pos=jnp.array([[60.0, 63.95]])))
+    before = float(s.flock.levels[0, 4])
+    s2 = sim.step(s, jnp.array([sim.WALK]))
+    assert float(s2.flock.levels[0, 4]) > before  # entering a fresh cell raised interest
+    assert int(s2.flock.visits.sum()) == 1

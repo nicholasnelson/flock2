@@ -20,10 +20,11 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from flock.meadow import sim
+from flock.meadow import drives as D, sim
 from flock.meadow.world import HUT, N_TILES, TREE, State
 
 THIRSTY, HUNGRY = 0.6, 0.3
+FULL = 0.95  # keep drinking or grazing, once started, until the level reaches this
 COVER_REST_DIST = 3.0
 COHESION_DIST = 6.0
 EPS = 0.05
@@ -81,7 +82,13 @@ def policy(state: State, key: jax.Array) -> jax.Array:
     idle_act = jnp.where(far_from_flock, _steer(f.heading, to_c, jnp.zeros(n, bool)), wander)
 
     night = sim.is_night(state.t)
-    act = jnp.where(night, night_act, jnp.where(f.thirst > THIRSTY, thirsty_act, jnp.where(f.hunger > HUNGRY, hungry_act, idle_act)))
+    thirst, hunger = 1.0 - f.levels[:, D.HYDRATION], 1.0 - f.levels[:, D.ENERGY]
+    # hysteresis without memory: once at the water (on good grass), keep drinking (grazing) until nearly full
+    topping_up_water = sim.near_water(m, f.pos) & (thirst > 1.0 - FULL)
+    topping_up_grass = (here >= 1.5) & (hunger > 1.0 - FULL)
+    want_water = (thirst > THIRSTY) | topping_up_water
+    want_grass = (hunger > HUNGRY) | topping_up_grass
+    act = jnp.where(night, night_act, jnp.where(want_water, thirsty_act, jnp.where(want_grass, hungry_act, idle_act)))
     act = jnp.where(jax.random.uniform(k2, (n,)) < 0.02, sim.HEAD_UP, act)
     rand = jax.random.randint(k3, (n,), 0, sim.N_ACTIONS)
     act = jnp.where(jax.random.uniform(k4, (n,)) < EPS, rand, act)

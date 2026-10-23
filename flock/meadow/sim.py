@@ -14,7 +14,8 @@ from __future__ import annotations
 import jax
 import jax.numpy as jnp
 
-from flock.meadow.world import N_TILES, RADIUS, SHEEP_RADIUS, Flock, Meadow, State
+from flock.meadow import drives as D
+from flock.meadow.world import HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State
 
 STOP, WALK, TROT, LEFT, RIGHT, GRAZE, DRINK, REST, HEAD_UP = range(9)
 N_ACTIONS = 9
@@ -26,6 +27,9 @@ BITE = 0.05  # biomass eaten per graze step
 REGROW = 0.0004  # fraction of the gap to full (3) regrown per step
 DAY = 1200  # steps per day; the first 60 % is light
 DAY_FRACTION = 0.6
+# how far a sheep sees (tiles): by day / day with head up / night / night with head up
+RANGE_DAY, RANGE_DAY_UP, RANGE_NIGHT, RANGE_NIGHT_UP = 12.0, 16.0, 5.0, 8.0
+FOV = jnp.deg2rad(300.0)  # outside it, the rear blind wedge
 
 
 def is_night(t: jax.Array) -> jax.Array:
@@ -62,6 +66,20 @@ def _allowed(m: Meadow, p: jax.Array) -> jax.Array:
     return inside & dry & ~hits
 
 
+def view_range(night: jax.Array, head_up: jax.Array) -> jax.Array:
+    return jnp.where(night, jnp.where(head_up, RANGE_NIGHT_UP, RANGE_NIGHT), jnp.where(head_up, RANGE_DAY_UP, RANGE_DAY))
+
+
+def n_visible(pos: jax.Array, heading: jax.Array, rng: jax.Array) -> jax.Array:
+    """(S,) how many other sheep each sheep can see: in range and outside the blind wedge."""
+    rel = pos[None, :, :] - pos[:, None, :]
+    d = jnp.linalg.norm(rel, axis=-1)
+    bearing = jnp.arctan2(rel[..., 1], -rel[..., 0])
+    alpha = (bearing - heading[:, None] + jnp.pi) % (2 * jnp.pi) - jnp.pi
+    seen = (d > 1e-6) & (d <= rng[:, None]) & (jnp.abs(alpha) < FOV / 2)
+    return jnp.sum(seen, -1).astype(jnp.float32)
+
+
 def step(state: State, actions: jax.Array) -> State:
     m, f = state.meadow, state.flock
     a = actions
@@ -88,8 +106,28 @@ def step(state: State, actions: jax.Array) -> State:
     grass = jnp.where(m.water, grass, grass + REGROW * (3.0 - grass))
 
     drinking = (a == DRINK) & near_water(m, pos)
-    hunger = jnp.clip(f.hunger + 0.0005 - jnp.where(grazing, 0.02, 0.0), 0.0, 1.0)
-    thirst = jnp.clip(f.thirst + 0.0006 - jnp.where(drinking, 0.05, 0.0), 0.0, 1.0)
-
-    flock = Flock(pos=pos, heading=heading, resting=a == REST, head_up=a == HEAD_UP, thirst=thirst, hunger=hunger)
+    resting = a == REST
+    head_up = a == HEAD_UP
+    night = is_night(state.t + 1)
+    cover = m.obj_present & ((m.obj_kind == TREE) | (m.obj_kind == HUT))
+    d_cover = jnp.min(jnp.where(cover[None, :], jnp.linalg.norm(pos[:, None, :] - m.obj_pos[None, :, :], axis=-1), jnp.inf), -1)
+    # interest: entering a cell, novelty 1/sqrt(1 + previous visits); visits counted on entry
+    cell_old = jnp.clip(jnp.floor(f.pos / D.CELL).astype(jnp.int32), 0, N_TILES // D.CELL - 1)
+    cell = jnp.clip(jnp.floor(pos / D.CELL).astype(jnp.int32), 0, N_TILES // D.CELL - 1)
+    entered = jnp.any(cell != cell_old, -1)
+    s_idx = jnp.arange(pos.shape[0])
+    prev = f.visits[s_idx, cell[:, 0], cell[:, 1]]
+    novelty = jnp.where(entered, 1.0 / jnp.sqrt(1.0 + prev), 0.0)
+    visits = f.visits.at[s_idx, cell[:, 0], cell[:, 1]].add(entered.astype(jnp.int32))
+    levels = D.update(
+        f.levels,
+        grazed=grazing,
+        drank=drinking,
+        resting=resting,
+        night=night,
+        near_cover=d_cover <= D.COVER_DIST,
+        n_visible=n_visible(pos, heading, view_range(night, head_up)),
+        novelty=novelty,
+    )
+    flock = Flock(pos=pos, heading=heading, resting=resting, head_up=head_up, levels=levels, visits=visits, reward=D.reward(f.levels, levels))
     return State(meadow=m._replace(grass=grass), flock=flock, t=state.t + 1)

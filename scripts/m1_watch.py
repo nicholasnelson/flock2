@@ -43,7 +43,7 @@ def main():
 
         st, _ = jax.lax.scan(one, st, jax.random.split(key, a.every))
         view = views.view_one(st, jnp.int32(a.follow), ground_state(st.meadow))
-        rec = dict(pos=st.flock.pos, heading=st.flock.heading, grass=st.meadow.grass, t=st.t, view=view, thirst=st.flock.thirst, hunger=st.flock.hunger, resting=st.flock.resting)
+        rec = dict(pos=st.flock.pos, heading=st.flock.heading, grass=st.meadow.grass, t=st.t, view=view, levels=st.flock.levels, resting=st.flock.resting, reward=st.flock.reward)
         return st, rec
 
     run = jax.jit(lambda s, k: jax.lax.scan(chunk, s, jax.random.split(k, n_frames)))
@@ -57,7 +57,8 @@ def main():
         t = int(rec["t"][i])
         night = bool(sim.is_night(t))
         phase = (t % sim.DAY) / sim.DAY
-        text = f"day {t // sim.DAY}  {'night' if night else 'day'} {phase:.2f}  resting {rec['resting'][i].mean():.0%}  thirst {rec['thirst'][i].mean():.2f}  hunger {rec['hunger'][i].mean():.2f}  (sheep {a.follow}'s view below)"
+        lv = rec["levels"][i].mean(0)
+        text = f"day {t // sim.DAY} {'night' if night else 'day'} {phase:.2f}  resting {rec['resting'][i].mean():.0%}  energy {lv[0]:.2f} water {lv[1]:.2f} warmth {lv[2]:.2f} social {lv[3]:.2f} interest {lv[4]:.2f}  (sheep {a.follow}'s view)"
         frames.append(viewer.frame(st, rec["view"][i], a.follow, night, text))
     frames[0].save(os.path.join(a.out, "watch.gif"), save_all=True, append_images=frames[1:], duration=80, loop=0, optimize=True)
     for i in (0, n_frames // 3, int(n_frames * 0.75), n_frames - 1):
