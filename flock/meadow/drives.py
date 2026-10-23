@@ -17,7 +17,8 @@ deep-HRRL work the notes cite) collapsed with drives at zero, so the reward is n
 itself (M1 step 3, owner's decision).
 
 Levels (set-point 1 for all):
-- energy: falls slowly; grazing restores it in proportion to the grass under the sheep;
+- energy: falls slowly; grazing restores it by a fixed amount while the grass under the sheep
+  is at least 1 (of 3);
 - hydration: falls a little faster; drinking at the water's edge restores it;
 - warmth: falls slowly by day, fast at night in the open, less fast at night near cover; only
   resting restores it (faster beside cover);

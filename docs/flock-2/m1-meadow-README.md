@@ -141,7 +141,7 @@ as deviation, so over-eating is penalised):
 
 | Level | Falls per step | Restored by |
 | --- | --- | --- |
-| energy | 0.0006 | grazing: +0.012 per bite at full grass |
+| energy | 0.0006 | grazing: +0.012 per step on a tile with grass ≥ 1 (of 3); the bite (0.05) is removed from the tile, which regrows |
 | hydration | 0.0008 | drinking within one tile of water: +0.04 per step |
 | warmth | 0.0002 by day; at night 0.0016 in the open, 0.0007 within 3 tiles of a tree or hut | resting only: +0.003, +0.006 beside cover |
 | social | — (instantaneous, not a store) | number of other sheep in view (in range, outside the blind wedge) / 8, capped at 1 |
