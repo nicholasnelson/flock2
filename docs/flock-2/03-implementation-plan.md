@@ -161,8 +161,8 @@ worth noting: the pixel sender trained fine.
 
 ## Milestone 1 — meadow, drives and world model
 
-*Revised 2026-10-23 after M0 closed and the owner adopted the first-person view (Q9 addendum).
-Items marked "decision for review" are proposals awaiting the owner's sign-off before code.*
+*Revised 2026-10-23 after M0 closed and the owner adopted the first-person view (Q9 addendum);
+movement, the action set and the salt lick's role decided by the owner the same day.*
 
 **Goal.** A single flock (20–40 sheep) on the 128×128 meadow with grazing patches, water, salt
 lick, trees and huts and a day/night cycle, driven by homeostatic drives and a shared RSSM world
@@ -178,16 +178,16 @@ from the start. No communication yet.
   and darkens the strip; "head up" extends the range at a foraging cost (Q9). Far objects are a
   few pixels tall by geometry, which replaces the two-scale far view (Q8 addendum). The isometric
   view is kept, tested, as the agents' fallback.
-- *Movement (decision for review).* A first-person view needs smooth turning, so positions and
+- *Movement (decided: continuous).* A first-person view needs smooth turning, so positions and
   headings become continuous: sheep turn in small steps and walk or trot forward, colliding with
   objects and each other as circles; the ground stays a tile grid (grass growth states, water).
-  Proposed actions: turn left/right, walk, trot, stop, graze, drink, rest, head up. Fallback if
+  Actions: turn left/right, walk, trot, stop, graze, drink, rest, head up. Fallback if
   continuous movement complicates learning: positions snapped to tiles with 8 headings, rendered
   with the same first-person view.
 - *The meadow.* M0's sprite set carries over: grass is the ground (hunger; regrows by state);
   water tiles (thirst); trees and huts (cover: warmth recovers faster when resting beside them,
-  and they block sight); the salt lick (a slow mineral need — decision for review: include now
-  or later); flowers and mushrooms as scenery and future referents (the mushroom's "not to eat"
+  and they block sight); the salt lick, flowers and mushrooms are scenery and future referents
+  for now (decided: the salt lick's slow mineral need comes later; the mushroom's "not to eat"
   role is deferred).
 - *Drives* per the survey: HRRL drive-difference reward over hunger, thirst, warmth, social,
   interest (fear added in M2); continuous decay; non-substitutable norm; over-satiation
