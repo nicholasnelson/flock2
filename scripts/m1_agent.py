@@ -2,7 +2,14 @@
 """Train the flock's shared policy online (Milestone 1, step 3): act in the meadows, log to a
 replay, fine-tune the world model, train the actor-critic in imagination; repeat.
 
-    python scripts/m1_agent.py --wm ~/flock2_data/m1_wm/run2_intero/model.pkl --out ~/flock2_data/m1_agent/run1 --iters 500
+    python scripts/m1_agent.py --wm ~/flock2_data/m1_wm/run4_negdrive/model.pkl --out ~/flock2_data/m1_agent/run3
+    python scripts/m1_agent.py --wm none --scripted none --ensemble 5 --curiosity 0.1 --out ~/flock2_data/m1_agent/birth1
+
+``--wm none`` starts the world model from random weights and ``--scripted none`` uses no scripted
+data: the sheep learn from birth on their own behaviour. ``--ensemble K`` gives the world model
+K next-state heads whose disagreement, weighted ``--curiosity``, is added to the imagined reward.
+The actor-critic starts training after ``--ac_start`` iterations (before that the policy is
+uniform: an infancy of random behaviour while the world model learns).
 
 Every sheep in every meadow acts from the actor, from its own world-model state (h, z) updated
 each step with its strip and its drive levels. Eight sheep per meadow are logged; each logged
@@ -53,7 +60,11 @@ def act_and_step(world, agent, state, mem, key, rec_idx):
     z = wm._sample(world.posterior(h, embed), k1)
     actions = agent.act(ac.feat_of(h, z), k2)
     new = sim.step(state, actions)
-    rec = dict(view=views[rec_idx].astype(jnp.uint8), action=actions[rec_idx], levels=state.flock.levels[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward)
+    # ingesting nothing: drinking away from water, grazing where the grass is too short to bite
+    r, c = sim._tile(state.meadow, state.flock.pos)
+    dry_drink = (actions == sim.DRINK) & ~sim.near_water(state.meadow, state.flock.pos)
+    bare_graze = (actions == sim.GRAZE) & (state.meadow.grass[r, c] < 1.0)
+    rec = dict(view=views[rec_idx].astype(jnp.uint8), action=actions[rec_idx], levels=state.flock.levels[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward, dry_drink=dry_drink, bare_graze=bare_graze)
     return new, (h, z, actions), rec
 
 
@@ -111,15 +122,21 @@ def main():
     p.add_argument("--ac_steps", type=int, default=64)
     p.add_argument("--replay", type=int, default=2048)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--ensemble", type=int, default=0, help="curiosity ensemble heads in the world model (0: none)")
+    p.add_argument("--curiosity", type=float, default=0.0, help="weight of the ensemble-disagreement reward")
+    p.add_argument("--ac_start", type=int, default=0, help="iterations of world-model-only learning before the actor-critic trains")
     a = p.parse_args()
+    if a.scripted == "none":
+        a.wm_online = 4
     os.makedirs(a.out, exist_ok=True)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True)
-    wm.load_into(world, pickle.load(open(a.wm, "rb")))
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble)
+    if a.wm != "none":
+        wm.load_into(world, pickle.load(open(os.path.expanduser(a.wm), "rb")))
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
-    agent = ac.Agent(nnx.Rngs(a.seed + 1))
+    agent = ac.Agent(nnx.Rngs(a.seed + 1), curiosity=a.curiosity)
     ac_opt = ac.make_optimizer(agent)
-    scripted = _wmt.load_shards(a.scripted, intero=True, reward=True, reward_from_levels=True)[:-1]
+    scripted = _wmt.load_shards(a.scripted, intero=True, reward=True, reward_from_levels=True)[:-1] if a.scripted != "none" else None
     replay = Replay(a.replay, a.length)
     n_rec = a.meadows * a.record
     window = Replay(n_rec, a.length)  # the logged sheep's last --length steps, oldest first
@@ -132,14 +149,18 @@ def main():
     states = states._replace(t=jax.random.randint(k, (a.meadows,), 0, sim.DAY))
     mems = (jnp.zeros((a.meadows, a.sheep, wm.DETER)), jnp.zeros((a.meadows, a.sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((a.meadows, a.sheep), jnp.int32))
     rec_idx = jnp.arange(a.record)
-    # compile (and autotune) the two update steps before acting, while the GPU is empty
-    while replay.n < 4:
-        replay.add(*(np.concatenate([x, x]) for x in _wmt.sample(scripted, rng, 2, a.length)))
-    pk, ak, lk, rk = replay.sample(rng, 4)
+    # compile (and autotune) the two update steps before acting, while the GPU is empty; on
+    # throwaway copies, so the warm-up changes nothing
+    pk = np.zeros((4, a.length, wm.H, wm.W // 2), np.uint8)
+    ak = np.zeros((4, a.length), np.int32)
+    lk = np.ones((4, a.length, D.N_DRIVES), np.float32)
+    rk = np.zeros((4, a.length), np.float32)
+    w_tmp, g_tmp = nnx.clone(world), nnx.clone(agent)
+    o_tmp, a_tmp = nnx.clone(wm_opt), nnx.clone(ac_opt)
     key, k1, k2 = jax.random.split(key, 3)
-    _wmt.train_step(world, wm_opt, pk, ak, lk, rk, k1)
-    ac.train_step(world, agent, ac_opt, *start_states(world, pk, ak, lk, k1), k2)
-    replay.n = replay.i = 0
+    _wmt.train_step(w_tmp, o_tmp, pk, ak, lk, rk, k1)
+    ac.train_step(w_tmp, g_tmp, a_tmp, *start_states(w_tmp, pk, ak, lk, k1), k2)
+    del w_tmp, g_tmp, o_tmp, a_tmp
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for it in range(1, a.iters + 1):
@@ -162,13 +183,16 @@ def main():
         wm_aux = []
         for _ in range(a.wm_steps):
             on = replay.sample(rng, a.wm_online)
-            off = _wmt.sample(scripted, rng, 4 - a.wm_online, a.length)
-            pk, ak, lk, rk = (np.concatenate([x, y]) for x, y in zip(on, off))
+            if a.wm_online < 4:
+                off = _wmt.sample(scripted, rng, 4 - a.wm_online, a.length)
+                pk, ak, lk, rk = (np.concatenate([x, y]) for x, y in zip(on, off))
+            else:
+                pk, ak, lk, rk = on
             key, k = jax.random.split(key)
             wm_aux.append(_wmt.train_step(world, wm_opt, pk, ak, lk, rk, k))
         # actor-critic
         ac_aux = []
-        for _ in range(a.ac_steps):
+        for _ in range(a.ac_steps if it > a.ac_start else 0):
             pk, ak, lk, _ = replay.sample(rng, 4)
             key, k1, k2 = jax.random.split(key, 3)
             h0, z0 = start_states(world, pk, ak, lk, k1)
@@ -185,13 +209,16 @@ def main():
             "night_frac": float(night.mean()),
             "actions_day": frac(~night),
             "actions_night": frac(night),
+            "dry_drink": float(np.asarray(recs["dry_drink"]).mean()),
+            "bare_graze": float(np.asarray(recs["bare_graze"]).mean()),
+            "drink_dry_share": float(np.asarray(recs["dry_drink"]).sum() / max(1, (acts == sim.DRINK).sum())),
             **{f"wm_{k2}": float(np.mean([float(x[k2]) for x in wm_aux])) for k2 in wm_aux[0]},
-            **{f"ac_{k2}": float(np.mean([float(x[k2]) for x in ac_aux])) for k2 in ac_aux[0]},
+            **({f"ac_{k2}": float(np.mean([float(x[k2]) for x in ac_aux])) for k2 in ac_aux[0]} if ac_aux else {}),
         }
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if it % 10 == 0 or it == 1:
-            print(json.dumps({k2: rec[k2] for k2 in ("iter", "t", "reward", "levels", "night_frac", "ac_return", "ac_entropy", "wm_pixel_acc")}), flush=True)
+            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "levels", "drink_dry_share", "bare_graze", "ac_return", "ac_entropy", "ac_intrinsic", "wm_pixel_acc", "wm_reward_ce", "wm_ensemble_ce")}), flush=True)
         if it % 50 == 0 or it == a.iters:
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(world))), open(os.path.join(a.out, "wm.pkl"), "wb"))
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(agent))), open(os.path.join(a.out, "agent.pkl"), "wb"))

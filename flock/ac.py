@@ -8,6 +8,9 @@ arXiv:2301.04104), on the drive-reduction reward (Milestone 1, step 3).
   ``HORIZON`` steps with actions sampled from the actor. The reward of each imagined step is the
   world model's reward head read at the state it leads to (the drive-reduction reward it was
   trained on, ``flock.meadow.drives.reward``).
+- Curiosity (optional, the world model having an ensemble): each imagined step also earns
+  ``curiosity`` x the ensemble's disagreement about (state, action) divided by a running mean of
+  the disagreement, so a typical step earns about ``curiosity``.
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
   percentile range of the returns, with a small entropy bonus; the critic regresses on the
@@ -52,12 +55,14 @@ def policy_logp(logits: jax.Array) -> jax.Array:
 
 
 class Agent(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs):
+    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0):
         self.actor = Head(wm.N_ACTIONS, rngs)
         self.critic = Head(1, rngs)
         self.slow_critic = Head(1, rngs)
         nnx.update(self.slow_critic, nnx.state(self.critic))
         self.ret_scale = nnx.Variable(jnp.float32(1.0))
+        self.curiosity = nnx.Variable(jnp.float32(curiosity))
+        self.intr_scale = nnx.Variable(jnp.float32(0.0))  # running mean of the disagreement (0: unset)
 
     def act(self, feat: jax.Array, key: jax.Array) -> jax.Array:
         return jax.random.categorical(key, policy_logp(self.actor(feat)), -1)
@@ -69,7 +74,8 @@ def feat_of(h, z):
 
 def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
     """Roll the prior ``HORIZON`` steps from (h, z) (N, ...) with the actor's actions.
-    Returns feats (H+1, N, FEAT), actions (H, N), rewards (H, N)."""
+    Returns feats (H+1, N, FEAT), actions (H, N), extrinsic rewards (H, N) and the ensemble's
+    disagreement about each (state, action) (H, N; zeros without an ensemble)."""
 
     def body(carry, k):
         h, z = carry
@@ -83,7 +89,12 @@ def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
     (hT, zT), (feats, acts) = jax.lax.scan(body, (h, z), jax.random.split(key, HORIZON))
     feats = jnp.concatenate([feats, feat_of(hT, zT)[None]], 0)
     rewards = world.reward(feats[1:])
-    return jax.lax.stop_gradient(feats), acts, jax.lax.stop_gradient(rewards)
+    if world.ensemble is not None:
+        dis = world.disagreement(feats[:-1], jax.nn.one_hot(acts, wm.N_ACTIONS))
+    else:
+        dis = jnp.zeros_like(rewards)
+    sg = jax.lax.stop_gradient
+    return sg(feats), acts, sg(rewards), sg(dis)
 
 
 def lambda_returns(rewards, values):
@@ -115,7 +126,12 @@ def ac_loss(agent: Agent, feats, acts, rewards, scale):
 @nnx.jit
 def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, key):
     """One actor-critic update from start states (h0, z0) (N, ...)."""
-    feats, acts, rewards = imagine(world, agent, h0, z0, key)
+    feats, acts, extrinsic, dis = imagine(world, agent, h0, z0, key)
+    old = agent.intr_scale[...]
+    intr_scale = jnp.where(old > 0, RETURN_DECAY * old + (1 - RETURN_DECAY) * dis.mean(), dis.mean())
+    agent.intr_scale[...] = intr_scale
+    intrinsic = agent.curiosity[...] * dis / jnp.maximum(intr_scale, 1e-8)
+    rewards = extrinsic + intrinsic
     scale = agent.ret_scale[...]
     (loss, (aux, rets)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
     opt.update(agent, grads)
@@ -126,6 +142,9 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     fast = nnx.state(agent.critic, nnx.Param)
     nnx.update(agent.slow_critic, jax.tree.map(lambda s, f: SLOW_DECAY * s + (1 - SLOW_DECAY) * f, slow, fast))
     aux["ret_scale"] = agent.ret_scale[...]
+    aux["extrinsic"] = jnp.mean(extrinsic)
+    aux["intrinsic"] = jnp.mean(intrinsic)
+    aux["disagreement"] = jnp.mean(dis)
     return aux
 
 

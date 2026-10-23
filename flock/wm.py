@@ -17,6 +17,18 @@ first-person strip (``flock.fpv``: 64 x 256, 16 palette colours) and their actio
   the reward from the predicted levels through the drive formula was tried first: over a
   15-step horizon it correlated only 0.28 with the true reward and was strongly biased, since
   small level errors swamp the per-step drive changes.)
+- Curiosity ensemble (optional, ``ensemble`` > 0): heads that each predict, from the state (h, z)
+  and the action taken, the distribution of the next stochastic state z' (logits over its 32 x 16
+  classes). Each head has a shared hidden layer and one output branch per action (rather than the
+  action concatenated to the input as in Plan2Explore: with 9 action inputs beside 896 state
+  inputs an action never tried got no more disagreement than a familiar one — tests/test_wm.py);
+  an untried branch keeps each head's own random weights, so the heads disagree until it is
+  trained. Heads are trained by cross-entropy against the posterior the model actually reached, on
+  stop-gradient inputs (they measure the model, they do not shape it). Their disagreement — the
+  variance across heads of the predicted class probabilities — is high where the model lacks
+  experience and low where it has it, including for genuinely random outcomes, which every head
+  learns to predict as the same spread. It is the curiosity reward of Plan2Explore (Sekar et al.
+  2020, arXiv:2005.05960), here over the categorical latent instead of the embedding.
 - Loss: per-pixel cross-entropy summed over the strip, plus KL balancing — a dynamics term
   KL(sg(post) || prior) weighted 0.5 and a representation term KL(post || sg(prior)) weighted
   0.1, each with 1 nat of free bits (all as in DreamerV3).
@@ -42,6 +54,7 @@ EMBED = 512
 UNIMIX = 0.01
 REWARD_BINS = 255
 REWARD_WEIGHT = 1.0
+ENSEMBLE_WEIGHT = 1.0
 INTERO_WEIGHT = 1000.0  # on the summed squared error of the levels (the strip's CE sums 16,384 pixels)
 FREE_NATS, KL_DYN, KL_REP = 1.0, 0.5, 0.1
 ENC_CH = (32, 64, 96, 128, 192)  # 64x256 -> 32x128 -> 16x64 -> 8x32 -> 4x16 -> 2x8
@@ -112,6 +125,19 @@ class MLP(nnx.Module):
         return self.b(_act(self.n(self.a(x))))
 
 
+class EnsembleHead(nnx.Module):
+    """Next-z logits from the state, one output branch per action (see the module docstring)."""
+
+    def __init__(self, rngs: nnx.Rngs, hidden: int = 256):
+        self.a = nnx.Linear(DETER + STOCH * CLASSES, hidden, rngs=rngs)
+        self.n = nnx.LayerNorm(hidden, rngs=rngs)
+        self.b = nnx.Linear(hidden, N_ACTIONS * STOCH * CLASSES, rngs=rngs)
+
+    def __call__(self, feat: jax.Array, a_onehot: jax.Array) -> jax.Array:
+        out = self.b(_act(self.n(self.a(feat)))).reshape(feat.shape[:-1] + (N_ACTIONS, STOCH, CLASSES))
+        return jnp.einsum("...a,...asc->...sc", a_onehot, out)
+
+
 class Step(NamedTuple):
     h: jax.Array  # (..., DETER)
     z: jax.Array  # (..., STOCH*CLASSES) one-hot (straight-through)
@@ -159,7 +185,7 @@ def kl(post_logits, prior_logits):
 
 
 class WorldModel(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0, reward: bool = False):
+    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0, reward: bool = False, ensemble: int = 0):
         self.n_intero = n_intero
         self.encoder = Encoder(rngs)
         self.decoder = Decoder(rngs)
@@ -168,6 +194,7 @@ class WorldModel(nnx.Module):
         self.reward_head = MLP(DETER + STOCH * CLASSES, REWARD_BINS, rngs) if reward else None
         if reward:  # zero-initialised output, as in DreamerV3
             self.reward_head.b.kernel[...] = jnp.zeros_like(self.reward_head.b.kernel[...])
+        self.ensemble = nnx.List([EnsembleHead(rngs) for _ in range(ensemble)]) if ensemble else None
         self.img_in = MLP(STOCH * CLASSES + N_ACTIONS, HIDDEN, rngs)
         self.gru = GRU(HIDDEN, DETER, rngs)
         self.prior_net = MLP(DETER, STOCH * CLASSES, rngs)
@@ -234,6 +261,16 @@ class WorldModel(nnx.Module):
     def decode_intero(self, s: Step) -> jax.Array:
         return self.intero_head(jnp.concatenate([s.h, s.z], -1))
 
+    def ensemble_logits(self, feat: jax.Array, a_onehot: jax.Array) -> jax.Array:
+        """(..., FEAT), (..., N_ACTIONS) -> (K, ..., STOCH, CLASSES) predicted next-z logits."""
+        return jnp.stack([e(feat, a_onehot) for e in self.ensemble])
+
+    def disagreement(self, feat: jax.Array, a_onehot: jax.Array) -> jax.Array:
+        """(...) the ensemble's variance in predicted class probabilities, summed over classes,
+        averaged over the STOCH variables."""
+        p = _probs(self.ensemble_logits(feat, a_onehot))
+        return jnp.mean(jnp.sum(jnp.var(p, axis=0), -1), -1)
+
     def reward(self, feat: jax.Array) -> jax.Array:
         """feat (..., DETER + STOCH*CLASSES) -> predicted reward of the step that led there."""
         return symexp(jnp.sum(jax.nn.softmax(self.reward_head(feat), -1) * BINS, -1))
@@ -261,6 +298,15 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
         r_ce = -jnp.mean(jnp.sum(target * jax.nn.log_softmax(r_logits, -1), -1))
         loss = loss + REWARD_WEIGHT * r_ce
         aux["reward_ce"] = r_ce
+    if model.ensemble is not None:
+        sg = jax.lax.stop_gradient
+        feat = sg(jnp.concatenate([s.h, s.z], -1))[:, :-1]
+        a = jax.nn.one_hot(actions[:, :-1], N_ACTIONS)
+        target = sg(_probs(s.post[:, 1:]))
+        logp = jax.nn.log_softmax(model.ensemble_logits(feat, a), -1)
+        e_ce = -jnp.mean(jnp.sum(target[None] * logp, -1).sum(-1))  # per head and step, summed over the 32 variables
+        loss = loss + ENSEMBLE_WEIGHT * e_ce
+        aux["ensemble_ce"] = e_ce
     aux["loss"] = loss
     return loss, aux
 

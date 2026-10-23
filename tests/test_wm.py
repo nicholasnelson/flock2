@@ -80,3 +80,40 @@ def test_reward_head_starts_at_zero_and_trains():
     (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views, acts, jax.random.PRNGKey(3), intero, reward)
     assert np.isfinite(float(aux["reward_ce"]))
     assert float(jnp.abs(g.reward_head.b.kernel[...]).sum()) > 0
+
+
+def test_ensemble_learns_and_disagreement_falls_where_trained():
+    import optax
+
+    m = wm.WorldModel(nnx.Rngs(8), n_intero=5, reward=True, ensemble=3)
+    feat = jax.random.normal(jax.random.PRNGKey(0), (16, wm.DETER + wm.STOCH * wm.CLASSES))
+    a_seen = jax.nn.one_hot(jnp.zeros(16, jnp.int32), wm.N_ACTIONS)
+    a_new = jax.nn.one_hot(jnp.full(16, 5), wm.N_ACTIONS)
+    target = jax.nn.one_hot(jax.random.randint(jax.random.PRNGKey(1), (16, wm.STOCH), 0, wm.CLASSES), wm.CLASSES)
+    opt = nnx.Optimizer(m, optax.adam(1e-3), wrt=nnx.Param)
+
+    @nnx.jit
+    def step(m, opt):
+        def loss(m):
+            return -jnp.mean(jnp.sum(target[None] * jax.nn.log_softmax(m.ensemble_logits(feat, a_seen), -1), -1))
+
+        l, g = nnx.value_and_grad(loss)(m)
+        opt.update(m, g)
+        return l
+
+    before = float(m.disagreement(feat, a_seen).mean())
+    for _ in range(150):
+        step(m, opt)
+    trained, untrained = float(m.disagreement(feat, a_seen).mean()), float(m.disagreement(feat, a_new).mean())
+    assert trained < before
+    assert untrained > 2 * trained  # the action it never saw stays uncertain
+
+
+def test_ensemble_loss_is_in_the_world_model_loss():
+    m = wm.WorldModel(nnx.Rngs(9), n_intero=5, reward=True, ensemble=2)
+    views = jax.random.randint(jax.random.PRNGKey(0), (2, 4, wm.H, wm.W), 0, 16)
+    acts = jax.random.randint(jax.random.PRNGKey(1), (2, 4), 0, wm.N_ACTIONS)
+    intero = jax.random.uniform(jax.random.PRNGKey(2), (2, 4, 5))
+    (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views, acts, jax.random.PRNGKey(3), intero, jnp.zeros((2, 4)))
+    assert np.isfinite(float(aux["ensemble_ce"]))
+    assert float(jnp.abs(g.ensemble[0].b.kernel[...]).sum()) > 0

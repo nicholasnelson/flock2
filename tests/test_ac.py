@@ -29,3 +29,14 @@ def test_an_actor_critic_step_runs_and_changes_only_the_agent():
     assert all(np.isfinite(float(v)) for v in aux.values())
     assert np.allclose(np.asarray(world.encoder.out.kernel[...]), w_before)
     assert not np.allclose(np.asarray(agent.actor.c.kernel[...]), a_before)
+
+
+def test_curiosity_adds_a_reward_of_about_its_weight():
+    world = wm.WorldModel(nnx.Rngs(0), n_intero=5, reward=True, ensemble=3)
+    agent = ac.Agent(nnx.Rngs(1), curiosity=0.5)
+    opt = ac.make_optimizer(agent)
+    h0 = jax.random.normal(jax.random.PRNGKey(0), (6, wm.DETER))
+    z0 = jax.nn.one_hot(jax.random.randint(jax.random.PRNGKey(1), (6, wm.STOCH), 0, wm.CLASSES), wm.CLASSES).reshape(6, -1)
+    aux = ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(2))
+    assert float(aux["disagreement"]) > 0
+    assert abs(float(aux["intrinsic"]) - 0.5) < 0.05  # normalised by its own running mean on the first step
