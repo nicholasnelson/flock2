@@ -102,6 +102,17 @@ def scale_sprite(sprite: jax.Array, s: jax.Array) -> jax.Array:
     return jnp.where(ok, out, jnp.uint8(TRANSPARENT)).astype(sprite.dtype)
 
 
+def outline_sprite(sprite: jax.Array, colour: int = 15, width: int = 2) -> jax.Array:
+    """The sprite as an outline drawing: the ``width``-px ring of its silhouette's edge in
+    ``colour``, the interior transparent."""
+    m = sprite != TRANSPARENT
+    er = m
+    for _ in range(width):
+        p = jnp.pad(er, 1)
+        er = er & p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:]
+    return jnp.where(m & ~er, jnp.uint8(colour), jnp.uint8(TRANSPARENT)).astype(sprite.dtype)
+
+
 def facing(heading: jax.Array, view_heading: jax.Array) -> jax.Array:
     """Sprite facing index of an agent with world heading ``heading`` as seen in a view rotated
     by ``view_heading``: the heading in the rotated frame (0 N away/up-right, 1 E toward/
@@ -118,12 +129,15 @@ def render_view(
     radius_px: int | None = None,
     silhouette: jax.Array | None = None,
     silhouette_colour: int = 15,
+    outline: jax.Array | None = None,
 ) -> jax.Array:
     """VIEW x VIEW palette view centred on tile ``pos``, heading-aligned.
 
     ``silhouette`` (N,) bool, per object: draw that object's sprite as a solid
     ``silhouette_colour`` shape (used for colour-dropout augmentation in perception
-    pre-training). Agents are never silhouetted."""
+    pre-training). ``outline`` (N,) bool, per object: draw only a 2 px ring around the sprite's
+    silhouette in ``silhouette_colour`` (an outline drawing; used to give the examiner line-drawing
+    literacy). Agents are never silhouetted or outlined."""
     hh, ww = tile_map.shape
     # Screen position of the reference (agent) tile's box top-left inside the view: the view
     # centre sits on the diamond centre.
@@ -181,6 +195,8 @@ def render_view(
     o_spr = OBJECT_STACK[objects.kind, o_var, facing(o_head, heading)]
     if objects.scale is not None:
         o_spr = jax.vmap(scale_sprite)(o_spr, objects.scale)
+    if outline is not None:
+        o_spr = jnp.where(outline[:, None, None], jax.vmap(lambda sp: outline_sprite(sp, silhouette_colour))(o_spr), o_spr)
     # sub-tile offsets: rotate with the view like tile offsets, project to whole pixels
     o_off = jnp.zeros((n_obj, 2)) if objects.offset is None else rotate_offset(objects.offset, heading)
     o_pix = jnp.round(jnp.stack([(o_off[:, 1] - o_off[:, 0]) * (TILE_W // 2), (o_off[:, 1] + o_off[:, 0]) * (TILE_H // 2)], -1)).astype(jnp.int32)

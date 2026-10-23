@@ -534,3 +534,15 @@ What this shows:
    that floor *(judgement)*.
 
 Galleries: `runs/m0/grid_dot_galleries.png` (local).
+
+**Re-graded with an outline-literate examiner** (`examiner v2-outline`; owner's choice). The
+examiner was retrained with 2 px outline drawings of the sprites mixed in (`iso.outline_sprite`;
+a fifth solid silhouettes, nearly a third outlines), and every saved drawing re-graded with
+`scripts/m0_examine.py` — no sheep re-trained. It reads outline drawings of the real held-out
+sprites perfectly (1.00) and real views at 0.99, yet grades every grid-7 cell at chance
+(0.13–0.29), still guessing "fox" for most drawings. So the drawings genuinely are not outline
+pictures of the objects; it was not the examiner failing to read lines. The in-training judge's
+0.4–0.5 was inflated by the sender training against it. The one exception is a single
+smoke run (same settings and seed as `dot_stamp_both` s0, but GPU training is not
+bit-reproducible and it drew differently): its tall parallel verticals are recognised as "tree"
+98 % of the time — the examiner can detect resemblance when it is there.

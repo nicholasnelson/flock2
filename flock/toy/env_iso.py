@@ -162,7 +162,7 @@ def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "b
     return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading, variation, held_out))(keys)
 
 
-def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, scale_min: float = SCALE_MIN, scale: jax.Array | None = None, variants: bool = True, held_out: bool = False):
+def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, scale_min: float = SCALE_MIN, scale: jax.Array | None = None, variants: bool = True, held_out: bool = False, outline: jax.Array | None = None):
     """One single-object view; returns (view, type). ``scale`` overrides the sampled scale."""
     k1, k2, k3, k4, k5 = jax.random.split(k, 5)
     t = jax.random.randint(k1, (), 0, N_TYPES)
@@ -181,7 +181,8 @@ def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, s
         scale=sc,
     )
     ag = iso.Agents(kind=jnp.array([S.SHEEP]), pos=centre[None, :], heading=h[None], present=jnp.array([False]))
-    return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None]), t
+    ol = None if outline is None else outline[None]
+    return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None], outline=ol), t
 
 
 @functools.partial(jax.jit, static_argnames=("batch", "variation"))
