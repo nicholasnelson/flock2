@@ -425,3 +425,55 @@ communicate (`acc` high) but produce drawings that are neither iconic by the jud
 `*_perc` cells will be iconic and readable at little cost to `acc`; `latent_*` will communicate
 best and be least iconic; `pixels_*` will train poorly or not at all; `stamp` will be slower to
 learn than `bubble`. Deviations from these predictions are the interesting result.
+
+### Grid 6 — no blank drawings, and a channel that removes position (2026-10-23)
+
+Owner's two proposals (commit `4863650`):
+
+- **No blank drawings.** A blank that means something would make every unmarked patch of
+  ground say it. Two tunable options: `min_strokes` (with the on/off gate, the strokes the sender
+  most wants on are always on) and `blank_weight` (a penalty when ink is under `blank_ink` = 8 px,
+  one short stroke).
+- **Position and orientation carry nothing.** On its way to the reader a drawing is re-centred
+  on its ink centroid, jittered (≤ 4 px), and — for ground stamps only — turned by a random
+  multiple of 90° (a mark on the ground can be read from any side; in the sim a stamp may be
+  placed in the placer's frame but read from any angle). Bubbles stay upright, so tall versus
+  long can still distinguish types there. No mirroring: mirror pairs such as `<` and `>` stay
+  available for direction later, and for stamps the 180° turn already makes them equal.
+  The judge sees the drawing as drawn (jitter only): judging the centred drawing against the
+  object where it stands made any ink a mismatch and the sender stopped drawing (diagnosed in
+  single runs).
+
+All cells: variation, jitter 4 px, invariant judge, delayed ink cost, centring; stamps rotated.
+Three seeds.
+
+| cell | acc (held-out) | acc_seen | acc_blank | acc_swapped | CIC | judge_probe | ink | blank drawings |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| bubble, neither | 0.74±0.08 | 0.78±0.11 | 0.25±0.02 | 0.15±0.00 | 2.9±1.0 | 0.46±0.11 | 29.8 | 0.29±0.21 |
+| bubble, min 1 stroke | 0.74±0.09 | 0.82±0.08 | 0.25±0.02 | 0.15±0.02 | 4.2±0.4 | 0.47±0.03 | 43.4 | 0.00 |
+| bubble, penalty 0.05 | 0.78±0.03 | 0.84±0.04 | 0.25±0.03 | 0.15±0.04 | 3.9±0.2 | 0.49±0.05 | 40.3 | 0.00 |
+| bubble, penalty 0.2 | 0.75±0.06 | 0.84±0.06 | 0.24±0.02 | 0.14±0.02 | 4.0±0.6 | 0.42±0.06 | 39.8 | 0.00 |
+| bubble, min 1 + 0.05 | 0.77±0.03 | 0.85±0.05 | 0.23±0.01 | 0.19±0.03 | 3.6±1.1 | 0.37±0.10 | 40.9 | 0.00 |
+| stamp, neither | 0.74±0.07 | 0.80±0.05 | 0.26±0.04 | 0.10±0.03 | 3.3±1.2 | 0.26±0.02 | 28.4 | 0.34±0.09 |
+| stamp, min 1 stroke | **0.79±0.01** | 0.86±0.03 | 0.25±0.03 | 0.14±0.01 | 5.3±0.3 | 0.44±0.11 | 31.2 | 0.00 |
+| stamp, penalty 0.05 | 0.78±0.01 | 0.84±0.04 | 0.25±0.03 | 0.13±0.01 | 5.1±0.3 | 0.48±0.02 | 34.5 | 0.00 |
+| stamp, penalty 0.2 | 0.78±0.00 | 0.83±0.02 | 0.25±0.03 | 0.14±0.01 | 5.2±0.3 | 0.46±0.10 | 36.4 | 0.00 |
+| stamp, min 1 + 0.05 | 0.80±0.01 | 0.84±0.02 | 0.25±0.03 | 0.16±0.02 | 5.2±0.4 | 0.43±0.15 | 36.3 | 0.00 |
+
+What this shows:
+
+1. **Without an anti-blank rule the sender uses blank as a sign**: 29–34 % of drawings are
+   empty, typically one whole type per seed — the owner's concern, confirmed.
+2. **Either option removes blanks completely at no cost** (accuracy 0.74–0.80 vs 0.74), and
+   the options are indistinguishable; the forced stroke has no weight to tune and is the
+   steadiest (stamp 0.79 ± 0.01). Recommended default: `min_strokes=1`.
+3. **Centring and stamp rotation cost nothing measurable** against grid 5 (0.77–0.81).
+4. **The blank is replaced by the cheapest possible mark** *(judgement, galleries as drawn,
+   before the channel)*: in several seeds the tree becomes a single dot and the flower a tiny
+   tick — no longer empty, but still "the smallest mark means X", not a shape. The salt lick
+   gets the most elaborate glyphs (wedges and triangles, often like the cube's top) and the
+   fox keeps its long low line. Without anti-blank, stamps show suggestive shapes for the
+   types that are drawn: two tall vertical lines for the tree, small `Y`/`V` forms for the
+   flower. A minimum stroke length (dots impossible, not just costly) is the obvious next lever.
+
+Galleries: `runs/m0/grid_tune_galleries.png` (local).
