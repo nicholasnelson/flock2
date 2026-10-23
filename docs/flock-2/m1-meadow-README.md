@@ -48,6 +48,10 @@ world-model pretraining are under a minute of simulation, so the simulation will
 
 ## What the scripted flock looks like (2,400 steps, two days)
 
+Stills: [`m1-results/scripted_watch_day.png`](m1-results/scripted_watch_day.png),
+[`m1-results/scripted_watch_night.png`](m1-results/scripted_watch_night.png) (isometric window,
+the followed sheep's strip below, status line with the drive levels).
+
 By day the flock grazes and wanders together, eats visible patches of grass down near where it
 feeds, and goes to water when thirsty; at night it gathers among trees and rests (42 % resting
 early in the night, 90 % by dawn); after the night's fast thirst is high (0.86 on average at
