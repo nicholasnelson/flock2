@@ -578,6 +578,23 @@ direction, not yet tested; item 1 needs a benchmark before it is adopted.
      agents learn from such views; not that it suits this project).
    - Cost: about 1.5–2× the isometric render (a guess, not benchmarked). Before deciding, a
      short JAX ray-cast spike with a throughput benchmark against the current renderer.
+     **Spike result (2026-10-23)**: `flock/fpv.py` (cylindrical 300° strip, 256×64, ground by
+     per-pixel ray to the ground plane reusing the isometric tile art, billboards scaled by
+     1/distance and painted far to near), benchmarked by `scripts/bench_fpv.py` on the 4080 at
+     batch 512 against `iso.render_view` (128×128) on the same worlds:
+
+     | world | objects | isometric views/s | first-person views/s | first-person cost |
+     | --- | --- | --- | --- | --- |
+     | 24×24 | 8 | 654,000 | 1,477,000 | 0.44× |
+     | 64×64 | 40 | 233,000 | 400,000 | 0.58× |
+     | 128×128 | 120 | 98,000 | 141,000 | 0.70× |
+
+     The first-person view is *cheaper*, not dearer: the isometric renderer pads and copies the
+     whole image once per sprite it pastes. Neither culls objects out of range, so both have
+     headroom. Either way rendering will not limit M1 *(judgement)*. Visual check: distance
+     shrinks objects as intended — something 8 tiles away is a few pixels tall, so far
+     objects lose detail without a separate far view; ground right in front of the viewer is
+     blocky (the tile art magnified), a cosmetic issue for later.
    - Relevant M0 finding: a perception encoder that must recognise objects at several scales
      is what a first-person view forces; M0 had to add scale variation by hand
      (`m0-toy-README.md`, the instance-variation work).
