@@ -56,8 +56,19 @@ def _ground_texel(tile_map: jax.Array, r: jax.Array, c: jax.Array) -> jax.Array:
     return jnp.where(inside, tex, 0).astype(jnp.uint8)
 
 
-def render_fpv(tile_map: jax.Array, sprites: jax.Array, spos: jax.Array, present: jax.Array, eye: jax.Array, heading: jax.Array) -> jax.Array:
-    """(H, W) palette view from ``eye`` (2,) looking along ``heading`` (radians).
+def render_fpv(
+    tile_map: jax.Array,
+    sprites: jax.Array,
+    spos: jax.Array,
+    present: jax.Array,
+    eye: jax.Array,
+    heading: jax.Array,
+    max_dist: jax.Array | float = MAX_DIST,
+    sky: jax.Array | int = SKY,
+    far: jax.Array | int = FAR,
+) -> jax.Array:
+    """(H, W) palette view from ``eye`` (2,) looking along ``heading`` (radians). ``max_dist``,
+    ``sky`` and ``far`` may vary per view (night shortens the range and darkens the sky).
 
     ``sprites`` (N, BOX_H, BOX_W) billboards standing at ``spos`` (N, 2) (tiles, float),
     shown where ``present``."""
@@ -71,16 +82,16 @@ def render_fpv(tile_map: jax.Array, sprites: jax.Array, spos: jax.Array, present
     dr, dc = -jnp.cos(ang), jnp.sin(ang)  # (W,) ground direction per column
     gr = eye[0] + dist[:, None] * dr[None, :]
     gc = eye[1] + dist[:, None] * dc[None, :]
-    near = (dist <= MAX_DIST)[:, None]
+    near = (dist <= max_dist)[:, None]
     ground = _ground_texel(tile_map, jnp.where(near, gr, eye[0]), jnp.where(near, gc, eye[1]))
-    img = jnp.where(below[:, None], jnp.where(near, ground, FAR), SKY).astype(jnp.uint8)
+    img = jnp.where(below[:, None], jnp.where(near, ground, far), sky).astype(jnp.uint8)
 
     # --- billboards, far to near --------------------------------------------------------------
     rel = spos - eye[None, :]
     r = jnp.sqrt(jnp.sum(rel**2, -1))  # (N,)
     bearing = jnp.arctan2(rel[:, 1], -rel[:, 0])  # 0 = north, clockwise
     alpha = (bearing - heading + jnp.pi) % (2 * jnp.pi) - jnp.pi  # relative, [-pi, pi)
-    visible = present & (r > 0.3) & (r <= MAX_DIST) & (jnp.abs(alpha) < FOV / 2)
+    visible = present & (r > 0.3) & (r <= max_dist) & (jnp.abs(alpha) < FOV / 2)
     cx = (alpha / FOV + 0.5) * W  # screen column of the sprite's centre
     y_base = HORIZON + jnp.arctan(EYE_H / jnp.maximum(r, 1e-3)) / RAD_PER_PX  # row of its base
     scale = 1.0 / (PX_PER_TILE * jnp.maximum(r, 1e-3) * RAD_PER_PX)  # screen px per sprite px
