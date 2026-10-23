@@ -5,9 +5,9 @@ arXiv:2301.04104), on the drive-reduction reward (Milestone 1, step 3).
   uniform mix). Critic: an MLP giving the value; a slow copy (EMA) supplies bootstrap targets and
   a regulariser.
 - Imagination: from model states inferred on real data, roll the world model's prior forward
-  ``HORIZON`` steps with actions sampled from the actor. The reward of step t is computed from
-  the levels the model predicts at t and t+1 through the exact drive formula
-  (``flock.meadow.drives.reward``) — no reward network.
+  ``HORIZON`` steps with actions sampled from the actor. The reward of each imagined step is the
+  world model's reward head read at the state it leads to (the drive-reduction reward it was
+  trained on).
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
   percentile range of the returns, with a small entropy bonus; the critic regresses on the
@@ -22,7 +22,6 @@ import optax
 from flax import nnx
 
 from flock import wm
-from flock.meadow import drives as D
 
 HORIZON = 15
 GAMMA, LAMBDA = 0.997, 0.95
@@ -70,7 +69,7 @@ def feat_of(h, z):
 
 def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
     """Roll the prior ``HORIZON`` steps from (h, z) (N, ...) with the actor's actions.
-    Returns feats (H+1, N, FEAT), actions (H, N), levels (H+1, N, n_intero)."""
+    Returns feats (H+1, N, FEAT), actions (H, N), rewards (H, N)."""
 
     def body(carry, k):
         h, z = carry
@@ -83,8 +82,8 @@ def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
 
     (hT, zT), (feats, acts) = jax.lax.scan(body, (h, z), jax.random.split(key, HORIZON))
     feats = jnp.concatenate([feats, feat_of(hT, zT)[None]], 0)
-    levels = world.intero_head(feats)
-    return jax.lax.stop_gradient(feats), acts, jax.lax.stop_gradient(levels)
+    rewards = world.reward(feats[1:])
+    return jax.lax.stop_gradient(feats), acts, jax.lax.stop_gradient(rewards)
 
 
 def lambda_returns(rewards, values):
@@ -99,8 +98,7 @@ def lambda_returns(rewards, values):
     return rets
 
 
-def ac_loss(agent: Agent, feats, acts, levels, scale):
-    rewards = D.reward(levels[:-1], levels[1:])  # (H, N)
+def ac_loss(agent: Agent, feats, acts, rewards, scale):
     values = agent.critic(feats)[..., 0]
     slow = jax.lax.stop_gradient(agent.slow_critic(feats)[..., 0])
     rets = jax.lax.stop_gradient(lambda_returns(rewards, slow))
@@ -117,9 +115,9 @@ def ac_loss(agent: Agent, feats, acts, levels, scale):
 @nnx.jit
 def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, key):
     """One actor-critic update from start states (h0, z0) (N, ...)."""
-    feats, acts, levels = imagine(world, agent, h0, z0, key)
+    feats, acts, rewards = imagine(world, agent, h0, z0, key)
     scale = agent.ret_scale[...]
-    (loss, (aux, rets)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, levels, scale)
+    (loss, (aux, rets)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
     opt.update(agent, grads)
     # return-scale EMA and the slow critic
     spread = jnp.percentile(rets, 95) - jnp.percentile(rets, 5)

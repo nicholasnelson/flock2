@@ -9,9 +9,14 @@ first-person strip (``flock.fpv``: 64 x 256, 16 palette colours) and their actio
   posterior also sees the embedding of the strip at t.
 - Decoder: the mirror of the encoder, logits over the 16 colours per pixel.
 - Interoception (optional, ``n_intero`` > 0): the sheep's drive levels enter as a second input
-  added to the strip's embedding, and a head reconstructs them from (h, z) — so in imagination
-  the predicted levels give the drive-reduction reward through the exact drive formula, with no
-  separate reward network (Milestone 1, step 3).
+  added to the strip's embedding, and a head reconstructs them from (h, z) (Milestone 1, step 3).
+- Reward head (optional, ``reward=True``): as in DreamerV3, the reward is predicted from (h, z)
+  as a categorical over 255 bins spaced evenly in symlog space on [-20, 20], trained by
+  cross-entropy against the two-hot encoding of symlog(reward); the prediction is the symexp of
+  the expected bin. The state at t predicts the reward of the step that led to it. (Computing
+  the reward from the predicted levels through the drive formula was tried first: over a
+  15-step horizon it correlated only 0.28 with the true reward and was strongly biased, since
+  small level errors swamp the per-step drive changes.)
 - Loss: per-pixel cross-entropy summed over the strip, plus KL balancing — a dynamics term
   KL(sg(post) || prior) weighted 0.5 and a representation term KL(post || sg(prior)) weighted
   0.1, each with 1 nat of free bits (all as in DreamerV3).
@@ -35,6 +40,8 @@ DETER, HIDDEN = 384, 384
 STOCH, CLASSES = 32, 16
 EMBED = 512
 UNIMIX = 0.01
+REWARD_BINS = 255
+REWARD_WEIGHT = 1.0
 INTERO_WEIGHT = 1000.0  # on the summed squared error of the levels (the strip's CE sums 16,384 pixels)
 FREE_NATS, KL_DYN, KL_REP = 1.0, 0.5, 0.1
 ENC_CH = (32, 64, 96, 128, 192)  # 64x256 -> 32x128 -> 16x64 -> 8x32 -> 4x16 -> 2x8
@@ -125,6 +132,26 @@ def _sample(logits, key):
     return st.reshape(st.shape[:-2] + (STOCH * CLASSES,))
 
 
+def symlog(x):
+    return jnp.sign(x) * jnp.log1p(jnp.abs(x))
+
+
+def symexp(x):
+    return jnp.sign(x) * jnp.expm1(jnp.abs(x))
+
+
+BINS = jnp.linspace(-20.0, 20.0, REWARD_BINS)
+
+
+def twohot(y: jax.Array) -> jax.Array:
+    """(...) values already in symlog space -> (..., REWARD_BINS) two-hot weights."""
+    y = jnp.clip(y, BINS[0], BINS[-1])
+    hi = jnp.clip(jnp.searchsorted(BINS, y, side="right"), 1, REWARD_BINS - 1)
+    lo = hi - 1
+    w_hi = (y - BINS[lo]) / (BINS[hi] - BINS[lo])
+    return jax.nn.one_hot(lo, REWARD_BINS) * (1 - w_hi)[..., None] + jax.nn.one_hot(hi, REWARD_BINS) * w_hi[..., None]
+
+
 def kl(post_logits, prior_logits):
     """Sum over the STOCH variables of KL(post || prior), categorical."""
     p, q = _probs(post_logits), _probs(prior_logits)
@@ -132,12 +159,15 @@ def kl(post_logits, prior_logits):
 
 
 class WorldModel(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0):
+    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0, reward: bool = False):
         self.n_intero = n_intero
         self.encoder = Encoder(rngs)
         self.decoder = Decoder(rngs)
         self.intero_in = nnx.Linear(n_intero, EMBED, rngs=rngs) if n_intero else None
         self.intero_head = MLP(DETER + STOCH * CLASSES, n_intero, rngs) if n_intero else None
+        self.reward_head = MLP(DETER + STOCH * CLASSES, REWARD_BINS, rngs) if reward else None
+        if reward:  # zero-initialised output, as in DreamerV3
+            self.reward_head.b.kernel[...] = jnp.zeros_like(self.reward_head.b.kernel[...])
         self.img_in = MLP(STOCH * CLASSES + N_ACTIONS, HIDDEN, rngs)
         self.gru = GRU(HIDDEN, DETER, rngs)
         self.prior_net = MLP(DETER, STOCH * CLASSES, rngs)
@@ -204,8 +234,13 @@ class WorldModel(nnx.Module):
     def decode_intero(self, s: Step) -> jax.Array:
         return self.intero_head(jnp.concatenate([s.h, s.z], -1))
 
+    def reward(self, feat: jax.Array) -> jax.Array:
+        """feat (..., DETER + STOCH*CLASSES) -> predicted reward of the step that led there."""
+        return symexp(jnp.sum(jax.nn.softmax(self.reward_head(feat), -1) * BINS, -1))
 
-def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None):
+
+def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None, reward: jax.Array | None = None):
+    """``reward`` (B, T): the reward of the step taken after each view (as logged)."""
     s = model.observe(views, actions, key, intero)
     logits = model.decode(s)
     ce = -jnp.take_along_axis(jax.nn.log_softmax(logits, -1), views[..., None], -1)[..., 0]
@@ -220,6 +255,12 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
         err = jnp.mean(jnp.sum((model.decode_intero(s) - intero) ** 2, -1))
         loss = loss + INTERO_WEIGHT * err
         aux["intero_mse"] = err
+    if model.reward_head is not None:
+        r_logits = model.reward_head(jnp.concatenate([s.h, s.z], -1))[:, 1:]  # state t+1 <- reward of step t
+        target = twohot(symlog(reward[:, :-1]))
+        r_ce = -jnp.mean(jnp.sum(target * jax.nn.log_softmax(r_logits, -1), -1))
+        loss = loss + REWARD_WEIGHT * r_ce
+        aux["reward_ce"] = r_ce
     aux["loss"] = loss
     return loss, aux
 

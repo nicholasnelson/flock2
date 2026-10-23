@@ -72,28 +72,29 @@ def start_states(world, packed, actions, levels, key):
 
 
 class Replay:
-    """A ring of fixed-length sequences (packed strips, actions, levels)."""
+    """A ring of fixed-length sequences (packed strips, actions, levels, rewards)."""
 
     def __init__(self, capacity: int, length: int):
         self.v = np.zeros((capacity, length, wm.H, wm.W // 2), np.uint8)
         self.a = np.zeros((capacity, length), np.int32)
         self.l = np.zeros((capacity, length, D.N_DRIVES), np.float32)
+        self.r = np.zeros((capacity, length), np.float32)
         self.n, self.i, self.cap = 0, 0, capacity
 
-    def add(self, v, a, l):
+    def add(self, v, a, l, r):
         for k in range(v.shape[0]):
-            self.v[self.i], self.a[self.i], self.l[self.i] = v[k], a[k], l[k]
+            self.v[self.i], self.a[self.i], self.l[self.i], self.r[self.i] = v[k], a[k], l[k], r[k]
             self.i = (self.i + 1) % self.cap
             self.n = min(self.n + 1, self.cap)
 
     def sample(self, rng, B):
         idx = rng.integers(self.n, size=B)
-        return self.v[idx], self.a[idx], self.l[idx]
+        return self.v[idx], self.a[idx], self.l[idx], self.r[idx]
 
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--wm", default=os.path.expanduser("~/flock2_data/m1_wm/run2_intero/model.pkl"))
+    p.add_argument("--wm", default=os.path.expanduser("~/flock2_data/m1_wm/run3_reward/model.pkl"))
     p.add_argument("--scripted", default=os.path.expanduser("~/flock2_data/m1_rollouts_drives"))
     p.add_argument("--out", default=os.path.expanduser("~/flock2_data/m1_agent/run1"))
     p.add_argument("--iters", type=int, default=500)
@@ -108,12 +109,12 @@ def main():
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES)
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True)
     wm.load_into(world, pickle.load(open(a.wm, "rb")))
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     agent = ac.Agent(nnx.Rngs(a.seed + 1))
     ac_opt = ac.make_optimizer(agent)
-    scripted = _wmt.load_shards(a.scripted, intero=True)[:-1]
+    scripted = _wmt.load_shards(a.scripted, intero=True, reward=True)[:-1]
     replay = Replay(a.replay, a.collect)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
@@ -131,19 +132,20 @@ def main():
         states, mems, recs = collect(world, agent, states, mems, k, a.collect, rec_idx)
         # to the replay: (T, B, R, ...) -> (B*R, T, ...)
         v = np.asarray(recs["view"]).transpose(1, 2, 0, 3, 4).reshape(-1, a.collect, wm.H, wm.W)
-        replay.add(pack(v), np.asarray(recs["action"]).transpose(1, 2, 0).reshape(-1, a.collect), np.asarray(recs["levels"]).transpose(1, 2, 0, 3).reshape(-1, a.collect, D.N_DRIVES))
+        seq = lambda x: np.asarray(x).swapaxes(0, 1).swapaxes(1, 2).reshape((-1, a.collect) + x.shape[3:])
+        replay.add(pack(v), seq(recs["action"]), seq(recs["levels"]), seq(recs["reward"]))
         # world model
         wm_aux = []
         for _ in range(a.wm_steps):
             on = replay.sample(rng, 2)
             off = _wmt.sample(scripted, rng, 2, a.collect)
-            pk, ak, lk = (np.concatenate([x, y]) for x, y in zip(on, off))
+            pk, ak, lk, rk = (np.concatenate([x, y]) for x, y in zip(on, off))
             key, k = jax.random.split(key)
-            wm_aux.append(_wmt.train_step(world, wm_opt, pk, ak, lk, k))
+            wm_aux.append(_wmt.train_step(world, wm_opt, pk, ak, lk, rk, k))
         # actor-critic
         ac_aux = []
         for _ in range(a.ac_steps):
-            pk, ak, lk = replay.sample(rng, 4)
+            pk, ak, lk, _ = replay.sample(rng, 4)
             key, k1, k2 = jax.random.split(key, 3)
             h0, z0 = start_states(world, pk, ak, lk, k1)
             ac_aux.append(ac.train_step(world, agent, ac_opt, h0, z0, k2))

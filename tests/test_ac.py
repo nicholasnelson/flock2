@@ -18,7 +18,7 @@ def test_lambda_returns_match_a_hand_computation():
 
 
 def test_an_actor_critic_step_runs_and_changes_only_the_agent():
-    world = wm.WorldModel(nnx.Rngs(0), n_intero=5)
+    world = wm.WorldModel(nnx.Rngs(0), n_intero=5, reward=True)
     agent = ac.Agent(nnx.Rngs(1))
     opt = ac.make_optimizer(agent)
     h0 = jax.random.normal(jax.random.PRNGKey(0), (6, wm.DETER))

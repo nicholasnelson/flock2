@@ -59,3 +59,24 @@ def test_interoception_and_loading_a_vision_only_checkpoint():
     assert np.isfinite(float(loss)) and "intero_mse" in aux
     s = new.observe(views, acts, jax.random.PRNGKey(4), intero)
     assert new.decode_intero(s).shape == (2, 4, 5)
+
+
+def test_twohot_round_trips_through_the_bins():
+    y = jnp.array([-73.0, -0.08, 0.0, 0.24, 3.2, 71.8])
+    t = wm.twohot(wm.symlog(y))
+    assert np.allclose(np.asarray(t.sum(-1)), 1.0, atol=1e-5)
+    back = wm.symexp(jnp.sum(t * wm.BINS, -1))
+    assert np.allclose(np.asarray(back), np.asarray(y), rtol=1e-4, atol=1e-5)
+
+
+def test_reward_head_starts_at_zero_and_trains():
+    m = wm.WorldModel(nnx.Rngs(7), n_intero=5, reward=True)
+    views = jax.random.randint(jax.random.PRNGKey(0), (2, 4, wm.H, wm.W), 0, 16)
+    acts = jax.random.randint(jax.random.PRNGKey(1), (2, 4), 0, wm.N_ACTIONS)
+    intero = jax.random.uniform(jax.random.PRNGKey(2), (2, 4, 5))
+    reward = jnp.full((2, 4), 5.0)
+    s = m.observe(views, acts, jax.random.PRNGKey(3), intero)
+    assert np.allclose(np.asarray(m.reward(jnp.concatenate([s.h, s.z], -1))), 0.0, atol=1e-5)
+    (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views, acts, jax.random.PRNGKey(3), intero, reward)
+    assert np.isfinite(float(aux["reward_ce"]))
+    assert float(jnp.abs(g.reward_head.b.kernel[...]).sum()) > 0

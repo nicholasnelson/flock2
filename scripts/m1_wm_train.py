@@ -33,31 +33,34 @@ OBJECT_COLOURS = np.array([6, 8, 9, 10, 11, 12, 13, 14, 15])  # bark, white, sto
 CONTEXT, HORIZON = 16, 48
 
 
-def load_shards(data: str, intero: bool = False):
+def load_shards(data: str, intero: bool = False, reward: bool = False):
+    """Shards as (views, actions, levels | None, reward | None), memory-mapped."""
     names = sorted(glob.glob(os.path.join(data, "shard_*.views.npy")))
     out = []
     for n in names:
         lv = np.load(n.replace(".views.", ".levels."), mmap_mode="r") if intero else None
-        out.append((np.load(n, mmap_mode="r"), np.load(n.replace(".views.", ".actions."), mmap_mode="r"), lv))
+        rw = np.load(n.replace(".views.", ".reward."), mmap_mode="r") if reward else None
+        out.append((np.load(n, mmap_mode="r"), np.load(n.replace(".views.", ".actions."), mmap_mode="r"), lv, rw))
     return out
 
 
 def sample(shards, rng, B, L):
-    vs, acts, lvs = [], [], []
+    vs, acts, lvs, rws = [], [], [], []
     for _ in range(B):
-        v, a, lv = shards[rng.integers(len(shards))]
+        v, a, lv, rw = shards[rng.integers(len(shards))]
         n, o = rng.integers(v.shape[0]), rng.integers(v.shape[1] - L + 1)
         vs.append(v[n, o : o + L])
         acts.append(a[n, o : o + L])
         lvs.append(lv[n, o : o + L] if lv is not None else np.zeros((L, 0), np.float16))
-    return np.stack(vs), np.stack(acts).astype(np.int32), np.stack(lvs).astype(np.float32)
+        rws.append(rw[n, o : o + L] if rw is not None else np.zeros((L,), np.float32))
+    return np.stack(vs), np.stack(acts).astype(np.int32), np.stack(lvs).astype(np.float32), np.stack(rws).astype(np.float32)
 
 
 @nnx.jit
-def train_step(model, opt, packed, actions, levels, key):
+def train_step(model, opt, packed, actions, levels, reward, key):
     views = unpack(packed).astype(jnp.int32)
     intero = levels if model.intero_head is not None else None
-    (loss, aux), grads = nnx.value_and_grad(wm.loss_fn, has_aux=True)(model, views, actions, key, intero)
+    (loss, aux), grads = nnx.value_and_grad(wm.loss_fn, has_aux=True)(model, views, actions, key, intero, reward)
     opt.update(model, grads)
     return aux
 
@@ -65,48 +68,44 @@ def train_step(model, opt, packed, actions, levels, key):
 @nnx.jit
 def open_loop(model, packed, actions, levels, key):
     """Observe CONTEXT strips, imagine HORIZON more; returns (truth, predicted) palette indices
-    and, with interoception, the imagined drive levels."""
+    and, with interoception, the imagined drive levels; with a reward head, the imagined rewards
+    (entry k: the reward of the step taken at CONTEXT - 1 + k)."""
     views = unpack(packed).astype(jnp.int32)
     k1, k2 = jax.random.split(key)
     intero = levels[:, :CONTEXT] if model.intero_head is not None else None
     s = model.observe(views[:, :CONTEXT], actions[:, :CONTEXT], k1, intero)
     im = model.imagine(s.h[:, -1], s.z[:, -1], actions[:, CONTEXT - 1 : CONTEXT - 1 + HORIZON], k2)
     pred = jnp.argmax(model.decode(im), -1)
-    if model.intero_head is not None:
-        lv = model.decode_intero(im)
-        lv0 = model.decode_intero(jax.tree.map(lambda x: x[:, -1], s))
-    else:
-        lv = lv0 = jnp.zeros(pred.shape[:2] + (0,))
-    return views[:, CONTEXT : CONTEXT + HORIZON], pred, lv, lv0
+    lv = model.decode_intero(im) if model.intero_head is not None else jnp.zeros(pred.shape[:2] + (0,))
+    rw = model.reward(jnp.concatenate([im.h, im.z], -1)) if model.reward_head is not None else jnp.zeros(pred.shape[:2])
+    return views[:, CONTEXT : CONTEXT + HORIZON], pred, lv, rw
 
 
-def evaluate(model, shard, step, out, key, n=16):
-    v, a, lv = shard
+def evaluate(model, shard, step, out, key, n=64):
+    v, a, lv, rw = shard
     rng = np.random.default_rng(0)  # the same held-out windows every time
     idx = [(rng.integers(v.shape[0]), rng.integers(v.shape[1] - CONTEXT - HORIZON)) for _ in range(n)]
     packed = np.stack([v[i, o : o + CONTEXT + HORIZON] for i, o in idx])
     acts = np.stack([a[i, o : o + CONTEXT + HORIZON] for i, o in idx]).astype(np.int32)
     levels = np.stack([lv[i, o : o + CONTEXT + HORIZON] for i, o in idx]).astype(np.float32) if lv is not None else np.zeros((n, CONTEXT + HORIZON, 0), np.float32)
+    rewards = np.stack([rw[i, o : o + CONTEXT + HORIZON] for i, o in idx]).astype(np.float32) if rw is not None else None
     chunks = [[np.asarray(x) for x in open_loop(model, packed[c : c + 16], acts[c : c + 16], levels[c : c + 16], jax.random.fold_in(key, c))] for c in range(0, n, 16)]
-    truth, pred, lv_pred, lv0 = (np.concatenate(xs) for xs in zip(*chunks))
+    truth, pred, lv_pred, rw_pred = (np.concatenate(xs) for xs in zip(*chunks))
     res = {"step": step}
     if lv_pred.shape[-1]:
-        from flock.meadow import drives as D
-
         lv_true = levels[:, CONTEXT : CONTEXT + HORIZON]
         res["intero_abs_err_h1"] = float(np.abs(lv_pred[:, 0] - lv_true[:, 0]).mean())
         res["intero_abs_err_h48"] = float(np.abs(lv_pred[:, -1] - lv_true[:, -1]).mean())
-        r_true = np.asarray(D.reward(jnp.asarray(lv_true[:, :-1]), jnp.asarray(lv_true[:, 1:]))).ravel()
-        r_pred = np.asarray(D.reward(jnp.asarray(lv_pred[:, :-1]), jnp.asarray(lv_pred[:, 1:]))).ravel()
-        res["reward_corr"] = float(np.corrcoef(r_true, r_pred)[0, 1]) if r_true.std() > 0 and r_pred.std() > 0 else None
+    if rewards is not None and model.reward_head is not None:
+        corr = lambda x, y: float(np.corrcoef(x, y)[0, 1]) if x.std() > 0 and y.std() > 0 else None
+        r_true = rewards[:, CONTEXT - 1 : CONTEXT - 1 + HORIZON]
+        res["reward_corr_h1"] = corr(r_true[:, 0], rw_pred[:, 0])
+        res["reward_corr"] = corr(r_true.ravel(), rw_pred.ravel())
         # what the actor-critic sees: reward summed over its 15-step imagination horizon
-        # (the imagined levels at the start of the horizon are decoded too, as in flock.ac)
-        lv_all = np.concatenate([lv0[:, None], lv_pred[:, :15]], 1)
-        lv_true_all = levels[:, CONTEXT - 1 : CONTEXT + 15]
-        s_true = np.asarray(D.reward(jnp.asarray(lv_true_all[:, :-1]), jnp.asarray(lv_true_all[:, 1:]))).sum(1)
-        s_pred = np.asarray(D.reward(jnp.asarray(lv_all[:, :-1]), jnp.asarray(lv_all[:, 1:]))).sum(1)
-        res["reward15_corr"] = float(np.corrcoef(s_true, s_pred)[0, 1]) if s_true.std() > 0 and s_pred.std() > 0 else None
+        s_true, s_pred = r_true[:, :15].sum(1), rw_pred[:, :15].sum(1)
+        res["reward15_corr"] = corr(s_true, s_pred)
         res["reward15_mean_true_pred"] = [float(s_true.mean()), float(s_pred.mean())]
+        res["reward15_std_true_pred"] = [float(s_true.std()), float(s_pred.std())]
     for h in (1, 4, 16, 32, 48):
         t, p = truth[:, h - 1], pred[:, h - 1]
         obj = np.isin(t, OBJECT_COLOURS)
@@ -133,28 +132,29 @@ def main():
     p.add_argument("--eval_every", type=int, default=2000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--intero", action="store_true", help="train with the drive levels (interoception)")
+    p.add_argument("--reward", action="store_true", help="train a reward head on the logged reward")
     p.add_argument("--init", default=None, help="checkpoint to start from (parts it lacks start fresh)")
     p.add_argument("--eval_only", type=int, default=0, help="just evaluate --init on this many held-out windows")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    shards = load_shards(a.data, a.intero)
+    shards = load_shards(a.data, a.intero, a.reward)
     train, held = shards[:-1], shards[-1]
-    model = wm.WorldModel(nnx.Rngs(a.seed), n_intero=5 if a.intero else 0)
+    model = wm.WorldModel(nnx.Rngs(a.seed), n_intero=5 if a.intero else 0, reward=a.reward)
     if a.init:
         wm.load_into(model, pickle.load(open(os.path.expanduser(a.init), "rb")))
     opt = nnx.Optimizer(model, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(a.lr, eps=1e-8)), wrt=nnx.Param)
     if a.eval_only:
         print(json.dumps({"eval": evaluate(model, held, 0, a.out, jax.random.PRNGKey(a.seed), n=a.eval_only)}), flush=True)
         return
-    print(f"params {wm.count_params(model):,}; train frames {sum(v.shape[0] * v.shape[1] for v, _, _ in train):,}", flush=True)
+    print(f"params {wm.count_params(model):,}; train frames {sum(v.shape[0] * v.shape[1] for v, *_ in train):,}", flush=True)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for step in range(1, a.steps + 1):
-        packed, acts, lvs = sample(train, rng, a.batch, a.length)
+        packed, acts, lvs, rws = sample(train, rng, a.batch, a.length)
         key, k = jax.random.split(key)
-        aux = train_step(model, opt, packed, acts, lvs, k)
+        aux = train_step(model, opt, packed, acts, lvs, rws, k)
         if step % 100 == 0 or step == 1:
             rec = {"step": step, **{k2: float(v) for k2, v in aux.items()}, "t": time.time() - t0}
             log.write(json.dumps(rec) + "\n")
