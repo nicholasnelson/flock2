@@ -477,3 +477,60 @@ What this shows:
    flower. A minimum stroke length (dots impossible, not just costly) is the obvious next lever.
 
 Galleries: `runs/m0/grid_tune_galleries.png` (local).
+
+### Grid 7 — why not dots: clutter and reduced resolution, graded by an independent examiner (2026-10-23)
+
+Owner's question: human writing is not dot patterns; why do our sheep end up with a dot for one
+type? My reading *(judgement)*: human signs face pressures our channel lacked — background
+clutter (a dot sign is indistinguishable from a speck of dirt, the blank-ground argument one step
+further), viewing at a distance or in poor light (small marks vanish first), production noise,
+and many meanings (four need only four distinguishable tokens; symbols need only enough
+structure to be told apart — [Fay et al. 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2607338/)).
+The owner chose the first two as channel pressures (commit `52a9e18`), reader only:
+
+- `clutter=6`: six random specks and short dashes (0–4 px, ink colour) added to each drawing.
+- `lowres_p=0.5`: half the time the drawing is read block-averaged at a quarter of the
+  resolution (32 → 8 px), as from further away.
+
+**The independent examiner** (owner's proposal; `flock/toy/examiner.py`). The judge probe is
+graded by the network the sender trains against, and every run has its own judge, so its scores
+are inflated and not comparable across runs. The examiner is a supervised classifier trained
+once per world on labelled views of every variant, offset and scale (a third as silhouettes),
+cached, never used in training: the same yardstick for every run. It scores 1.00 on real
+held-out sprite views. Every iso run now saves its final drawings on held-out variants
+(`drawings.npz`) and is graded as drawn and re-centred.
+
+All cells: variation, jitter, invariant judge, delayed ink cost, centring, stamp rotation,
+`min_strokes=1`. Three seeds; chance 0.25.
+
+| cell | acc (held-out) | acc_seen | judge_probe | ink | examiner (as drawn) |
+| --- | --- | --- | --- | --- | --- |
+| bubble, neither | 0.79±0.04 | 0.84±0.04 | 0.50±0.07 | 40.0 | 0.28±0.07 |
+| bubble, clutter | 0.74±0.08 | 0.81±0.06 | 0.49±0.13 | 47.8 | 0.28±0.04 |
+| bubble, low-res | 0.76±0.03 | 0.84±0.06 | 0.49±0.04 | 41.1 | 0.23±0.03 |
+| bubble, both | 0.76±0.06 | 0.83±0.06 | 0.43±0.14 | 51.5 | 0.22±0.01 |
+| stamp, neither | 0.78±0.02 | 0.83±0.02 | 0.31±0.13 | 42.6 | 0.21±0.03 |
+| stamp, clutter | 0.78±0.03 | 0.83±0.02 | 0.42±0.16 | 51.2 | **0.32±0.06** |
+| stamp, low-res | 0.79±0.02 | 0.85±0.01 | 0.44±0.07 | 32.5 | 0.20±0.03 |
+| stamp, both | 0.79±0.02 | 0.84±0.03 | 0.36±0.14 | 50.1 | 0.17±0.07 |
+
+What this shows:
+
+1. **The pressures cost nothing in communication** (0.74–0.79 everywhere) and clutter raises
+   ink use (48–51 vs 40–43 px): drawings get bigger.
+2. **Under clutter the minimal mark is a short line, not a dot**, and large closed shapes appear
+   *(judgement, seed-0 galleries as drawn)*: in stamp mode with clutter the salt lick is a box or
+   triangle outline, quite cube-like, drawn consistently; the fox a low squiggle or triangle;
+   tree and flower single short strokes. Which type gets the elaborate glyph and which the
+   cheapest token varies by seed and cell.
+3. **The examiner finds the drawings unrecognisable**: 0.17–0.32 against chance 0.25, and it
+   guesses "fox" for 64–91 % of drawings. Caveat *(judgement)*: it learned from solid sprites
+   and silhouettes, and the drawings are thin 2 px outlines — a style it has never seen. People
+   have a lifetime of outline drawings; this examiner has none, so "fox" may just be its default
+   for a low line drawing. An examiner that has also seen outline renderings of the sprites
+   would be the fairer test; the saved drawings can be re-graded without re-training any sheep.
+4. **One or two types always get the cheapest token.** With four meanings and a cost on ink,
+   two types only need to differ from each other; more referents is the lever that would remove
+   that floor *(judgement)*.
+
+Galleries: `runs/m0/grid_dot_galleries.png` (local).
