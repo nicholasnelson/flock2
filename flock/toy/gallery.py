@@ -22,7 +22,7 @@ def _scale(img_rgb: np.ndarray, s: int) -> Image.Image:
 
 def drawings_grid(cfg, canvases_idx: np.ndarray, types: np.ndarray, per_type: int = 10, gap: int = 1) -> np.ndarray:
     """Rows = object types (sprite first), columns = examples. Returns a palette-index image."""
-    n_types = envs.get(cfg).N_TYPES
+    n_types = envs.n_types(cfg)
     S = canvases_idx.shape[1]  # drawing size in px (16 top-down, 32 iso)
     cell = S + gap
     grid = np.full((n_types * cell + gap, (per_type + 2) * cell + gap), 10, np.uint8)

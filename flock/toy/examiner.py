@@ -112,14 +112,19 @@ def get_examiner(steps: int = 3000, seed: int = 20261023, log=print) -> Examiner
     return model
 
 
-def _classify(model: Examiner, views: jax.Array, chunk: int = 256) -> np.ndarray:
+def _classify(model: Examiner, views: jax.Array, chunk: int = 256, n_types: int | None = None) -> np.ndarray:
+    """Predicted type per view; with ``n_types`` the choice is among the first n types only
+    (the run's referent set), so chance is 1/n."""
     out = []
     for i in range(0, views.shape[0], chunk):
-        out.append(np.asarray(jnp.argmax(model(world.to_onehot(views[i : i + chunk])), -1)))
+        logits = model(world.to_onehot(views[i : i + chunk]))
+        if n_types is not None:
+            logits = logits[:, :n_types]
+        out.append(np.asarray(jnp.argmax(logits, -1)))
     return np.concatenate(out)
 
 
-def examine(model: Examiner, alpha: np.ndarray, types: np.ndarray, key: jax.Array, ink_colour: int = 15) -> dict:
+def examine(model: Examiner, alpha: np.ndarray, types: np.ndarray, key: jax.Array, ink_colour: int = 15, n_types: int | None = None) -> dict:
     """Grade drawings (alpha (N, C, C), black ink) against their referent types. Each drawing is
     pasted on plain ground where the referent would stand, as drawn and re-centred on its ink.
     Returns accuracies, the confusion matrix (rows true, columns guessed) and, as a check on the
@@ -134,9 +139,10 @@ def examine(model: Examiner, alpha: np.ndarray, types: np.ndarray, key: jax.Arra
     t = np.asarray(types)
     out = {}
     for name, c in (("as_drawn", canvas), ("centred", centred)):
-        pred = _classify(model, paste(c).astype(jnp.uint8))
+        pred = _classify(model, paste(c).astype(jnp.uint8), n_types=n_types)
         out[f"examiner_acc_{name}"] = float((pred == t).mean())
-        cm = np.zeros((S.N_OBJECT_TYPES, S.N_OBJECT_TYPES), int)
+        k = n_types or S.N_OBJECT_TYPES
+        cm = np.zeros((k, k), int)
         np.add.at(cm, (t, pred), 1)
         out[f"examiner_confusion_{name}"] = cm.tolist()
     real, rt = _labelled_views(jax.random.fold_in(key, 2))

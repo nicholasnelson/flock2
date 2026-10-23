@@ -110,3 +110,10 @@ def test_scaled_sprite_stands_on_the_same_base():
     rows = lambda a: np.where((a != TRANSPARENT).any(1))[0]
     assert rows(half).max() == rows(full).max()  # same bottom row
     assert len(rows(half)) <= len(rows(full)) // 2 + 1  # about half as tall
+
+
+def test_referent_set_restricts_types():
+    ep = env.make_batch(jax.random.PRNGKey(7), batch=64, n_candidates=4, mode="bubble", variation=True, n_types=4)
+    assert int(np.asarray(ep.candidate_types).max()) < 4
+    views, t = env.object_views(jax.random.PRNGKey(8), 64, True, 4)
+    assert int(np.asarray(t).max()) < 4

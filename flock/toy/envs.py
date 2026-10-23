@@ -38,13 +38,18 @@ def object_thumbnail(cfg, t: int) -> np.ndarray:
     return cell
 
 
+def n_types(cfg) -> int:
+    """How many referent types this run uses: ``cfg.n_types`` (the first n), or all."""
+    return getattr(cfg, "n_types", 0) or get(cfg).N_TYPES
+
+
 def make_batch(cfg, key, batch: int, held_out: bool = False):
     """A batch of episodes for ``cfg``: instance variation (iso only) when ``cfg.variation``;
     ``held_out`` draws variants from the evaluation-only set."""
     E = get(cfg)
     if getattr(cfg, "renderer", "topdown") == "iso":
         v = bool(getattr(cfg, "variation", False))
-        return E.make_batch(key, batch, cfg.n_candidates, cfg.mode, cfg.random_heading, v, held_out and v)
+        return E.make_batch(key, batch, cfg.n_candidates, cfg.mode, cfg.random_heading, v, held_out and v, n_types(cfg))
     return E.make_batch(key, batch, cfg.n_candidates, cfg.mode, cfg.random_heading)
 
 
@@ -52,7 +57,7 @@ def object_views(cfg, key, n: int):
     """Single-object views (types) for fitting probes; training variants if ``cfg.variation``."""
     E = get(cfg)
     if getattr(cfg, "renderer", "topdown") == "iso":
-        return E.object_views(key, n, bool(getattr(cfg, "variation", False)))
+        return E.object_views(key, n, bool(getattr(cfg, "variation", False)), n_types(cfg))
     return E.object_views(key, n)
 
 

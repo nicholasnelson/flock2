@@ -88,11 +88,11 @@ def _instances(key: jax.Array, types: jax.Array, variation: bool, held_out: bool
     return variant, offset, scale
 
 
-def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: bool = True, variation: bool = False, held_out: bool = False) -> Episode:
+def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: bool = True, variation: bool = False, held_out: bool = False, n_types: int = N_TYPES) -> Episode:
     k_t, k_g1, k_g2, k_c, k_slot, k_h1, k_h2, k_f, k_i = jax.random.split(key, 9)
     k_f1, k_f2 = jax.random.split(k_f)
     k_i1, k_i2 = jax.random.split(k_i)
-    target = jax.random.randint(k_t, (), 0, N_TYPES)
+    target = jax.random.randint(k_t, (), 0, n_types)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
 
     # --- sender ------------------------------------------------------------------------
@@ -113,7 +113,7 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
 
     # --- receiver ----------------------------------------------------------------------
     h_r = jax.random.randint(k_h2, (), 0, 4) if random_heading else jnp.int32(0)
-    perm = jax.random.permutation(k_c, N_TYPES)
+    perm = jax.random.permutation(k_c, n_types)
     perm = perm[jnp.argsort(perm == target)]
     cand_types = jnp.concatenate([target[None], perm[: n_candidates - 1]])
     slot_idx = jax.random.permutation(k_slot, MAX_CANDIDATES)[:n_candidates]
@@ -156,16 +156,17 @@ def make_episode(key: jax.Array, n_candidates: int, mode: str, random_heading: b
     )
 
 
-@functools.partial(jax.jit, static_argnames=("batch", "n_candidates", "mode", "random_heading", "variation", "held_out"))
-def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "bubble", random_heading: bool = True, variation: bool = False, held_out: bool = False) -> Episode:
+@functools.partial(jax.jit, static_argnames=("batch", "n_candidates", "mode", "random_heading", "variation", "held_out", "n_types"))
+def make_batch(key: jax.Array, batch: int, n_candidates: int = 4, mode: str = "bubble", random_heading: bool = True, variation: bool = False, held_out: bool = False, n_types: int = N_TYPES) -> Episode:
+    """``n_types``: only the first ``n_types`` referent types are used (the referent set)."""
     keys = jax.random.split(key, batch)
-    return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading, variation, held_out))(keys)
+    return jax.vmap(lambda k: make_episode(k, n_candidates, mode, random_heading, variation, held_out, n_types))(keys)
 
 
-def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, scale_min: float = SCALE_MIN, scale: jax.Array | None = None, variants: bool = True, held_out: bool = False, outline: jax.Array | None = None):
+def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, scale_min: float = SCALE_MIN, scale: jax.Array | None = None, variants: bool = True, held_out: bool = False, outline: jax.Array | None = None, n_types: int = N_TYPES):
     """One single-object view; returns (view, type). ``scale`` overrides the sampled scale."""
     k1, k2, k3, k4, k5 = jax.random.split(k, 5)
-    t = jax.random.randint(k1, (), 0, N_TYPES)
+    t = jax.random.randint(k1, (), 0, n_types)
     h = jax.random.randint(k3, (), 0, 4)
     centre = jnp.array([WORLD_TILES // 2, WORLD_TILES // 2])
     v, o, sc = _instances(k5, t[None], variation, held_out, scale_min, variants)
@@ -185,15 +186,15 @@ def _object_view(k: jax.Array, silhouette: jax.Array, variation: bool = False, s
     return iso.render_view(_random_ground(k2, WORLD_TILES), obj, ag, centre, h, silhouette=silhouette[None], outline=ol), t
 
 
-@functools.partial(jax.jit, static_argnames=("batch", "variation"))
-def object_views(key: jax.Array, batch: int, variation: bool = False) -> tuple[jax.Array, jax.Array]:
+@functools.partial(jax.jit, static_argnames=("batch", "variation", "n_types"))
+def object_views(key: jax.Array, batch: int, variation: bool = False, n_types: int = N_TYPES) -> tuple[jax.Array, jax.Array]:
     """Views with a single object ahead of an (invisible) viewer on grass, random heading
     (training variants, offsets and scales if ``variation``)."""
-    return jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation))(jax.random.split(key, batch))
+    return jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, n_types=n_types))(jax.random.split(key, batch))
 
 
-@functools.partial(jax.jit, static_argnames=("batch", "variation", "scale_min", "variants"))
-def object_views_pretrain(key: jax.Array, batch: int, p_silhouette: float, variation: bool = False, scale_min: float = SCALE_MIN, variants: bool = True):
+@functools.partial(jax.jit, static_argnames=("batch", "variation", "scale_min", "variants", "n_types"))
+def object_views_pretrain(key: jax.Array, batch: int, p_silhouette: float, variation: bool = False, scale_min: float = SCALE_MIN, variants: bool = True, n_types: int = N_TYPES):
     """Single-object views for perception pre-training, three renders of each scene:
 
     - ``inp``: the input; the object is a solid outline-colour silhouette with probability
@@ -205,9 +206,9 @@ def object_views_pretrain(key: jax.Array, batch: int, p_silhouette: float, varia
     Returns (inp, tgt, anchor, types)."""
     keys = jax.random.split(key, batch + 1)
     sil = jax.random.bernoulli(keys[0], p_silhouette, (batch,))
-    inp, t = jax.vmap(lambda k, s: _object_view(k, s, variation, scale_min, None, variants))(keys[1:], sil)
-    tgt, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, None, variants))(keys[1:])
-    anchor, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, jnp.float32(1.0), variants))(keys[1:])
+    inp, t = jax.vmap(lambda k, s: _object_view(k, s, variation, scale_min, None, variants, n_types=n_types))(keys[1:], sil)
+    tgt, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, None, variants, n_types=n_types))(keys[1:])
+    anchor, _ = jax.vmap(lambda k: _object_view(k, jnp.bool_(False), variation, scale_min, jnp.float32(1.0), variants, n_types=n_types))(keys[1:])
     return inp, tgt, anchor, t
 
 

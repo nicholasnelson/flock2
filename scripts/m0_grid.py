@@ -13,6 +13,7 @@ The grid tests, per the plan:
   9. (128 world) anti-blank options x bubble/stamp, with centring and stamp rotation
  10. (128 world) clutter x reduced resolution in the channel, graded by the independent examiner
  11. (128 world) seven referent types
+ 12. (128 world) M0's closing result: the medium only, no encouragement, four and seven types
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -100,6 +101,20 @@ for _mode in ("bubble", "stamp"):
 for _mode in ("bubble", "stamp"):
     for _tag, _opts in [("base", {}), ("clut", dict(clutter=6))]:
         CELLS[f"seven_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, min_strokes=1, **_opts)
+
+# M0's closing result: the medium only, no encouragement. The physics of drawing (black 2 px
+# lines, pen-lift + length cost delayed 1,500 steps, at least one stroke) and of reading
+# (centring, jitter, stamp rotation, clutter, reduced resolution), varied objects with
+# held-out evaluation; no resemblance loss and no invariant judge. Four and seven referent types
+# (seven at 3x the game steps, which grid 8 showed it needs).
+_MEDIUM = dict(
+    mono=True, stroke_width=2.0, stroke_cost=4.0, hard_gate=True, min_strokes=1, pretrain_colour_dropout=0.5,
+    ink_weight=0.002, ink_delay_steps=1500, variation=True, jitter_px=4, centre_glyph=True, rotate_stamps=True,
+    clutter=6, lowres_p=0.5, perceptual_weight=0.0, judge_invariance=0.0,
+)
+for _mode in ("bubble", "stamp"):
+    CELLS[f"final4_{_mode}"] = dict(_MEDIUM, mode=_mode, n_types=4)
+    CELLS[f"final7_{_mode}"] = dict(_MEDIUM, mode=_mode, n_types=7, steps=12000)
 
 
 # Cell names become directory names; on Windows (and /mnt/c under WSL) those are case-insensitive,

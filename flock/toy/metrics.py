@@ -44,7 +44,7 @@ def _embed(enc: Encoder, views_onehot: jax.Array, chunk: int = 256) -> jax.Array
 def fit_type_probe(judge: Encoder, key: jax.Array, cfg, n: int = 2048, steps: int = 300, lr: float = 0.1) -> TypeProbe:
     """Logistic-regression probe on judge embeddings of real single-object views (training
     variants, offsets and scales when ``cfg.variation``)."""
-    n_types = envs.get(cfg).N_TYPES
+    n_types = envs.n_types(cfg)
     views, types = envs.object_views(cfg, key, n)
     x = jax.lax.stop_gradient(_embed(judge, world.to_onehot(views)))
     y = types
@@ -133,7 +133,7 @@ def evaluate(model: Agents, judge: Encoder, probe: TypeProbe, cfg, key: jax.Arra
     # per-type accuracy for the gallery / analysis
     tt = np.asarray(ep.target_type)
     a = np.asarray(acc)
-    out["acc_by_type"] = [float(a[tt == t].mean()) if (tt == t).any() else None for t in range(E.N_TYPES)]
+    out["acc_by_type"] = [float(a[tt == t].mean()) if (tt == t).any() else None for t in range(envs.n_types(cfg))]
     if getattr(cfg, "variation", False):
         # the same game on the training variants, for the seen/unseen gap
         ep_seen = envs.make_batch(cfg, jax.random.fold_in(k_ep, 1), cfg.eval_batch, held_out=False)

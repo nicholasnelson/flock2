@@ -58,6 +58,7 @@ class Config:
     #   this weight pulling augmented embeddings to the clean one, so it sees shape, not placement; iso only.
     #   The sheep's own perception is pre-trained without it (strong invariance blinds the receiver).
     variation: bool = False  # instance variation: sprite variants, sub-tile offsets, scales; held-out variants for eval; iso only
+    n_types: int = 0  # referent set: the first n types (iso: salt, tree, flower, fox, hut, pond, mushroom); 0 = all
     jitter_px: int = 0  # channel noise: the drawing is moved by up to this many px within its frame when read or judged
     centre_glyph: bool = False  # the channel re-centres each drawing on its ink centroid (before jitter)
     rotate_stamps: bool = False  # in stamp mode, the channel turns each drawing by a random multiple of 90 degrees
@@ -131,7 +132,7 @@ def pretrain_views(key: jax.Array, batch: int, cfg: Config, invariant: bool = Fa
         inv = invariant
         smin = JUDGE_SCALE_MIN if inv else E.SCALE_MIN
         ov_in, ov_tgt, anchor, _ = E.object_views_pretrain(
-            k1, n_obj, cfg.pretrain_colour_dropout, variation=cfg.variation or inv, scale_min=smin, variants=cfg.variation
+            k1, n_obj, cfg.pretrain_colour_dropout, variation=cfg.variation or inv, scale_min=smin, variants=cfg.variation, n_types=envs.n_types(cfg)
         )
         if inv:
             ov_in, ov_tgt = _image_aug(k3, ov_in, ov_tgt)
@@ -346,7 +347,7 @@ def train(cfg: Config) -> dict:
         fwd = game.forward(model, ep, k_d, cfg.opaque, hard=True)
         alpha, types = np.asarray(fwd.canvas.alpha), np.asarray(ep.target_type)
         np.savez_compressed(os.path.join(cfg.out_dir, "drawings.npz"), alpha=alpha.astype(np.float16), types=types, ink=np.asarray(fwd.canvas.ink))
-        exam = X.examine(X.get_examiner(log=log), alpha, types, k_x)
+        exam = X.examine(X.get_examiner(log=log), alpha, types, k_x, n_types=envs.n_types(cfg))
         summary["examiner"] = exam
         last_eval.update({k: v for k, v in exam.items() if not k.startswith("examiner_confusion")})
         log({"phase": "examiner_grade", **exam})
