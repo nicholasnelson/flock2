@@ -33,13 +33,22 @@ OBJECT_COLOURS = np.array([6, 8, 9, 10, 11, 12, 13, 14, 15])  # bark, white, sto
 CONTEXT, HORIZON = 16, 48
 
 
-def load_shards(data: str, intero: bool = False, reward: bool = False):
-    """Shards as (views, actions, levels | None, reward | None), memory-mapped."""
+def load_shards(data: str, intero: bool = False, reward: bool = False, reward_from_levels: bool = False):
+    """Shards as (views, actions, levels | None, reward | None), memory-mapped. With
+    ``reward_from_levels`` the reward is recomputed from the logged levels with the current
+    ``drives.reward`` (the reward of step t from the levels at t and t+1; the last step reuses
+    the levels at t) instead of read from disk."""
     names = sorted(glob.glob(os.path.join(data, "shard_*.views.npy")))
     out = []
     for n in names:
         lv = np.load(n.replace(".views.", ".levels."), mmap_mode="r") if intero else None
         rw = np.load(n.replace(".views.", ".reward."), mmap_mode="r") if reward else None
+        if reward and reward_from_levels:
+            from flock.meadow import drives as D
+
+            lvl = np.load(n.replace(".views.", ".levels."), mmap_mode="r").astype(np.float32)
+            nxt = np.concatenate([lvl[:, 1:], lvl[:, -1:]], 1)
+            rw = np.asarray(D.reward(jnp.asarray(lvl), jnp.asarray(nxt)), np.float32)
         out.append((np.load(n, mmap_mode="r"), np.load(n.replace(".views.", ".actions."), mmap_mode="r"), lv, rw))
     return out
 
@@ -133,11 +142,12 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--intero", action="store_true", help="train with the drive levels (interoception)")
     p.add_argument("--reward", action="store_true", help="train a reward head on the logged reward")
+    p.add_argument("--reward_from_levels", action="store_true", help="recompute the reward from the logged levels (drives.reward)")
     p.add_argument("--init", default=None, help="checkpoint to start from (parts it lacks start fresh)")
     p.add_argument("--eval_only", type=int, default=0, help="just evaluate --init on this many held-out windows")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
-    shards = load_shards(a.data, a.intero, a.reward)
+    shards = load_shards(a.data, a.intero, a.reward, a.reward_from_levels)
     train, held = shards[:-1], shards[-1]
     model = wm.WorldModel(nnx.Rngs(a.seed), n_intero=5 if a.intero else 0, reward=a.reward)
     if a.init:

@@ -107,10 +107,13 @@ def test_drive_reward_signs():
 
     hungry = jnp.array([[0.3, 0.9, 0.9, 1.0, 0.9]])
     after = D.update(hungry, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
-    assert float(D.reward(hungry, after)[0]) > 0  # eating when hungry pays
+    assert float(D.drive_reduction(hungry, after)[0]) > 0  # eating when hungry pays
+    assert float(D.reward(hungry, after)[0]) > float(D.reward(hungry, hungry)[0])
     full = jnp.array([[1.1, 0.9, 0.9, 1.0, 0.9]])
     over = D.update(full, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
-    assert float(D.reward(full, over)[0]) < 0  # over-eating past the set-point costs
+    assert float(D.drive_reduction(full, over)[0]) < 0  # over-eating past the set-point costs
+    assert float(D.reward(full, over)[0]) < float(D.reward(full, full)[0])
+    assert float(D.reward(full, jnp.ones((1, 5)))[0]) == 0.0  # at the set-points nothing is owed
     # warmth at night: the open chills faster than cover
     h = jnp.full((2, 5), 0.8)
     n = D.update(h, grazed=jnp.zeros(2, bool), drank=jnp.zeros(2, bool), resting=jnp.zeros(2, bool), night=jnp.bool_(True), near_cover=jnp.array([False, True]), n_visible=jnp.zeros(2), novelty=jnp.zeros(2))

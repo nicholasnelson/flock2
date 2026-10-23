@@ -12,7 +12,7 @@ On disk (a directory of shards, one per rollout):
     shard_XXXX.pos.npy      float16 (N, T, 2)
     shard_XXXX.heading.npy  float16 (N, T)
     shard_XXXX.levels.npy   float16 (N, T, N_DRIVES)  drive levels when the strip was seen
-    shard_XXXX.reward.npy   float32 (N, T)            drive-reduction reward for the step taken
+    shard_XXXX.reward.npy   float32 (N, T)            reward for the step taken (drives.reward at logging time)
 with N = B * R sequences. The strip at t is what the sheep saw before acting at t.
 """
 

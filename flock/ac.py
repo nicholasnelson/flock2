@@ -7,7 +7,7 @@ arXiv:2301.04104), on the drive-reduction reward (Milestone 1, step 3).
 - Imagination: from model states inferred on real data, roll the world model's prior forward
   ``HORIZON`` steps with actions sampled from the actor. The reward of each imagined step is the
   world model's reward head read at the state it leads to (the drive-reduction reward it was
-  trained on).
+  trained on, ``flock.meadow.drives.reward``).
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
   percentile range of the returns, with a small entropy bonus; the critic regresses on the
@@ -25,7 +25,7 @@ from flock import wm
 
 HORIZON = 15
 GAMMA, LAMBDA = 0.997, 0.95
-ENTROPY = 3e-4
+ENTROPY = 3e-3  # DreamerV3 uses 3e-4; at that the first agent run's policy collapsed in ~1,600 updates
 SLOW_DECAY = 0.98
 RETURN_DECAY = 0.99
 UNIMIX = 0.01

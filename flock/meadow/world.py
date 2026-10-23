@@ -50,7 +50,7 @@ class Flock(NamedTuple):
     head_up: jax.Array  # (S,) bool
     levels: jax.Array  # (S, N_DRIVES) homeostatic levels, set-point 1 (``flock.meadow.drives``)
     visits: jax.Array  # (S, 16, 16) int: each sheep's visits to the interest cells (hashed counts)
-    reward: jax.Array  # (S,) the drive-reduction reward of the last step
+    reward: jax.Array  # (S,) the reward of the last step (drives.reward)
 
 
 class State(NamedTuple):

@@ -6,8 +6,9 @@ replay, fine-tune the world model, train the actor-critic in imagination; repeat
 
 Every sheep in every meadow acts from the actor, from its own world-model state (h, z) updated
 each step with its strip and its drive levels. Eight sheep per meadow are logged. Per iteration:
-``--collect`` steps of acting, then ``--wm_steps`` world-model updates (half on the online
-replay, half on the scripted shards, so the model keeps what it learned there) and
+``--collect`` steps of acting, then ``--wm_steps`` world-model updates (``--wm_online`` of
+each batch of 4 sequences from the online replay, the rest from the scripted shards, so the
+model keeps what it learned there) and
 ``--ac_steps`` actor-critic updates from model states inferred on the online replay.
 """
 
@@ -94,7 +95,7 @@ class Replay:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--wm", default=os.path.expanduser("~/flock2_data/m1_wm/run3_reward/model.pkl"))
+    p.add_argument("--wm", default=os.path.expanduser("~/flock2_data/m1_wm/run4_negdrive/model.pkl"))
     p.add_argument("--scripted", default=os.path.expanduser("~/flock2_data/m1_rollouts_drives"))
     p.add_argument("--out", default=os.path.expanduser("~/flock2_data/m1_agent/run1"))
     p.add_argument("--iters", type=int, default=500)
@@ -102,7 +103,8 @@ def main():
     p.add_argument("--sheep", type=int, default=40)
     p.add_argument("--record", type=int, default=8)
     p.add_argument("--collect", type=int, default=64)
-    p.add_argument("--wm_steps", type=int, default=16)
+    p.add_argument("--wm_steps", type=int, default=48)
+    p.add_argument("--wm_online", type=int, default=3)
     p.add_argument("--ac_steps", type=int, default=16)
     p.add_argument("--replay", type=int, default=2048)
     p.add_argument("--seed", type=int, default=0)
@@ -114,7 +116,7 @@ def main():
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     agent = ac.Agent(nnx.Rngs(a.seed + 1))
     ac_opt = ac.make_optimizer(agent)
-    scripted = _wmt.load_shards(a.scripted, intero=True, reward=True)[:-1]
+    scripted = _wmt.load_shards(a.scripted, intero=True, reward=True, reward_from_levels=True)[:-1]
     replay = Replay(a.replay, a.collect)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
@@ -148,8 +150,8 @@ def main():
         # world model
         wm_aux = []
         for _ in range(a.wm_steps):
-            on = replay.sample(rng, 2)
-            off = _wmt.sample(scripted, rng, 2, a.collect)
+            on = replay.sample(rng, a.wm_online)
+            off = _wmt.sample(scripted, rng, 4 - a.wm_online, a.collect)
             pk, ak, lk, rk = (np.concatenate([x, y]) for x, y in zip(on, off))
             key, k = jax.random.split(key)
             wm_aux.append(_wmt.train_step(world, wm_opt, pk, ak, lk, rk, k))
