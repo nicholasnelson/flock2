@@ -5,9 +5,10 @@ living in a meadow, watched like an aquarium. FLOCK 2.0 re-imagines it so that s
 behaviour, instincts, communication and relationships are genuinely *learned* rather than
 borrowed from an LLM.
 
-This folder holds the pre-build research and the staged implementation plan. Nothing here
-is production code; the first build step is the Milestone 0 toy prototype described in
-[`03-implementation-plan.md`](03-implementation-plan.md), after the plan is reviewed.
+This folder holds the research, the staged implementation plan and the record of each
+milestone as it is built. Milestone 0 (the toy drawing game) is closed; Milestone 1 (the meadow,
+drives and world model) is in progress — start with [`HANDOFF.md`](HANDOFF.md) for where things
+stand.
 
 ## Documents
 
@@ -18,6 +19,11 @@ is production code; the first build step is the Milestone 0 toy prototype descri
 | [`02-design-questions.md`](02-design-questions.md) | Recommendations for the seven open design questions, with reasoning and evidence. |
 | [`03-implementation-plan.md`](03-implementation-plan.md) | Staged milestones, each watchable or testable on its own, starting with the Milestone 0 toy. |
 | [`research/`](research/) | Per-topic research notes with citations. The survey above is built from these. |
+| [`HANDOFF.md`](HANDOFF.md) | Where things stand, what to read first, practical gotchas. Newest update at the top. |
+| [`m0-toy-README.md`](m0-toy-README.md) | Milestone 0: the toy drawing game — design, every experiment grid, the result. |
+| [`m1-meadow-README.md`](m1-meadow-README.md) | Milestone 1: the meadow, drives, world model and actor-critic — what was built, every run, the diagnosis, what is next. |
+| [`m1-model.svg`](m1-model.svg) | Diagram of the M1 sheep brain: world model, heads, actor-critic, planned curiosity ensemble. |
+| [`m1-results/`](m1-results/) | M1 run logs, evaluation numbers and figures cited in the M1 README. |
 
 ## Conventions
 

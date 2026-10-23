@@ -1,5 +1,31 @@
 # Handoff
 
+## Update — M1 in progress (2026-10-24)
+
+**Where things are.** M1 steps 1–2 are done; step 3 (drives and the actor-critic) is built and
+tested, but no learned behaviour yet. Everything — what was built, every run with its numbers,
+the diagnosis and the agreed next step — is in [`m1-meadow-README.md`](m1-meadow-README.md),
+with the run logs and figures in [`m1-results/`](m1-results/) and the model in
+[`m1-model.svg`](m1-model.svg). Read that README first.
+
+**Code added for M1.** `flock/fpv.py` (first-person strip), `flock/meadow/` (world, sim,
+drives, views, scripted flock, viewer, rollout logger), `flock/wm.py` (world model with
+interoception and reward head), `flock/ac.py` (actor-critic in imagination); scripts
+`m1_watch`, `m1_profile`, `m1_log`, `m1_wm_train`, `m1_wm_surprise`, `m1_wm_probe`, `m1_agent`,
+`m1_agent_report`. Tests: `tests/test_meadow.py`, `test_wm.py`, `test_ac.py`, `test_fpv.py`
+(CPU: `JAX_PLATFORMS=cpu pytest -q tests/test_meadow.py tests/test_wm.py tests/test_ac.py`).
+
+**Next, agreed with the owner.** Run the world model and the policy together from birth on the
+sheep's own behaviour (no scripted pretraining), with a curiosity reward from the disagreement
+of five next-state heads (Plan2Explore). Details and reasoning in the README's § Next.
+
+**Gotchas added.** Data and checkpoints live on the WSL filesystem (`~/flock2_data/`), not in
+git; `runs/` is git-ignored, so results worth keeping are copied to `docs/flock-2/m1-results/`.
+Compile the training steps before the first acting step in a long-running loop, or XLA's
+autotuning can run out of GPU memory. Several shells mangle heredocs containing non-ASCII text;
+write patch scripts to files instead. `pkill -f` with a plain pattern from `wsl bash -c` kills
+its own shell: use a bracket pattern (`m1_agen[t]`).
+
 ## Update — end of the first local GPU session (2026-10-23)
 
 **M0 is closed.** Result and every grid: `m0-toy-README.md` (§ Result, grids 1–9); summary in

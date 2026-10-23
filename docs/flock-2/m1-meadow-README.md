@@ -1,6 +1,18 @@
-# Milestone 1 — the meadow: step 1 (sim, first-person views, viewer, scripted flock)
+# Milestone 1 — the meadow
 
 Plan: [`03-implementation-plan.md`](03-implementation-plan.md#milestone-1--meadow-drives-and-world-model).
+Model diagram: [`m1-model.svg`](m1-model.svg). Logs, evaluation numbers and figures behind every
+result here: [`m1-results/`](m1-results/) (copied from the local runs, which are not in git).
+
+| Step | Status (2026-10-24) |
+| --- | --- |
+| 1. Meadow sim, first-person views, viewer, scripted flock | Done. |
+| 2. Logged rollouts, world-model pretraining | Done; surprise not yet selective. |
+| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. **Three agent runs, no useful learned behaviour yet**; cause found (§ Step 3); next approach agreed with the owner. |
+| 4. Behavioural and stability evaluation | Not started. |
+
+# Step 1 — sim, first-person views, viewer, scripted flock
+
 This step builds the world the rest of M1 learns in; nothing is learned yet.
 
 ## What exists (`flock/meadow/`)
@@ -103,3 +115,209 @@ Against the plan's world-model criteria *(judgement)*: small distant objects are
 recall ~0.5 at long horizons); surprise rises on genuine novelty but is not yet *selective* — the
 routine peaks are close to the teleport. Not blocking for step 3; worth revisiting with more data
 (the plan's 10⁷ steps) and a longer run before M1's evaluation.
+
+Evidence: `m1-results/wm_run1_log.jsonl`, `wm_run1_open_loop_020000.png` (three held-out
+sequences; actual strip above, imagined below, at 1, 4, 16 and 32 steps ahead),
+`surprise.json`, `kl_trace.png`, `kl_teleport.png`.
+
+# Step 3 — drives, interoception, reward and the actor-critic (2026-10-23/24)
+
+Summary: the drives work (the scripted flock keeps them up); the world model learns to feel and
+predict them and, after two changes, predicts the reward accurately (15-step sum correlation 0.90,
+unbiased). The actor-critic has not yet learned useful behaviour in three runs. A probe shows why:
+pretrained only on the scripted flock, the world model believes drinking raises hydration
+anywhere, because the scripted sheep only ever drink at the water's edge — and the actor exploits
+that belief faster than online training corrects it. The agreed next step is to learn from birth
+on the sheep's own behaviour with a curiosity drive (§ Next).
+
+## Drives (`flock/meadow/drives.py`)
+
+Five internal levels per sheep, set-point 1, clipped to [0, 1.15] (overshoot allowed, and counted
+as deviation, so over-eating is penalised):
+
+| Level | Falls per step | Restored by |
+| --- | --- | --- |
+| energy | 0.0006 | grazing: +0.012 per bite at full grass |
+| hydration | 0.0008 | drinking within one tile of water: +0.04 per step |
+| warmth | 0.0002 by day; at night 0.0016 in the open, 0.0007 within 3 tiles of a tree or hut | resting only: +0.003, +0.006 beside cover |
+| social | — (instantaneous, not a store) | number of other sheep in view (in range, outside the blind wedge) / 8, capped at 1 |
+| interest | 0.0004 | entering an 8×8-tile cell of the meadow: +0.08 / √(1 + previous visits by this sheep), blind to other sheep |
+
+The drive is the L4 norm of the deviations from the set-points, D = (Σ|1 − hᵢ|⁴)^¼ — close to
+the worst deficit, so topping up a small deficit is worth less than fixing the largest one (the
+non-substitutable norm the survey calls for, after
+[Keramati & Gutkin 2014](https://elifesciences.org/articles/04811)). Rates were chosen so that a
+sensible flock can keep up with them over the 1,200-step day *(judgement)*: the scripted flock,
+given hysteresis (top up to 0.95 once started), holds energy ~0.75, hydration ~0.65, warmth
+~0.95, social ~0.9, interest ~0.85 indefinitely. Tests: `tests/test_meadow.py` (reward signs,
+night chill in the open vs cover, social counts only sheep in view, interest pays for new cells).
+
+**Reward.** First Keramati & Gutkin's drive reduction, r = 100·(D_t − D_{t+1}) (the ×100 as in
+the deep-HRRL work the research notes cite). **Now r = −D_{t+1}** (owner's decision after agent
+run 1, below). The two rank policies the same way: Keramati & Gutkin prove that maximising
+discounted drive reduction equals minimising discounted drive, and directly
+Σₜ γᵗ(D_t − D_{t+1}) = D₀ − ((1 − γ)/γ)·Σ_{t≥1} γᵗ D_t. But drive reduction carries the signal at
+a scale of (1 − γ) ≈ 0.003, is flat once the levels bottom out (nothing more can be lost), and its
+per-step value is dominated by rare spikes when a sheep drinks or grazes.
+`drives.drive_reduction` keeps the old form.
+
+Rollouts were re-logged with the levels and the reward: `~/flock2_data/m1_rollouts_drives`, four
+shards as in step 2 plus `levels` (float16) and `reward` per step; shard 3 held out. The trainer's
+`--reward_from_levels` recomputes the reward from the logged levels with the current formula.
+
+## World model with interoception and a reward head (`flock/wm.py`)
+
+![One sheep's brain: world model, heads, actor-critic and the planned curiosity ensemble](m1-model.svg)
+
+Additions to step 2's model:
+
+- **Interoception in**: the five levels pass through a linear layer (5 → 512) added to the
+  strip's embedding before the posterior, so the model's state includes how the sheep feels.
+- **Interoception out**: an MLP head (896 → 384 → 5) reconstructs the levels from the state
+  (h, z), weighted 1,000 on the summed squared error (the strip's cross-entropy sums 16,384
+  pixels, ~3,600 nats per frame).
+- **Reward head** (DreamerV3's form, [Hafner et al. 2023](https://arxiv.org/abs/2301.04104)): an
+  MLP (896 → 384 → 255) giving a categorical over 255 bins evenly spaced in symlog space on
+  [−20, 20], trained by cross-entropy against the two-hot encoding of symlog(reward), output layer
+  zero-initialised; the prediction is symexp of the expected bin. The state at t+1 predicts the
+  reward of the step taken at t.
+
+Each fine-tune starts from the previous checkpoint (`wm.load_into` loads the matching parameters;
+new parts start fresh); batches of 4 × 64 steps, Adam 1e-4. Evaluation is step 2's open-loop test
+(observe 16, imagine 48 from the true actions) plus the reward the actor-critic would see: the
+imagined reward summed over the next 15 steps against the true sum.
+
+| Run | What changed | Steps | Level error h1 / h48 | Reward: 1-step corr. / 15-step-sum corr. / 15-step mean true vs predicted | Pixel acc. h1 / h48 |
+| --- | --- | --- | --- | --- | --- |
+| run2 | + interoception; reward computed from the predicted levels through the drive formula | 10,000 | 0.064 / 0.12 | 0.01 / **0.28** / −0.07 vs **−3.45** | 0.87 / 0.59 |
+| run3 | + reward head, drive-reduction reward | 10,000 | 0.043 / 0.11 | 0.57 / 0.75 / −0.07 vs −0.22 | 0.87 / 0.59 |
+| run4 | reward head retrained on r = −D | 6,000 | 0.043 / 0.10 | 0.93 / **0.90** / −9.44 vs **−9.49** | 0.88 / 0.60 |
+
+(run2's row is from `--eval_only 64`, 64 held-out windows; runs 3 and 4 evaluate 64 windows each
+time. Level error is the mean absolute error per drive. Logs: `m1-results/wm_run{2,3,4}_log.jsonl`;
+`wm_run4_open_loop_006000.png`.) Reading *(judgement)*: computing the reward from predicted levels
+fails because small level errors swamp the tiny per-step changes the reward is made of, and the
+imagined levels drift (the model imagined the drives always worsening); a direct reward head
+removes most of the bias; −D is a smooth function of the felt levels and far easier to predict
+than drive-reduction spikes. Vision is unaffected by the additions.
+
+## Actor-critic in imagination (`flock/ac.py`)
+
+DreamerV3's recipe ([Hafner et al. 2023](https://arxiv.org/abs/2301.04104)):
+
+- Actor and critic: separate MLPs on the model state (896 → 256 → 256 → out, layer norm, SiLU,
+  zero-initialised output; ~0.3 M parameters each). Actor: categorical over the nine actions
+  with a 1 % uniform mix. Critic: scalar value; a slow copy (EMA 0.98) gives the bootstrap
+  targets and a regulariser.
+- Imagination: from model states inferred on real sequences, roll the prior forward H steps with
+  actions sampled from the actor; rewards from the reward head. The world model is frozen here.
+- Targets: λ-returns (γ 0.997, λ 0.95) bootstrapped by the slow critic. Actor: REINFORCE on
+  advantages divided by max(1, S), S an EMA (0.99) of the 5th–95th percentile spread of the
+  returns, plus an entropy bonus. Adam 3e-5, gradient clip 100.
+- Tests (`tests/test_ac.py`): λ-returns against a hand computation; an update changes only the
+  agent, never the world model.
+
+## The online loop (`scripts/m1_agent.py`)
+
+Every sheep in every meadow acts from the shared actor, from its own model state (h, z) updated
+each step with its strip and its levels (a per-sheep posterior filter, as the world model runs in
+training). Each iteration: act for `--collect` steps; push the logged sheep's sequences to a
+replay; `--wm_steps` world-model updates mixing online sequences with scripted shards (so the
+model keeps what it learned there); `--ac_steps` actor-critic updates from start states inferred
+on online sequences. Logged per iteration: mean reward, levels, the day and night action mix and
+the losses (`scripts/m1_agent_report.py` summarises a run). The update steps are compiled before
+the first acting step (XLA autotuning ran out of GPU memory otherwise).
+
+## Agent runs
+
+Flock of 40 per meadow, 8 sheep per meadow logged to the replay.
+
+| Run | Reward (world model) | Per iteration | Horizon | Entropy | Outcome |
+| --- | --- | --- | --- | --- | --- |
+| 1 | drive reduction (run3) | 16 meadows × 64 steps; 16 WM updates (2 of 4 sequences online), 16 AC | 15 | 3e-4 | **Collapse.** By iterations 91–100, 83 % of actions are *drink*, the same by day and night; water, warmth and interest at 0; entropy 2.2 → 0.6. Stopped at 116. |
+| 2 | −D (run4) | as run 1 but 48 WM updates (3 of 4 online) | 15 | 3e-3 | **No learning.** Policy stays uniform (entropy 2.196 → 2.183 over 530 iterations, 45 min) while every drive runs down; reward −1.15 → −1.34 per step. The return spread S ≈ 11.6 dwarfs any action's effect. |
+| 3 | −D (run4) | 4 meadows × 16 steps; each logged sheep's last 64 steps enter the replay every iteration (sliding window); 64 WM (3 of 4 online), 64 AC | 32 | 3e-4 | **Collapse again.** *Drink* 0.12 → 0.72 of actions by iteration 50; water 0.63 → 0.14; imagined reward −0.63 against real −0.91. Stopped at 52. |
+
+Per-iteration logs: `m1-results/agent_run{1,2,3}_log.jsonl`.
+
+## Why: the probe (`scripts/m1_wm_probe.py`)
+
+Fresh daytime meadows (8 × 40 sheep, none of them at the water's edge), scripted flock warmed up
+300 steps; each sheep's model state is inferred from its last 16 strips and levels, then the model
+imagines 8 steps of repeating one action while the simulator really does it from the same state:
+
+| Model | Action | Δ hydration predicted / true | Δ energy predicted / true | Mean reward predicted / true |
+| --- | --- | --- | --- | --- |
+| run4 (pretrained) | drink | **+0.160** / −0.006 | −0.002 / −0.005 | **−0.507** / −0.550 |
+| | graze | +0.025 / −0.006 | +0.061 / +0.071 | −0.532 / −0.547 |
+| | stop | +0.026 / −0.006 | +0.033 / −0.005 | −0.538 / −0.550 |
+| | walk | −0.010 / −0.006 | −0.007 / −0.005 | −0.574 / −0.550 |
+| agent run 3 after 50 iterations | drink | +0.032 / −0.006 | +0.019 / −0.005 | −0.533 / −0.550 |
+| | graze | −0.032 / −0.006 | +0.071 / +0.071 | −0.552 / −0.547 |
+| | stop | −0.035 / −0.006 | +0.032 / −0.005 | −0.560 / −0.550 |
+| | walk | −0.023 / −0.006 | −0.007 / −0.005 | −0.560 / −0.550 |
+
+(`m1-results/probe_drink.json`.) The pretrained model believes drinking on dry ground raises
+hydration by half of what drinking at water would give (+0.04 per step, +0.32 over 8 steps at
+these sheep's mean hydration of 0.50); drinking is the action it rates best, while in reality it is worth no more than standing
+still. Online training shrinks the false belief but has not removed it after 50 iterations, and
+*drink* still rates best. (It also believes stopping raises energy.) The cause is the data, not
+the model: in the scripted rollouts *drink* happens only at the water's edge, so "drinking raises
+hydration" and "drinking at water raises hydration" cannot be told apart. Run 2 hid the problem
+only because its high entropy kept the policy from acting on anything.
+
+## Next — agreed with the owner (2026-10-24)
+
+The owner's framing: in an animal, world model and behaviour are learned together from its own
+experience, with the reward circuitry built in rather than learned. The sheep already match this
+in two respects: the drives are a fixed, internal reward (homeostatic regulation,
+[Keramati & Gutkin 2014](https://elifesciences.org/articles/04811)), and the world model learns
+only by predicting its own senses, with no reward of its own; what is learned about reward is its
+*prediction* (the critic, the reward head), as in the reward-prediction-error account of dopamine
+([Schultz, Dayan & Montague 1997](https://www.science.org/doi/10.1126/science.275.5306.1593)). The
+departure is the scripted pretraining, which acts as an external teacher and is the source of the
+bug.
+
+The plan *(judgement; not yet built or tested)*:
+
+1. **Learn from birth.** Drop scripted pretraining (or keep only a short "infancy"); world model
+   and policy learn together from the sheep's own behaviour.
+2. **A curiosity drive from the world model's own uncertainty.** An ensemble of five small heads,
+   each predicting the next model state from (h, z, action) — dashed in the diagram — trained on the
+   same data from different random initialisations; the sheep is rewarded where they disagree
+   (Plan2Explore, [Sekar et al. 2020](https://arxiv.org/abs/2005.05960)). Where data is plentiful
+   they agree; where it is missing (drinking on dry ground) each extrapolates in its own way.
+   Because each head predicts a *distribution*, genuinely random events (another sheep's wandering)
+   give agreement, not reward — the guard against the "noisy TV" trap of rewarding raw prediction
+   error. The first try of something new pays most, a confirming retry less, a mastered behaviour
+   nothing. Fallback if the heads are awkward: Monte-Carlo dropout, one model run several times
+   with random units silenced, a recognised cheap approximation to an ensemble
+   ([Gal & Ghahramani 2016](https://arxiv.org/abs/1506.02142)).
+3. **Later, if disagreement chases the wrong things: learning progress** — reward the improvement
+   in prediction, not its error, so unlearnable noise pays nothing and a mastered thing stops
+   paying (the owner's proposal; established as compression progress,
+   [Schmidhuber 2010](https://people.idsia.ch/~juergen/ieeetamd2010.pdf), and learning-progress
+   motivation, [Oudeyer, Kaplan & Hafner 2007](https://ieeexplore.ieee.org/document/4141061)).
+
+Considered and set aside: measuring how much the output changes under small noise on the input
+image — a model can be smooth and confidently wrong, as this one is about drinking, and the
+unknown here is the *action*, not the image. The current location-novelty interest drive stays
+(it is part of the homeostatic reward); the disagreement reward is the first intrinsic term
+outside the drives, which the survey warns can shift set-points (the "palatability" pathology), so
+its weight is a measured choice *(judgement)*.
+
+## Reproduce
+
+```bash
+python scripts/m1_log.py --out ~/flock2_data/m1_rollouts_drives   # ~40 s; reward logged with today's -D
+python scripts/m1_wm_train.py --data ~/flock2_data/m1_rollouts_drives --intero --reward --reward_from_levels \
+    --init ~/flock2_data/m1_wm/run3_reward/model.pkl --out ~/flock2_data/m1_wm/run4_negdrive --steps 6000 --batch 4
+python scripts/m1_agent.py --wm ~/flock2_data/m1_wm/run4_negdrive/model.pkl --out ~/flock2_data/m1_agent/run3 --iters 1000
+python scripts/m1_agent_report.py ~/flock2_data/m1_agent/run3/log.jsonl
+python scripts/m1_wm_probe.py --wm ~/flock2_data/m1_wm/run4_negdrive/model.pkl ~/flock2_data/m1_agent/run3/wm.pkl
+python scripts/m1_watch.py --agent ~/flock2_data/m1_agent/run3 --out runs/m1/watch_agent
+```
+
+World-model runs 2 and 3: `--intero --init <run1>` and `--intero --reward --init <run2>`, 10,000
+steps each. Agent runs 1 and 2 used the defaults in force at commits 13d9d4c/bfcd156 and 59d2d1b
+(settings in the table above); run 3 the defaults at 10a72ed.

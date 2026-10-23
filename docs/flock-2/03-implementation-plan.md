@@ -164,6 +164,16 @@ worth noting: the pixel sender trained fine.
 *Revised 2026-10-23 after M0 closed and the owner adopted the first-person view (Q9 addendum);
 movement, the action set and the salt lick's role decided by the owner the same day.*
 
+**Status (2026-10-24).** Steps 1–2 done; step 3 in progress. Results, numbers and the decisions
+below are recorded in [`m1-meadow-README.md`](m1-meadow-README.md). Decisions since the
+revision, all the owner's: the reward is −drive rather than drive reduction (same optimum, far
+stronger signal); the world model predicts reward with a DreamerV3 reward head; scripted
+pretraining is to be replaced by learning from birth with a curiosity drive from world-model
+disagreement, because pretraining on the scripted flock taught the model that drinking works
+anywhere and the actor exploited it. Not yet built from the list below: the trait embedding,
+allelomimetic coupling of the social drive, the visibility record and information-gap metric,
+the live viewer window.
+
 **Goal.** A single flock (20–40 sheep) on the 128×128 meadow with grazing patches, water, salt
 lick, trees and huts and a day/night cycle, driven by homeostatic drives and a shared RSSM world
 model; it looks alive to a viewer, its "expected view" and surprise are displayable, and the
@@ -193,9 +203,11 @@ from the start. No communication yet.
   interest (fear added in M2); continuous decay; non-substitutable norm; over-satiation
   penalties; warmth decays faster at night and in the open and recovers only while resting;
   social set-point saturating at ~6–10 visible conspecifics with allelomimetic coupling to
-  neighbour state changes.
+  neighbour state changes. *(Built: five drives, L4 norm, saturation at 8 visible; reward
+  changed to −drive on 2026-10-24 — see the M1 README.)*
 - *Curiosity*: hashed counts over static-world features only, routed into the interest drive;
-  blind to other sheep.
+  blind to other sheep. *(Built as visit counts over 8×8-tile cells. Planned addition,
+  2026-10-24: a reward for world-model ensemble disagreement, Plan2Explore-style.)*
 - *Information gaps, built in and logged from day one* (Q9 addendum, item 4a). Occlusion,
   the blind wedge, the range limit and night already create them; M1 measures them: per step, a
   visibility record of which sheep see which resources and which other sheep, and an
@@ -209,6 +221,9 @@ from the start. No communication yet.
   16×4 bottom map); DreamerV3 learned from first-person DMLab views
   ([Hafner et al. 2023](https://arxiv.org/abs/2301.04104)). Pre-trained self-supervised on logged
   rollouts from scripted sheep, then actor-critic in imagination with short horizons.
+  *(Built: five stride-2 stages to a 2×8 bottom map, 8.7 M parameters with the interoception and
+  reward heads; diagram [`m1-model.svg`](m1-model.svg). Scripted pretraining turned out to teach
+  false action effects — to be replaced by learning from birth.)*
 - *Replay*: a 256×64 palette frame is 8 KB at 4 bits per pixel (4× the old 64×64 estimate), so
   10⁶ steps are 8 GB: disk-backed replay from the start.
 - *Viewer*: a desktop window drawing the meadow isometrically from the state stream, with a
