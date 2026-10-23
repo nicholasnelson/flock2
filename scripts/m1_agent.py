@@ -50,7 +50,7 @@ def act_and_step(world, agent, state, mem, key, rec_idx):
     z = wm._sample(world.posterior(h, embed), k1)
     actions = agent.act(ac.feat_of(h, z), k2)
     new = sim.step(state, actions)
-    rec = dict(view=views[rec_idx], action=actions[rec_idx], levels=state.flock.levels[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward)
+    rec = dict(view=views[rec_idx].astype(jnp.uint8), action=actions[rec_idx], levels=state.flock.levels[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward)
     return new, (h, z, actions), rec
 
 
@@ -125,6 +125,14 @@ def main():
     states = states._replace(t=jax.random.randint(k, (a.meadows,), 0, sim.DAY))
     mems = (jnp.zeros((a.meadows, a.sheep, wm.DETER)), jnp.zeros((a.meadows, a.sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((a.meadows, a.sheep), jnp.int32))
     rec_idx = jnp.arange(a.record)
+    # compile (and autotune) the two update steps before acting, while the GPU is empty
+    while replay.n < 4:
+        replay.add(*(np.concatenate([x, x]) for x in _wmt.sample(scripted, rng, 2, a.collect)))
+    pk, ak, lk, rk = replay.sample(rng, 4)
+    key, k1, k2 = jax.random.split(key, 3)
+    _wmt.train_step(world, wm_opt, pk, ak, lk, rk, k1)
+    ac.train_step(world, agent, ac_opt, *start_states(world, pk, ak, lk, k1), k2)
+    replay.n = replay.i = 0
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for it in range(1, a.iters + 1):
@@ -132,8 +140,11 @@ def main():
         states, mems, recs = collect(world, agent, states, mems, k, a.collect, rec_idx)
         # to the replay: (T, B, R, ...) -> (B*R, T, ...)
         v = np.asarray(recs["view"]).transpose(1, 2, 0, 3, 4).reshape(-1, a.collect, wm.H, wm.W)
+        packed = pack(v)
+        del v
         seq = lambda x: np.asarray(x).swapaxes(0, 1).swapaxes(1, 2).reshape((-1, a.collect) + x.shape[3:])
-        replay.add(pack(v), seq(recs["action"]), seq(recs["levels"]), seq(recs["reward"]))
+        replay.add(packed, seq(recs["action"]), seq(recs["levels"]), seq(recs["reward"]))
+        del recs["view"]
         # world model
         wm_aux = []
         for _ in range(a.wm_steps):
