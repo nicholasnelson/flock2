@@ -87,7 +87,8 @@ def evaluate(model, shard, step, out, key, n=16):
     packed = np.stack([v[i, o : o + CONTEXT + HORIZON] for i, o in idx])
     acts = np.stack([a[i, o : o + CONTEXT + HORIZON] for i, o in idx]).astype(np.int32)
     levels = np.stack([lv[i, o : o + CONTEXT + HORIZON] for i, o in idx]).astype(np.float32) if lv is not None else np.zeros((n, CONTEXT + HORIZON, 0), np.float32)
-    truth, pred, lv_pred, lv0 = (np.asarray(x) for x in open_loop(model, packed, acts, levels, key))
+    chunks = [[np.asarray(x) for x in open_loop(model, packed[c : c + 16], acts[c : c + 16], levels[c : c + 16], jax.random.fold_in(key, c))] for c in range(0, n, 16)]
+    truth, pred, lv_pred, lv0 = (np.concatenate(xs) for xs in zip(*chunks))
     res = {"step": step}
     if lv_pred.shape[-1]:
         from flock.meadow import drives as D
