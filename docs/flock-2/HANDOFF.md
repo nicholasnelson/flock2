@@ -1,9 +1,54 @@
-# Handoff to the local (GPU) session
+# Handoff
+
+## Update — end of the first local GPU session (2026-10-23)
+
+**M0 is closed.** Result and every grid: `m0-toy-README.md` (§ Result, grids 1–9); summary in
+the plan's M0 section. In one line: sheep reliably learn to communicate with drawings; without
+a resemblance reward the drawings are an arbitrary but consistent code, not pictures.
+
+**What changed since the cloud handoff below**
+
+- World: isometric only for real work, now **16×8 px tiles, 128×128 view** (16 tiles across),
+  **seven referent types** (salt-lick cube, pine, star flower, fox, hut, pond, mushroom), six
+  sprite variants each, two held out for evaluation. Art: `flock/sprites_iso.py`; mocks in
+  `flock/art/`. The top-down renderer stays at 64×64 as the old baseline.
+- Drawing: black 2 px strokes drawn at 32×32 (the drawing's size in the view), pen-lift +
+  length cost with a delayed start, at least one stroke, an on/off stroke gate. Reading
+  channel (`game.transmit`): re-centring, jitter, 90° rotation of ground stamps, clutter,
+  reduced resolution. Config defaults are still the old ones; the M0 closing cells
+  (`final4_*`, `final7_*` in `scripts/m0_grid.py`) are the settings to carry forward.
+- Measurement: `flock/toy/examiner.py`, an independent outline-literate classifier trained once
+  per world (cached in `runs/examiner/`); every iso run saves `drawings.npz` and is graded;
+  `scripts/m0_examine.py` re-grades saved drawings.
+- Design: Q9 addendum (first-person billboard view as a ~300° strip, look-down reading of ground
+  marks, steps toward language), agreed with the owner for M1+.
+- Spike (not wired in): `flock/fpv.py`, a first-person cylindrical renderer, with
+  `scripts/bench_fpv.py` comparing its throughput with the isometric view — the benchmark the
+  addendum asks for before adopting it.
+
+**Gotchas learned here**
+
+- JAX CUDA wheels are Linux-only: run under WSL2 (`~/.venvs/flock2`, uv Python 3.12) against
+  the checkout via `/mnt/c/...`; `XLA_PYTHON_CLIENT_PREALLOCATE=false`.
+- Run **one GPU job at a time**: four concurrent processes crashed a grid with a CUDA error.
+- **Directory names are case-insensitive** on `/mnt/c`: grid cell names must differ by more than
+  case (the grid script now asserts it).
+- GPU training is **not bit-reproducible**: the same seed can draw differently; judge by seeds.
+- Look at galleries before numbers: every cheat found in M0 (dot constellations, faint strokes,
+  blank signs, position codes, a layout cue from touching target squares) was spotted there.
+
+**Next** (owner's direction): the first-person renderer benchmark, then M1 (meadow, drives,
+world model) on whichever view wins, with information gaps (occlusion, the blind wedge) built
+in from the start.
+
+---
+
+The original handoff from the cloud session follows, kept for history.
 
 Written at the end of the cloud planning/prototyping session, 2026-10-22. Branch:
 `claude/compassionate-babbage-jtl1o1`. Everything below is pushed.
 
-## Where things stand
+## Where things stood (2026-10-22)
 
 **Docs** (`docs/flock-2/`): research notes (9 topics, cited), survey, design-question
 recommendations (Q1–Q10), staged plan (M0–M8), M0 run guide. Read `README.md` →

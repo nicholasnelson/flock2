@@ -143,6 +143,20 @@ view rendering by gather, rasteriser) is first built and profiled.
 perceptual-loss weight all become fixed inputs to M4, and the ablation is a publishable result
 because it does not exist in the literature.
 
+**Result (closed 2026-10-23; full account in [`m0-toy-README.md`](m0-toy-README.md#result-closed-2026-10-23)).**
+*Used*: pass, robustly, in every design tried. *Shared-encoder hypothesis*: not supported at
+this scale — without a resemblance reward the drawings are an arbitrary but consistent code.
+*Iconic*: not met by an independent, outline-literate examiner; a resemblance loss only raises
+the in-training judge it is trained against. *Readable*: not tested with people (the examiner
+predicts a shortfall). What became fixed inputs to M4 instead: the isometric 16×8-tile world
+and seven-referent sprite set; **the medium** (black fixed-width strokes, pen-lift + length cost
+with a delayed start, at least one stroke, an on/off gate; a reading channel with re-centring,
+jitter, rotation of ground marks, clutter and reduced resolution), each closing a cheat found in
+M0; the shared encoder (it costs nothing and communication works through it); and **no
+resemblance reward by default** — the owner's framing after review: the point is that the sheep
+communicate, not that they are coached to draw pictures. Deviation from the plan's prediction
+worth noting: the pixel sender trained fine.
+
 ---
 
 ## Milestone 1 — meadow, drives and world model

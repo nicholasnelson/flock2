@@ -5,6 +5,46 @@ metrics, gallery). Plan and success criteria: [`03-implementation-plan.md`](03-i
 Design decisions it tests: Q2 (action space), Q8 (perception scale), and the shared-encoder
 hypothesis.
 
+## Result (closed 2026-10-23)
+
+Measured against the plan's criteria
+([`03-implementation-plan.md`](03-implementation-plan.md#milestone-0--the-toy-drawing-game)),
+on the isometric 128 × 128 world, details in the grids below:
+
+- **Used — pass.** In every design tried (nine grids, colour and black ink, bubbles and stamps,
+  four and seven referent types, with and without every pressure) the drawings are causally
+  used: accuracy well above chance, blank drawings at chance, swapped drawings below chance.
+  Without any encouragement: 0.77 on held-out variants with four types (bubble), 0.65 with
+  seven (grid 9).
+- **Shared-encoder hypothesis — not supported at this scale.** Without a resemblance reward the
+  shared encoder does not make drawings iconic (grids 1–2: judge probe at chance; grid 9:
+  independent examiner at chance). Weak, partial exceptions: black-only bubble drawings at
+  ~2× chance on the judge (grid 3) and shape-alike types sharing glyphs (grids 8–9).
+- **Iconic — not met by an independent measure.** A resemblance loss raises the in-training
+  judge's score, but an independent, outline-literate examiner trained only on the world's
+  sprites finds the drawings unrecognisable (grids 7–9). Iconicity appears only as single
+  marks (the fox as a long low line; the tree as tall strokes in some runs) and as coarse
+  shape classes.
+- **Readable — not tested with people.** The examiner's results suggest a quiz would fall short
+  of the 35 % target, so the quiz was not run.
+
+What carries forward (to M4's ground marks): **the medium** — black fixed-width lines with a
+pen-lift + length cost (delayed), at least one stroke, an on/off stroke gate, and a channel that
+re-centres, jitters, rotates ground marks, and adds clutter and distance — because each closes a
+cheat found here (dot constellations, faint strokes, blank signs, position codes, dot codes).
+Rewards for resemblance stay **off** by default (available as an optional, fading bootstrap if
+legible early marks are ever wanted for the art). Also: the independent examiner as a fixed
+yardstick, and the training dynamics (delay the ink cost; with Adam even a tiny consistent cost
+switches hard-gated strokes off before reading starts).
+
+The marks the sheep make will be a sheep *script* — consistent, causally used, arbitrary to us
+— which is the normal endpoint of graphic communication in people too: drawings start iconic
+and drift toward symbols through use
+([Fay et al. 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2607338/);
+[Garrod et al. 2007](https://onlinelibrary.wiley.com/doi/10.1080/03640210701703659)). For an
+audience, what a mark means can be shown by the viewer from telemetry rather than by bending
+what the sheep draw *(judgement)*.
+
 ## Setup (desktop, RTX 4080)
 
 ```bash
@@ -581,3 +621,37 @@ What this shows:
    must when pairs share a glyph.
 
 Galleries: `runs/m0/grid_seven_galleries.png`, `runs/m0/seven_long_bubble/gallery.png` (local).
+
+### Grid 9 — M0's closing result: the medium only, no encouragement (2026-10-23)
+
+After stepping back with the owner: the brief's key idea is a hypothesis to test — that iconic
+drawings *emerge* because received drawings go through the same encoder as the world — not a
+requirement to make drawings iconic. Rewards for resemblance (the resemblance loss, the
+invariant judge, a recognisability loss) tell the sheep what to draw and make any resemblance
+uninformative about that hypothesis. So the closing run keeps only **the medium**: the physics
+of drawing (black 2 px lines, pen-lift + length cost delayed 1,500 steps, at least one stroke)
+and of reading (re-centring, jitter, stamp rotation, clutter, reduced resolution), varied
+objects with held-out evaluation, and **no encouragement** (commit `5468382`, cells
+`final4_*`/`final7_*`). Seven types at 3× the game steps. Three seeds.
+
+| cell | acc (held-out) | acc_seen | acc_blank | acc_swapped | ink | examiner (as drawn) | chance |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 4 types, bubble | 0.77±0.04 | 0.82±0.04 | 0.24±0.02 | 0.13±0.00 | 59.4 | 0.32±0.08 | 0.25 |
+| 4 types, stamp | 0.58±0.26 | 0.61±0.26 | 0.18±0.03 | 0.14±0.03 | 35.7 | 0.15±0.07 | 0.25 |
+| 7 types, bubble | 0.65±0.07 | 0.73±0.05 | 0.25±0.02 | 0.23±0.03 | 41.3 | 0.13±0.04 | 0.14 |
+| 7 types, stamp | 0.59±0.09 | 0.64±0.09 | 0.24±0.02 | 0.22±0.01 | 38.3 | 0.10±0.01 | 0.14 |
+
+Game chance is 0.25 throughout (four candidates on screen). One seed of 4-type stamp failed
+outright (it draws only the forced dot; 0.21); the other two reach 0.73 and 0.79.
+
+1. **Communication emerges without any encouragement**, at about the level reached with it
+   (grids 5–8), causally used (blank at chance, swapped below it), and carries over to held-out
+   variants with a 5–8 point gap.
+2. **The drawings are an arbitrary but consistent code** *(judgement, galleries)*. The examiner is
+   at chance except a small signal in 4-type bubble mode (0.32; salt-lick and fox drawings
+   partly recognised). The tendency to give shape-alike types alike glyphs persists (tree and
+   flower share a hatching texture in 4-type bubble mode; pond and fox share a compact star in
+   7-type stamp mode).
+3. **Seed fragility remains**: about one run in six fails to start communicating.
+
+Galleries: `runs/m0/grid_final_galleries.png` (local).
