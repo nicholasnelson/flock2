@@ -84,3 +84,18 @@ def test_generated_meadow_and_scripted_flock_run():
     p = np.asarray(st2.flock.pos)
     assert np.isfinite(p).all() and (p > 0).all() and (p < N_TILES).all()
     assert int(st2.t) == 50
+
+
+def test_pack_roundtrip_and_a_tiny_rollout(tmp_path):
+    from flock.meadow import rollouts
+
+    v = np.random.randint(0, 16, (3, 64, 256)).astype(np.uint8)
+    assert (np.asarray(rollouts.unpack(rollouts.pack(v))) == v).all()
+    n = rollouts.write_rollout(str(tmp_path), 0, seed=0, meadows=2, sheep=6, record=2, steps=16, warm=4, chunk=8)
+    assert n == 2 * 2 * 16
+    views = np.load(tmp_path / "shard_0000.views.npy")
+    acts = np.load(tmp_path / "shard_0000.actions.npy")
+    assert views.shape == (4, 16, 64, 128) and acts.shape == (4, 16)
+    full = np.asarray(rollouts.unpack(views))
+    assert full.max() < 16  # palette indices
+    assert acts.max() < 9
