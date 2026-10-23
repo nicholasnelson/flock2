@@ -11,6 +11,7 @@ The grid tests, per the plan:
   7. (128 world) fixed-width lines, sweeping the cost per unit length
   8. (128 world) instance variation x channel jitter x invariant judge, lines at cost 0.002
   9. (128 world) anti-blank options x bubble/stamp, with centring and stamp rotation
+ 10. (128 world) clutter x reduced resolution in the channel, graded by the independent examiner
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -86,13 +87,20 @@ for _mode in ("bubble", "stamp"):
     for _tag, _opts in [("none", {}), ("min1", dict(min_strokes=1)), ("bw005", dict(blank_weight=0.05)), ("bw02", dict(blank_weight=0.2)), ("min1bw005", dict(min_strokes=1, blank_weight=0.05))]:
         CELLS[f"tune_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, **_opts)
 
+# Why not dot codes: the reader sees each drawing among random specks (clutter, like dirt) and/or
+# at a quarter of the resolution (distance), so the smallest marks stop being readable. Graded by
+# the independent examiner. min_strokes=1 from here on (grid 6).
+for _mode in ("bubble", "stamp"):
+    for _tag, _opts in [("base", {}), ("clut", dict(clutter=6)), ("lowres", dict(lowres_p=0.5)), ("both", dict(clutter=6, lowres_p=0.5))]:
+        CELLS[f"dot_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, min_strokes=1, **_opts)
+
 
 # Cell names become directory names; on Windows (and /mnt/c under WSL) those are case-insensitive,
 # so two names differing only in case would share a directory and overwrite each other's files.
 assert len({n.lower() for n in CELLS}) == len(CELLS), "cell names must differ by more than case"
 
 
-KEYS = ["acc", "acc_seen", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink", "blank_frac"]
+KEYS = ["acc", "acc_seen", "acc_blank", "acc_swapped", "cic_kl", "judge_probe_acc", "judge_rank_acc", "own_probe_acc", "ink", "blank_frac", "examiner_acc_as_drawn", "examiner_acc_centred"]
 
 
 def main():

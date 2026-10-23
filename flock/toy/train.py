@@ -62,6 +62,8 @@ class Config:
     centre_glyph: bool = False  # the channel re-centres each drawing on its ink centroid (before jitter)
     rotate_stamps: bool = False  # in stamp mode, the channel turns each drawing by a random multiple of 90 degrees
     min_strokes: int = 0  # with hard_gate: at least this many strokes are always on (no blank drawings)
+    clutter: int = 0  # the reader sees this many random specks/short dashes added to each drawing (dirt)
+    lowres_p: float = 0.0  # probability the reader sees the drawing at 1/4 resolution (distance)
     blank_weight: float = 0.0  # penalty weight on drawings with less than blank_ink px of ink
     blank_ink: float = 8.0  # px of ink below which the blank penalty applies (one short stroke)
     pretrain_steps: int = 1500
@@ -206,7 +208,9 @@ def make_game_step(cfg: Config):
                 aux["blank"] = blank
                 loss = loss + cfg.blank_weight * blank
             if cfg.perceptual_weight > 0:
-                judged = game.transmit(fwd.canvas, jax.random.fold_in(key, 11), **game.channel_args(cfg))
+                # the judge sees the drawing as drawn (jitter only): centring or turning it would
+                # misalign it with the object it is compared with and make any ink a mismatch
+                judged = game.transmit(fwd.canvas, jax.random.fold_in(key, 11), jitter=cfg.jitter_px)
                 pl = game.perceptual_loss(judge, judged, world.to_onehot(ep.sender_view), ground, envs.probe_px(cfg, ep))
                 aux["perceptual"] = pl
                 loss = loss + cfg.perceptual_weight * pl
@@ -332,6 +336,20 @@ def train(cfg: Config) -> dict:
     key, k_gal = jax.random.split(key)
     export_run_gallery(model, cfg, k_gal)
     summary = {"config": dataclasses.asdict(cfg), "final": last_eval}
+    if cfg.renderer == "iso":
+        # Final drawings (held-out variants when there is variation), saved so any examiner can
+        # grade them later, and graded now by the independent examiner.
+        from flock.toy import examiner as X
+
+        key, k_d, k_x = jax.random.split(key, 3)
+        ep = envs.make_batch(cfg, k_d, 512, held_out=True)
+        fwd = game.forward(model, ep, k_d, cfg.opaque, hard=True)
+        alpha, types = np.asarray(fwd.canvas.alpha), np.asarray(ep.target_type)
+        np.savez_compressed(os.path.join(cfg.out_dir, "drawings.npz"), alpha=alpha.astype(np.float16), types=types, ink=np.asarray(fwd.canvas.ink))
+        exam = X.examine(X.get_examiner(log=log), alpha, types, k_x)
+        summary["examiner"] = exam
+        last_eval.update({k: v for k, v in exam.items() if not k.startswith("examiner_confusion")})
+        log({"phase": "examiner_grade", **exam})
     with open(os.path.join(cfg.out_dir, "summary.json"), "w") as f:
         json.dump(summary, f, indent=2)
     log_file.close()

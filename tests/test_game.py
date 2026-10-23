@@ -130,3 +130,19 @@ def test_transmit_centres_on_ink_and_rotates():
     rot = np.asarray(game.transmit(c, jax.random.PRNGKey(2), centre=True, rotate=True).alpha)
     shapes = {tuple(np.ptp(np.argwhere(r > 0.5), 0)) for r in rot}
     assert shapes <= {(0, 5), (5, 0)}  # a dash, either way round
+
+
+def test_transmit_clutter_and_lowres():
+    from flock.raster import Canvas
+
+    a = jnp.zeros((4, 32, 32)).at[:, 16, 4:28].set(1.0)  # a long line
+    c = Canvas(colour=jnp.full((4, 32, 32, 16), 1.0 / 16), alpha=a, ink=jnp.zeros((4,)))
+    cl = np.asarray(game.transmit(c, jax.random.PRNGKey(0), clutter=6).alpha)
+    assert (cl[:, 16, 4:28] > 0.99).all()  # the drawing is still there
+    extra = (cl > 0.5).sum((1, 2)) - 24
+    assert (extra > 6).all() and (extra < 6 * 16).all()  # plus a few small specks
+    lo = np.asarray(game.transmit(c, jax.random.PRNGKey(1), lowres_p=1.0).alpha)
+    assert lo.max() <= 0.5 + 1e-6 and lo[:, 16, 8:24].min() > 0.2  # the line survives as a soft trail
+    dot = jnp.zeros((1, 32, 32)).at[0, 17:19, 17:19].set(1.0)  # a 2 px dot, off the 4 px grid
+    lo_dot = np.asarray(game.transmit(Canvas(c.colour[:1], dot, c.ink[:1]), jax.random.PRNGKey(1), lowres_p=1.0).alpha)
+    assert lo_dot.max() <= 0.25 + 1e-6  # a dot becomes a faint smudge

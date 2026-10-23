@@ -59,15 +59,38 @@ def receive(model: Agents, receiver_base: jax.Array, canvas: Canvas, canvas_px: 
     return logits, rv
 
 
-def transmit(canvas: Canvas, key: jax.Array, jitter: int = 0, centre: bool = False, rotate: bool = False) -> Canvas:
+CLUTTER_COLOUR = 15  # the outline/ink colour: dirt looks like a mark
+CLUTTER_MAX_LEN = 4.0  # px
+LOWRES = 4  # block size of the reduced-resolution reading (32 -> 8 px)
+
+
+def _clutter(key: jax.Array, b: int, s: int, n: int) -> jax.Array:
+    """(b, s, s) alpha of ``n`` random specks and short dashes (0-4 px long, 2 px wide) per frame."""
+    from flock.raster import Strokes, rasterise
+
+    k1, k2, k3 = jax.random.split(key, 3)
+    p0 = jax.random.uniform(k1, (b, n, 2), minval=2.0, maxval=s - 2.0)
+    ang = jax.random.uniform(k2, (b, n), maxval=2 * jnp.pi)
+    ln = jax.random.uniform(k3, (b, n), maxval=CLUTTER_MAX_LEN)
+    p1 = jnp.clip(p0 + ln[..., None] * jnp.stack([jnp.cos(ang), jnp.sin(ang)], -1), 0.5, s - 0.5)
+    logit = lambda x: jnp.log(x / s) - jnp.log1p(-x / s)
+    ends = jnp.concatenate([logit(p0), logit(p1)], -1)  # (b, n, 4) x0, y0, x1, y1 in logit space
+    one = lambda e: rasterise(Strokes(e, jnp.zeros(n), jnp.zeros((n, 16)), jnp.full((n,), 20.0)), size=s, fixed_width=2.0).alpha
+    return jax.vmap(one)(ends)
+
+
+def transmit(canvas: Canvas, key: jax.Array, jitter: int = 0, centre: bool = False, rotate: bool = False, clutter: int = 0, lowres_p: float = 0.0) -> Canvas:
     """What the drawing looks like on arrival. ``centre``: moved so its ink centroid is at the
     middle of the frame (where a mark sits carries no information); then moved by up to
     ``jitter`` px; ``rotate``: turned by a random multiple of 90 degrees (a ground mark can
-    be read from any side). Ink is unchanged."""
-    if not (centre or rotate) and jitter <= 0:
+    be read from any side); ``lowres_p``: with this probability read at 1/LOWRES resolution
+    (block-averaged, as if from further away), so the smallest marks fade; ``clutter``: this
+    many random specks and short dashes in the ink colour are added, like dirt on the ground,
+    so a dot cannot be told from noise. Ink is unchanged."""
+    if not (centre or rotate or clutter > 0 or lowres_p > 0) and jitter <= 0:
         return canvas
     b, s = canvas.alpha.shape[0], canvas.alpha.shape[1]
-    k1, k2 = jax.random.split(key)
+    k1, k2, k3, k4 = jax.random.split(key, 4)
     d = jax.random.randint(k1, (b, 2), -jitter, jitter + 1) if jitter > 0 else jnp.zeros((b, 2), jnp.int32)
     if centre:
         a = jax.lax.stop_gradient(canvas.alpha)
@@ -93,6 +116,19 @@ def transmit(canvas: Canvas, key: jax.Array, jitter: int = 0, centre: bool = Fal
         k = jax.random.randint(k2, (b,), 0, 4)
         rot = lambda x, kk: jax.lax.switch(kk, [lambda v: v, lambda v: jnp.rot90(v, 1), lambda v: jnp.rot90(v, 2), lambda v: jnp.rot90(v, 3)], x)
         col, al = jax.vmap(rot)(col, k), jax.vmap(rot)(al, k)
+    if lowres_p > 0:
+        f = LOWRES
+        blk = al.reshape(b, s // f, f, s // f, f).mean((2, 4))
+        lo = jnp.repeat(jnp.repeat(blk, f, axis=1), f, axis=2)
+        use = jax.random.bernoulli(k3, lowres_p, (b,))[:, None, None]
+        al = jnp.where(use, lo, al)
+    if clutter > 0:
+        ca = jax.lax.stop_gradient(_clutter(k4, b, s, clutter))
+        cc = jax.nn.one_hot(CLUTTER_COLOUR, n)
+        new = al + ca * (1.0 - al)
+        col = (col * al[..., None] + cc * (ca * (1.0 - al))[..., None]) / jnp.maximum(new[..., None], 1e-6)
+        col = jnp.where(new[..., None] > 1e-6, col, 1.0 / n)
+        al = new
     return Canvas(colour=col, alpha=al, ink=canvas.ink)
 
 
@@ -102,15 +138,17 @@ def channel_args(cfg) -> dict:
         jitter=getattr(cfg, "jitter_px", 0),
         centre=getattr(cfg, "centre_glyph", False),
         rotate=getattr(cfg, "rotate_stamps", False) and cfg.mode == "stamp",
+        clutter=getattr(cfg, "clutter", 0),
+        lowres_p=getattr(cfg, "lowres_p", 0.0),
     )
 
 
-def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False, jitter: int = 0, centre: bool = False, rotate: bool = False) -> Forward:
+def forward(model: Agents, ep: env.Episode, key: jax.Array | None, opaque: bool, hard: bool = False, jitter: int = 0, centre: bool = False, rotate: bool = False, clutter: int = 0, lowres_p: float = 0.0) -> Forward:
     """Sender draws, receiver reads the drawing as it arrives through ``transmit`` (centring,
     jitter, rotation); ``Forward.canvas`` is the drawing as drawn."""
     sv = world.to_onehot(ep.sender_view)
     canvas, emb_s = draw(model, sv, key, hard)
-    shown = transmit(canvas, jax.random.fold_in(key, 7), jitter, centre, rotate) if (jitter > 0 or centre or rotate) else canvas
+    shown = transmit(canvas, jax.random.fold_in(key, 7), jitter, centre, rotate, clutter, lowres_p) if (jitter > 0 or centre or rotate or clutter > 0 or lowres_p > 0) else canvas
     logits, rv = receive(model, ep.receiver_base, shown, ep.canvas_px, opaque)
     return Forward(logits=logits, canvas=canvas, sender_emb=emb_s, receiver_view=rv)
 
