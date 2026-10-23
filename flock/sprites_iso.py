@@ -4,11 +4,13 @@
 Every sprite is camera-facing (billboarded, always drawn upright), so the tile layout can be
 rotated under a fixed camera: that is what makes heading-aligned isometric views possible.
 Ground states are drawn per position (never pixel-rotated), so grass texture is also
-rotation-safe. Water is a ground state (a pond is a cluster of water tiles), not an object.
+rotation-safe. Water is a ground state (a large pond is a cluster of water tiles); the toy
+game's "pond" referent is a small one-tile pool sprite.
 
 Referents (objects the toy game asks about): a sharp-edged salt-lick cube, a pine, a star
-flower, and the fox. Each has a distinct silhouette; the earlier rock, bush and stump were
-dropped because as silhouettes they were indistinguishable blobs with no role in the world.
+flower, the fox, and (added 2026-10-23, owner's choice) a hut, a pond and a mushroom. Each has
+a distinct silhouette; the earlier rock, bush and stump were dropped because as silhouettes
+they were indistinguishable blobs with no role in the world.
 The fox is both an animal and a referent, so objects have four facings like animals (static
 objects repeat one sprite).
 
@@ -209,6 +211,69 @@ def _flower(petals: int = 5, petal: str = "R", centre: str = "Y", R: float = 5.8
     return _outline(s)
 
 
+def _hut(W: int = 22, roof_h: int = 10, wall_h: int = 11, roof: str = "R", roof_light: str = "P", wall: str = "t", plank: str = "T", door_x: float = 0.5) -> np.ndarray:
+    """A small shed: a pitched roof (lit left) over plank walls with a dark door."""
+    s = np.full((roof_h + wall_h, W), TRANSPARENT, np.uint8)
+    for y in range(roof_h):
+        half = int(round((y + 1) * (W / 2) / roof_h))
+        for x in range(W // 2 - half, W // 2 + half):
+            s[y, x] = C[roof_light] if (x < W // 2 and (x + y) % 5 == 0) else C[roof]
+        s[y, W // 2 - half : W // 2 - half + 1] = C[roof_light]
+    s[roof_h - 1, :] = C["D"]
+    for y in range(roof_h, roof_h + wall_h):
+        for x in range(2, W - 2):
+            s[y, x] = C[wall] if (x // 3) % 2 else C[plank]
+    dx = int(round(2 + door_x * (W - 8)))
+    s[roof_h + 3 : roof_h + wall_h, dx : dx + 4] = C["D"]
+    return _outline(s)
+
+
+def _pond(W: int = 24, H: int = 9, reeds: bool = False, lobe: float = 0.0) -> np.ndarray:
+    """A flat pool: an earth rim round blue water with light ripples; ``lobe`` adds a second,
+    offset oval (a kidney shape); ``reeds`` adds a few stalks at the back."""
+    top = 5 if reeds else 0
+    s = np.full((H + top, W), TRANSPARENT, np.uint8)
+
+    def inside(x, y):
+        d = ((x + 0.5 - W / 2) / (W / 2)) ** 2 + ((y + 0.5 - H / 2) / (H / 2)) ** 2
+        if lobe > 0:
+            d2 = ((x + 0.5 - W * 0.3) / (W * 0.3)) ** 2 + ((y + 0.5 - H * 0.35) / (H * 0.45)) ** 2
+            d = min(d, d2 / (1 + lobe))
+        return d
+
+    for y in range(H):
+        for x in range(W):
+            d = inside(x, y)
+            if d <= 1.0:
+                s[top + y, x] = C["t"] if d > 0.62 else C["B"]
+    s[top + H // 2 - 1, W // 3 : W // 3 + 4] = C["b"]
+    s[top + H // 2 + 1, W // 2 + 1 : W // 2 + 5] = C["b"]
+    if reeds:
+        for x, h in [(W // 4, 6), (W // 4 + 2, 5), (3 * W // 4, 6)]:
+            s[top + 1 - h + 1 : top + 2, x] = C["g"]
+            s[top + 1 - h + 1, x] = C["T"]
+    return _outline(s)
+
+
+def _mushroom(W: int = 16, cap_h: int = 8, stem_h: int = 7, cap: str = "R", spots: bool = True, stem: str = "W") -> np.ndarray:
+    """A toadstool: a domed cap (with or without white spots) on a pale stem."""
+    s = np.full((cap_h + stem_h, W), TRANSPARENT, np.uint8)
+    for y in range(cap_h):
+        for x in range(W):
+            d = ((x + 0.5 - W / 2) / (W / 2)) ** 2 + ((y + 0.5 - cap_h) / cap_h) ** 2
+            if d <= 1.0:
+                s[y, x] = C[cap]
+    if spots:
+        for fy, fx in [(0.3, 0.38), (0.4, 0.62), (0.65, 0.2), (0.65, 0.78), (0.55, 0.45)]:
+            y, x = int(fy * cap_h), int(fx * W)
+            if s[y, x] == C[cap]:
+                s[y, x] = C["W"]
+    sw = max(2, W // 4)
+    s[cap_h : cap_h + stem_h, W // 2 - sw // 2 : W // 2 - sw // 2 + sw] = C[stem]
+    s[cap_h : cap_h + stem_h, W // 2 - sw // 2 + sw - 1] = C["S"]
+    return _outline(s)
+
+
 # --- animals: the signed-off 8x4 art enlarged 2x and outlined -----------------------------
 # Facing index = (world heading - view heading) % 4, i.e. the heading in the rotated frame:
 #   0 = N: away, up-right     1 = E: toward, down-right
@@ -324,6 +389,30 @@ OBJECT_VARIANTS = {
         _facings(FOX_FRONT_R, FOX_BACK_R, tail_tip=False),
         _facings(_recolour(FOX_FRONT_R, "O", "R"), _recolour(FOX_BACK_R, "O", "R")),  # held out: red
         [_outline(f) for f in _small_fox_facings("T")],  # held out: small brown
+    ],
+    "hut": [
+        _static(_hut()),  # the signed-off shed
+        _static(_hut(18, 8, 9)),  # small
+        _static(_hut(24, 8, 12, door_x=0.15)),  # low roof, door left
+        _static(_hut(22, 12, 9, roof="T", roof_light="t")),  # thatched-brown, steep
+        _static(_hut(20, 9, 10, roof="s", roof_light="S", door_x=0.85)),  # held out: slate roof, door right
+        _static(_hut(24, 11, 12, roof="B", roof_light="b", wall="S", plank="s")),  # held out: blue roof, stone walls
+    ],
+    "pond": [
+        _static(_pond()),  # the signed-off pool
+        _static(_pond(18, 8)),
+        _static(_pond(26, 11)),
+        _static(_pond(22, 9, reeds=True)),
+        _static(_pond(24, 10, lobe=0.6)),  # held out: kidney-shaped
+        _static(_pond(16, 8, reeds=True)),  # held out: small, reedy
+    ],
+    "mushroom": [
+        _static(_mushroom()),  # the signed-off red toadstool
+        _static(_mushroom(12, 6, 6)),  # small
+        _static(_mushroom(18, 7, 5, cap="T", spots=False)),  # brown, flat
+        _static(_mushroom(14, 9, 8, cap="Y", spots=False)),  # yellow, tall cap
+        _static(_mushroom(16, 6, 10, cap="P")),  # held out: pink, tall stem
+        _static(_mushroom(20, 8, 6, cap="T", spots=True)),  # held out: wide brown, spotted
     ],
 }
 HELD_OUT = 2

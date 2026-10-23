@@ -35,8 +35,9 @@ def test_sender_view_shows_target_sprite_ahead():
     for b in range(8):
         t = int(ep.target_type[b])
         patch = np.asarray(ep.sender_view[b, r : r + iso.BOX_H, c : c + iso.BOX_W])
-        # one of the object's four facings (only the fox's differ) is drawn there exactly
-        assert any((patch[spr != TRANSPARENT] == spr[spr != TRANSPARENT]).all() for spr in S.OBJECT_STACK[t, 0]), b
+        # one of the object's four facings (only the fox's differ) is drawn there; the widest
+        # sprites (the pond) can lose a corner pixel or two behind the sender's own sheep
+        assert max((patch[spr != TRANSPARENT] == spr[spr != TRANSPARENT]).mean() for spr in S.OBJECT_STACK[t, 0]) > 0.95, b
 
 
 def test_target_mask_covers_target_sprite_pixels():

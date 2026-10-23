@@ -12,6 +12,7 @@ The grid tests, per the plan:
   8. (128 world) instance variation x channel jitter x invariant judge, lines at cost 0.002
   9. (128 world) anti-blank options x bubble/stamp, with centring and stamp rotation
  10. (128 world) clutter x reduced resolution in the channel, graded by the independent examiner
+ 11. (128 world) seven referent types
 
 Not every combination is run; the cells below cover the questions. Each cell runs ``--seeds``
 seeds. Results are written to ``<out>/grid.json`` and printed as a table. On the 4080 with the
@@ -93,6 +94,12 @@ for _mode in ("bubble", "stamp"):
 for _mode in ("bubble", "stamp"):
     for _tag, _opts in [("base", {}), ("clut", dict(clutter=6)), ("lowres", dict(lowres_p=0.5)), ("both", dict(clutter=6, lowres_p=0.5))]:
         CELLS[f"dot_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, min_strokes=1, **_opts)
+
+# Seven referent types (hut, pond and mushroom added): with more meanings, four cheap tokens no
+# longer suffice. Same settings as the dot cells.
+for _mode in ("bubble", "stamp"):
+    for _tag, _opts in [("base", {}), ("clut", dict(clutter=6))]:
+        CELLS[f"seven_{_mode}_{_tag}"] = dict(_ALL, mode=_mode, min_strokes=1, **_opts)
 
 
 # Cell names become directory names; on Windows (and /mnt/c under WSL) those are case-insensitive,
