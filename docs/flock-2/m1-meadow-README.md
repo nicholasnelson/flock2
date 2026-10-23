@@ -56,3 +56,50 @@ preference among nearby cover.
 - The scripted flock's thirst and hunger are bookkeeping for the script only; the learned
   drives arrive in step 3.
 - The display is a GIF written by a script, not yet a live window.
+
+# Step 2 — logged rollouts and world-model pretraining (2026-10-23)
+
+**Data** (`flock/meadow/rollouts.py`, `scripts/m1_log.py`): four shards of the scripted flock,
+each 32 fresh meadows × 8 recorded sheep × 1,024 steps from a random time of day after a 200-step
+warm-up — 1.05 M first-person strips with the action taken after each, packed 4 bits per pixel
+(8 GB, on the WSL filesystem: `~/flock2_data/m1_rollouts`). Logging takes ~40 s in all.
+
+**Model** (`flock/wm.py`): a DreamerV3-style world model
+([Hafner et al. 2023](https://arxiv.org/abs/2301.04104)) — five stride-2 convolutions over the
+one-hot strip (64×256 → 2×8), a layer-normalised GRU deterministic state (384) and 32 categorical
+latents of 16 classes (1 % uniform mix, straight-through samples), the action entering the
+transition, a mirrored decoder over the 16 colours, per-pixel cross-entropy summed over the strip
+and KL balancing (0.5 dynamics / 0.1 representation, 1 nat free bits) as in the paper.
+7.9 M parameters. Trained with Adam 1e-4 on batches of 4 sequences × 64 steps — DreamerV3's
+pixels per batch (16 × 64 at 64×64); 8 × 64 ran out of the 4080's 16 GB. 20,000 steps in ~30 min
+(`scripts/m1_wm_train.py`; checkpoint `~/flock2_data/m1_wm/run1/model.pkl`).
+
+**Open-loop test on the held-out shard**: observe 16 strips, then imagine 48 from the true actions
+alone (16 fixed windows):
+
+| steps ahead | pixel accuracy | object-pixel recall (sheep, trees, huts, …) |
+| --- | --- | --- |
+| 1 | 0.87 | 0.75 |
+| 4 | 0.83 | 0.68 |
+| 16 | 0.70 | 0.56 |
+| 32 | 0.63 | 0.50 |
+| 48 | 0.57 | 0.49 |
+
+Long horizons are noisy between evaluations (16 windows). By eye (`runs/m1/wm_run1/open_loop_020000.png`):
+near sheep keep their legs and faces, distant sheep survive as small white shapes rather than
+being erased (the IRIS-style failure the plan's criterion guards against), and imagined frames
+bring plausible sheep into view; small trees and flowers are still often lost.
+
+**Surprise** (`scripts/m1_wm_surprise.py`: KL(posterior ‖ prior) per step on held-out sequences):
+routine mean 28 nats per step, 99th percentile 64. A teleport — half-way through a sequence the
+strips switch to a sheep in another meadow — gives 86, about 3× the routine mean, falling back
+to routine within five steps; but that is only 1.3× the routine 99th percentile, so routine viewing
+has frequent peaks of similar size. Surprise follows information: turning is the most surprising
+action (~37; new parts of the panorama come into view), resting (20) and night (19 vs 28 by day)
+the least, and dawn — the sky switching from dark to light — gives one of the largest spikes:
+the model has no clock and cannot anticipate it.
+
+Against the plan's world-model criteria *(judgement)*: small distant objects are kept (partly met;
+recall ~0.5 at long horizons); surprise rises on genuine novelty but is not yet *selective* — the
+routine peaks are close to the teleport. Not blocking for step 3; worth revisiting with more data
+(the plan's 10⁷ steps) and a longer run before M1's evaluation.
