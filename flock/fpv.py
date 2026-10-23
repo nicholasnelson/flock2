@@ -38,7 +38,7 @@ HORIZON = 24  # row of the horizon: 24 rows of sky, 40 of ground (looking slight
 EYE_H = 0.5  # eye height, in tiles
 MAX_DIST = 16.0  # tiles; beyond this the ground is a flat far colour (the Q9 view range)
 SKY, FAR = 5, 1  # palette: water_light as sky, grass_dark as the far ground
-PX_PER_TILE = S.TILE_W  # sprite pixels per tile of width (16)
+PX_PER_TILE = 24  # billboard sprite pixels per tile: a sheep (22 px) is ~0.9 tiles tall beside the 0.5-tile eye (owner, 2026-10-23; the isometric art scale of 16 made neighbours loom)
 
 
 def _ground_texel(tile_map: jax.Array, r: jax.Array, c: jax.Array) -> jax.Array:

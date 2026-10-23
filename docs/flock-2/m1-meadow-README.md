@@ -47,10 +47,11 @@ preference among nearby cover.
 
 ## Known issues and open choices
 
-- **Neighbours loom.** Billboards are drawn at the isometric art's scale (16 px per tile, so a
-  sheep is ~1.4 tiles tall) with the eye at 0.5 tiles: a neighbour standing alongside fills a
-  sheep's view. Geometrically right for those numbers; a billboard scale of ~24 px per tile
-  (a sheep ~0.9 tiles tall) would be gentler. A perceptual choice for the owner.
+- **Billboard scale: 24 px per tile** (owner, 2026-10-23). At the isometric art's 16 px per tile
+  a sheep was ~1.4 tiles tall against a 0.5-tile eye and any neighbour filled the view; now a
+  sheep is ~0.9 tiles tall and neighbours at ordinary spacing look like sheep among sheep. A
+  neighbour *touching* the viewer (~0.6 tiles, e.g. in the night huddle) still fills the strip,
+  which is what the geometry gives.
 - Ground right in front of the viewer is the tile art magnified (blocky).
 - The scripted flock's thirst and hunger are bookkeeping for the script only; the learned
   drives arrive in step 3.
