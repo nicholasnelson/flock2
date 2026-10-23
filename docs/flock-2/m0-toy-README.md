@@ -546,3 +546,38 @@ pictures of the objects; it was not the examiner failing to read lines. The in-t
 smoke run (same settings and seed as `dot_stamp_both` s0, but GPU training is not
 bit-reproducible and it drew differently): its tall parallel verticals are recognised as "tree"
 98 % of the time — the examiner can detect resemblance when it is there.
+
+### Grid 8 — seven referent types (2026-10-23)
+
+Owner's choice: hut, pond and mushroom added (crow left out: a small blob as a silhouette), each
+with six variants, two held out (commit `9851c76`). With more meanings, four cheap tokens no
+longer suffice. Same settings as grid 7 (`min_strokes=1`, centring, stamp rotation). Chance:
+game 0.25 (four candidates on screen), examiner and judge 1/7 ≈ 0.14. The examiner retrained
+for the new world reads real views at 0.98 and outline drawings at 0.99.
+
+| cell | acc (held-out) | acc_seen | judge_probe | examiner (as drawn) | examiner (centred) |
+| --- | --- | --- | --- | --- | --- |
+| bubble, base | 0.57±0.03 | 0.65±0.03 | 0.18±0.01 | 0.10±0.04 | 0.13±0.06 |
+| bubble, clutter | 0.55±0.05 | 0.65±0.06 | 0.18±0.03 | 0.13±0.08 | 0.19±0.03 |
+| stamp, base | 0.49±0.16 | 0.53±0.21 | 0.11±0.06 | 0.12±0.02 | 0.13±0.01 |
+| stamp, clutter | 0.53±0.04 | 0.60±0.03 | 0.15±0.03 | 0.20±0.10 | 0.16±0.08 |
+| bubble, clutter, 3× steps (1 seed) | 0.62 | 0.75 | 0.23 | 0.09 | – |
+| stamp, clutter, 3× steps (1 seed) | 0.61 | 0.71 | 0.10 | 0.15 | – |
+
+What this shows:
+
+1. **Seven types are much harder at this budget** (0.49–0.57 held-out), and three times the game
+   steps help (0.61–0.62) but widen the seen/held-out gap to ~12 points: part of the gain is
+   memorising examples.
+2. **Types are merged by shape, and the merges follow resemblance** *(judgement, galleries
+   as drawn)*: the salt lick and the hut share an A-frame or triangle glyph (angular, built
+   things; the hut's pitched roof); the fox and the pond share a long low horizontal (both long
+   and low); the tree and the flower share one glyph (a cross-hatch in stamp mode, near-blank in
+   bubble mode: both plants); the mushroom gets a single diagonal. That is iconicity at the
+   level of coarse silhouette classes, which is why accuracy stalls near half for the merged
+   pairs. With longer training the hut's glyph gains horizontal strokes that set it apart from
+   the salt lick's, but fox and pond still share one.
+3. **The examiner still finds the drawings unrecognisable** as the specific type (chance), as it
+   must when pairs share a glyph.
+
+Galleries: `runs/m0/grid_seven_galleries.png`, `runs/m0/seven_long_bubble/gallery.png` (local).
