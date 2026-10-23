@@ -352,6 +352,72 @@ What this shows:
 
 Galleries: `runs/m0/grid_line_galleries.png` (local).
 
+### Grid 5 — instance variation, channel jitter, an invariant judge (2026-10-23)
+
+Aim (owner): remove everything that is not the referent's shape, so a drawing must capture
+what all trees (flowers, …) share rather than one remembered example, its place or its size.
+Three switches, every combination, lines at cost 0.002 (commits `70a369f`, `081bbb6`):
+
+- **variation**: six sprite variants per type (cube sizes; pines with 2–4 tiers and a broadleaf
+  tree; flowers with 4–6 petals in five colours; foxes in three colours and two sizes), the last
+  two of each **held out**: training never shows them; `acc` is measured on them, `acc_seen` on
+  the training variants. Each object also gets a sub-tile offset (≤ 0.3 tile) and a scale
+  (0.6–1.0), independently for the sender's referent and each candidate. Held-out variants as
+  the test of type-level (not instance-level) drawings follow
+  [Qiu et al. 2022](https://arxiv.org/abs/2111.14210), who define iconicity as accuracy on
+  unseen instances.
+- **jitter**: channel noise — the drawing is moved by up to 4 px within its frame when read or
+  judged.
+- **judge**: a *separate* judge encoder pre-trained with shift (±6 px), flip, blur and scale
+  (0.5–1, the far view's range) and a term pulling augmented embeddings to the clean scene's.
+  The sheep's own perception is pre-trained without it: making the shared encoder that
+  invariant blinded the receiver (communication collapsed with or without the resemblance
+  loss; diagnosed in single runs, not tabulated).
+
+Two fixes were needed before the grid could run, both now default for these cells:
+
+- **Delayed ink cost** (`ink_delay_steps=1500`). With variation and jitter the receiver learns
+  to read slowly; meanwhile the ink cost was the only consistent gradient on the strokes and,
+  under Adam, even its tiny ramp-start value switched every hard-gated stroke off within ~300
+  steps, after which none recovered. The same mechanism plausibly explains grid 4's cliff.
+- **Disjoint target cells.** Two candidate slots are 8 px apart on screen; with sub-tile offsets
+  their target squares touched, and a receiver clicking a shared cell scored 0.35 with no
+  message. Cells claimed by two candidates now count for neither.
+
+| cell | acc (held-out) | acc_seen | acc_blank | acc_swapped | CIC | judge_probe | ink |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| var0 jit0 judge0 | 1.00±0.00 | – | 0.24±0.01 | 0.00±0.00 | 7.9±1.1 | 0.64±0.07 | 23.0 |
+| var0 jit0 judge1 | 1.00±0.00 | – | 0.26±0.02 | 0.00±0.00 | 8.3±3.4 | 0.47±0.01 | 53.8 |
+| var0 jit1 judge0 | 1.00±0.00 | – | 0.25±0.02 | 0.00±0.00 | 10.3±1.5 | 0.73±0.02 | 29.1 |
+| var0 jit1 judge1 | 1.00±0.00 | – | 0.23±0.02 | 0.00±0.00 | 12.2±1.6 | 0.67±0.13 | 63.2 |
+| var1 jit0 judge0 | 0.80±0.04 | 0.85±0.02 | 0.25±0.01 | 0.05±0.02 | 2.4±0.3 | 0.62±0.03 | 32.0 |
+| var1 jit0 judge1 | 0.81±0.02 | 0.87±0.03 | 0.23±0.00 | 0.07±0.03 | 2.5±0.6 | 0.39±0.04 | 27.4 |
+| var1 jit1 judge0 | 0.77±0.03 | 0.80±0.04 | 0.24±0.01 | 0.06±0.01 | 2.0±0.2 | 0.57±0.02 | 34.5 |
+| var1 jit1 judge1 | 0.77±0.05 | 0.84±0.04 | 0.26±0.00 | 0.08±0.01 | 2.6±0.3 | 0.33±0.16 | 30.3 |
+| all on, no resemblance loss | 0.78±0.04 | 0.86±0.04 | 0.25±0.03 | 0.07±0.01 | 2.7±0.8 | 0.24±0.08 | 34.3 |
+| all on, stamp | 0.79±0.02 | 0.85±0.01 | 0.26±0.02 | 0.09±0.01 | 3.4±1.4 | 0.32±0.07 | 32.6 |
+
+Judge probes compare only within a judge (judge0 vs judge1 are different encoders). The cells'
+per-run files were lost to a case-insensitive directory collision (cell names differing only in
+case); the metrics above were computed in-process and are intact, and galleries were
+regenerated from seed 0 (`runs/m0/grid_inv3_gal/`, montage `runs/m0/grid_inv3_galleries.png`).
+
+What this shows:
+
+1. **Variation costs about 20 points of accuracy but generalises**: held-out variants are only
+   ~5 points below seen ones (0.77–0.81 vs 0.80–0.87), so the drawings mostly stand for the
+   type, not the example. Without variation every cell is perfect.
+2. **The resemblance loss does not help communication** under variation (all on: 0.77 with,
+   0.78 without), and jitter costs a few points.
+3. **Galleries** *(judgement, seed 0)*: without variation each type gets one fixed glyph, and
+   with jitter and the invariant judge it degenerates into horizontal strokes at different
+   heights (a position code). With variation the marks vary by instance, but a few features
+   recur across cells: the fox as a long low horizontal line (the most consistently iconic
+   mark), the tree as a long diagonal, sometimes branched, the flower as small ticks. **Height
+   in the frame still carries much of the code** — salt-lick marks at the top, fox marks at the
+   bottom, although the cube stands on the ground — which motivates re-centring drawings on
+   their ink before they are read (grid 6).
+
 ## What the plan predicts
 
 From the literature (see `02-design-questions.md` Q2 and the survey §4): `shared_noperc` will
