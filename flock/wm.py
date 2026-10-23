@@ -8,6 +8,10 @@ first-person strip (``flock.fpv``: 64 x 256, 16 palette colours) and their actio
   samples). The transition takes (z_{t-1}, a_{t-1}); the prior predicts z_t from h_t; the
   posterior also sees the embedding of the strip at t.
 - Decoder: the mirror of the encoder, logits over the 16 colours per pixel.
+- Interoception (optional, ``n_intero`` > 0): the sheep's drive levels enter as a second input
+  added to the strip's embedding, and a head reconstructs them from (h, z) — so in imagination
+  the predicted levels give the drive-reduction reward through the exact drive formula, with no
+  separate reward network (Milestone 1, step 3).
 - Loss: per-pixel cross-entropy summed over the strip, plus KL balancing — a dynamics term
   KL(sg(post) || prior) weighted 0.5 and a representation term KL(post || sg(prior)) weighted
   0.1, each with 1 nat of free bits (all as in DreamerV3).
@@ -31,6 +35,7 @@ DETER, HIDDEN = 384, 384
 STOCH, CLASSES = 32, 16
 EMBED = 512
 UNIMIX = 0.01
+INTERO_WEIGHT = 1000.0  # on the summed squared error of the levels (the strip's CE sums 16,384 pixels)
 FREE_NATS, KL_DYN, KL_REP = 1.0, 0.5, 0.1
 ENC_CH = (32, 64, 96, 128, 192)  # 64x256 -> 32x128 -> 16x64 -> 8x32 -> 4x16 -> 2x8
 BOTTOM = (2, 8)
@@ -127,9 +132,12 @@ def kl(post_logits, prior_logits):
 
 
 class WorldModel(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs):
+    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0):
+        self.n_intero = n_intero
         self.encoder = Encoder(rngs)
         self.decoder = Decoder(rngs)
+        self.intero_in = nnx.Linear(n_intero, EMBED, rngs=rngs) if n_intero else None
+        self.intero_head = MLP(DETER + STOCH * CLASSES, n_intero, rngs) if n_intero else None
         self.img_in = MLP(STOCH * CLASSES + N_ACTIONS, HIDDEN, rngs)
         self.gru = GRU(HIDDEN, DETER, rngs)
         self.prior_net = MLP(DETER, STOCH * CLASSES, rngs)
@@ -149,11 +157,14 @@ class WorldModel(nnx.Module):
         return jnp.zeros((batch, DETER)), jnp.zeros((batch, STOCH * CLASSES))
 
     # --- sequences ----------------------------------------------------------------------------
-    def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array) -> Step:
-        """views (B, T, 64, 256) palette indices, actions (B, T) (taken after each view).
+    def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None) -> Step:
+        """views (B, T, 64, 256) palette indices, actions (B, T) (taken after each view),
+        intero (B, T, n_intero) the drive levels felt with each view (if the model has them).
         Returns the posterior rollout (time-major fields are (B, T, ...))."""
         B, T = views.shape[:2]
         embed = self.encoder(jax.nn.one_hot(views, N_COLOURS))
+        if self.intero_in is not None:
+            embed = embed + self.intero_in(intero)
         a_prev = jnp.concatenate([jnp.zeros((B, 1, N_ACTIONS)), jax.nn.one_hot(actions[:, :-1], N_ACTIONS)], 1)
         h0, z0 = self.initial(B)
 
@@ -190,9 +201,12 @@ class WorldModel(nnx.Module):
     def decode(self, s: Step) -> jax.Array:
         return self.decoder(jnp.concatenate([s.h, s.z], -1))
 
+    def decode_intero(self, s: Step) -> jax.Array:
+        return self.intero_head(jnp.concatenate([s.h, s.z], -1))
 
-def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array):
-    s = model.observe(views, actions, key)
+
+def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None):
+    s = model.observe(views, actions, key, intero)
     logits = model.decode(s)
     ce = -jnp.take_along_axis(jax.nn.log_softmax(logits, -1), views[..., None], -1)[..., 0]
     recon = jnp.mean(jnp.sum(ce, axis=(-2, -1)))  # summed over the strip, mean over (B, T)
@@ -201,7 +215,34 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     rep = jnp.mean(jnp.maximum(kl(s.post, sg(s.prior)), FREE_NATS))
     loss = recon + KL_DYN * dyn + KL_REP * rep
     acc = jnp.mean(jnp.argmax(logits, -1) == views)
-    return loss, {"loss": loss, "recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
+    aux = {"recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
+    if model.intero_head is not None:
+        err = jnp.mean(jnp.sum((model.decode_intero(s) - intero) ** 2, -1))
+        loss = loss + INTERO_WEIGHT * err
+        aux["intero_mse"] = err
+    aux["loss"] = loss
+    return loss, aux
+
+
+def load_into(model: WorldModel, pure: dict) -> None:
+    """Load a checkpoint's parameters into ``model``; parts the checkpoint lacks (e.g. the
+    interoception layers when fine-tuning a vision-only model) keep their fresh initialisation."""
+    state = nnx.state(model)
+    flat = dict(nnx.to_flat_state(state))
+    src = {k: v for k, v in _flatten(pure)}
+    for path in flat:
+        key = tuple(str(p) for p in path)
+        if key in src:
+            flat[path] = flat[path].replace(jnp.asarray(src[key]))
+    nnx.update(model, nnx.from_flat_state(flat))
+
+
+def _flatten(d, prefix=()):
+    for k, v in d.items():
+        if isinstance(v, dict):
+            yield from _flatten(v, prefix + (str(k),))
+        else:
+            yield prefix + (str(k),), v
 
 
 def count_params(model: nnx.Module) -> int:

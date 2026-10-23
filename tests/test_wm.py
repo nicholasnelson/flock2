@@ -40,3 +40,22 @@ def test_learns_a_constant_strip_quickly():
     for i in range(60):
         aux = step(m, opt, jax.random.PRNGKey(i))
     assert float(aux["pixel_acc"]) > 0.99
+
+
+def test_interoception_and_loading_a_vision_only_checkpoint():
+    import pickle
+
+    old = wm.WorldModel(nnx.Rngs(5))
+    pure = jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(old)))
+    new = wm.WorldModel(nnx.Rngs(6), n_intero=5)
+    wm.load_into(new, pickle.loads(pickle.dumps(pure)))
+    a = np.asarray(old.encoder.out.kernel[...])
+    b = np.asarray(new.encoder.out.kernel[...])
+    assert np.allclose(a, b)  # shared parts loaded
+    views = jax.random.randint(jax.random.PRNGKey(0), (2, 4, wm.H, wm.W), 0, 16)
+    acts = jax.random.randint(jax.random.PRNGKey(1), (2, 4), 0, wm.N_ACTIONS)
+    intero = jax.random.uniform(jax.random.PRNGKey(2), (2, 4, 5))
+    loss, aux = wm.loss_fn(new, views, acts, jax.random.PRNGKey(3), intero)
+    assert np.isfinite(float(loss)) and "intero_mse" in aux
+    s = new.observe(views, acts, jax.random.PRNGKey(4), intero)
+    assert new.decode_intero(s).shape == (2, 4, 5)

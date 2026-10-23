@@ -11,6 +11,8 @@ On disk (a directory of shards, one per rollout):
     shard_XXXX.night.npy    bool  (N, T)
     shard_XXXX.pos.npy      float16 (N, T, 2)
     shard_XXXX.heading.npy  float16 (N, T)
+    shard_XXXX.levels.npy   float16 (N, T, N_DRIVES)  drive levels when the strip was seen
+    shard_XXXX.reward.npy   float32 (N, T)            drive-reduction reward for the step taken
 with N = B * R sequences. The strip at t is what the sheep saw before acting at t.
 """
 
@@ -23,7 +25,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock import fpv
-from flock.meadow import scripted, sim, views
+from flock.meadow import drives as D, scripted, sim, views
 from flock.meadow.world import ground_state, generate
 
 
@@ -45,8 +47,10 @@ def _record_chunk(states, keys, rec_idx, n_steps):
         tiles = ground_state(st.meadow)
         v = jax.vmap(lambda i: views.view_one(st, i, tiles))(rec_idx)
         a = scripted.policy(st, k)
-        out = dict(view=v, action=a[rec_idx], night=sim.is_night(st.t), pos=st.flock.pos[rec_idx], heading=st.flock.heading[rec_idx])
-        return sim.step(st, a), out
+        out = dict(view=v, action=a[rec_idx], night=sim.is_night(st.t), pos=st.flock.pos[rec_idx], heading=st.flock.heading[rec_idx], levels=st.flock.levels[rec_idx])
+        st2 = sim.step(st, a)
+        out["reward"] = st2.flock.reward[rec_idx]
+        return st2, out
 
     def run(st, key):
         return jax.lax.scan(one, st, jax.random.split(key, n_steps))
@@ -85,6 +89,8 @@ def write_rollout(out_dir: str, shard: int, seed: int, meadows: int = 32, sheep:
         "night": np.lib.format.open_memmap(base + ".night.npy", "w+", bool, (N, steps)),
         "pos": np.lib.format.open_memmap(base + ".pos.npy", "w+", np.float16, (N, steps, 2)),
         "heading": np.lib.format.open_memmap(base + ".heading.npy", "w+", np.float16, (N, steps)),
+        "levels": np.lib.format.open_memmap(base + ".levels.npy", "w+", np.float16, (N, steps, D.N_DRIVES)),
+        "reward": np.lib.format.open_memmap(base + ".reward.npy", "w+", np.float32, (N, steps)),
     }
     keys = jax.random.split(k_run, steps // chunk)
     for c in range(steps // chunk):
@@ -96,6 +102,8 @@ def write_rollout(out_dir: str, shard: int, seed: int, meadows: int = 32, sheep:
         mm["night"][:, sl] = np.repeat(np.asarray(out["night"])[:, None, :], record, 1).reshape(N, chunk)
         mm["pos"][:, sl] = np.asarray(out["pos"]).transpose(0, 2, 1, 3).reshape(N, chunk, 2).astype(np.float16)
         mm["heading"][:, sl] = np.asarray(out["heading"]).transpose(0, 2, 1).reshape(N, chunk).astype(np.float16)
+        mm["levels"][:, sl] = np.asarray(out["levels"]).transpose(0, 2, 1, 3).reshape(N, chunk, D.N_DRIVES).astype(np.float16)
+        mm["reward"][:, sl] = np.asarray(out["reward"]).transpose(0, 2, 1).reshape(N, chunk)
     for a in mm.values():
         a.flush()
     return N * steps
