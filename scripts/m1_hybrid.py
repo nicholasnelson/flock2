@@ -145,6 +145,13 @@ def main():
     mems = (jnp.zeros((a.meadows, a.sheep, wm.DETER)), jnp.zeros((a.meadows, a.sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((a.meadows, a.sheep), jnp.int32))
     age = np.arange(a.meadows) * (a.reset_every // a.meadows)
     rec_idx = jnp.arange(a.record)
+    # compile (and autotune) both update steps before acting, while the GPU is empty, on throwaway
+    # copies (XLA's autotuning ran out of memory otherwise)
+    w_tmp, o_tmp, p_tmp, q_tmp = nnx.clone(world), nnx.clone(wm_opt), nnx.clone(policy), nnx.clone(opt)
+    _wmt.train_step(w_tmp, o_tmp, np.zeros((4, a.length, wm.H, wm.W // 2), np.uint8), np.zeros((4, a.length), np.int32), np.ones((4, a.length, D.N_FELT), np.float32), np.zeros((4, a.length), np.float32), key)
+    mb = a.steps * a.meadows * a.sheep // a.minibatches
+    _ppo.update(p_tmp, q_tmp, np.zeros((mb, ac.FEAT), np.float32), np.zeros(mb, np.int32), np.zeros(mb, np.float32), np.zeros(mb, np.float32), np.zeros(mb, np.float32), a.clip, a.ent)
+    del w_tmp, o_tmp, p_tmp, q_tmp
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for it in range(1, a.iters + 1):
