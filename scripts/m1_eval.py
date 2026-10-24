@@ -6,6 +6,7 @@ same statistics for every policy, so "beats a random flock" is a number.
     python scripts/m1_eval.py --policy scripted
     python scripts/m1_eval.py --policy rest
     python scripts/m1_eval.py --policy agent --agent ~/flock2_data/m1_agent/birth3
+    python scripts/m1_eval.py --policy ppo --ppo ~/flock2_data/m1_ppo/run1/ppo.pkl   # privileged upper bound
 
 Every policy runs on the same ``--meadows`` generated meadows (seeds 10,000 + i, so not the
 training meadows), ``--sheep`` per meadow, from dawn (t = 0) with ``generate``'s starting levels
@@ -37,7 +38,7 @@ import numpy as np
 from flax import nnx
 
 from flock import ac, wm
-from flock.meadow import drives as D, scripted, sim
+from flock.meadow import drives as D, privileged, scripted, sim
 from flock.meadow.world import HUT, TREE, generate
 
 STORES = (D.ENERGY, D.HYDRATION, D.WARMTH)
@@ -81,6 +82,9 @@ def run(policy, meadows, sheep, steps, seed, world=None, agent=None):
             if policy == "agent":
                 new, mem, _ = am.act_and_step(w, g, st, mem, kk, jnp.arange(1))
                 actions = mem[2]
+            elif policy == "ppo":
+                actions = jax.random.categorical(kk, w(privileged.observe(st))[0], -1)
+                new = sim.step(st, actions)
             else:
                 if policy == "random":
                     actions = jax.random.randint(kk, (sheep,), 0, sim.N_ACTIONS)
@@ -134,7 +138,8 @@ def summarise(rec, days):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "scripted", "rest", "agent"), required=True)
+    p.add_argument("--policy", choices=("random", "scripted", "rest", "agent", "ppo"), required=True)
+    p.add_argument("--ppo", default=None, help="ppo.pkl from m1_ppo.py (policy ppo)")
     p.add_argument("--agent", default=None, help="directory with wm.pkl and agent.pkl (policy agent)")
     p.add_argument("--meadows", type=int, default=8)
     p.add_argument("--sheep", type=int, default=40)
@@ -149,8 +154,14 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         agent = ac.Agent(nnx.Rngs(1))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
+    if a.policy == "ppo":
+        spec = importlib.util.spec_from_file_location("m1_ppo", os.path.join(os.path.dirname(__file__), "m1_ppo.py"))
+        mp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mp)
+        world = mp.Policy(nnx.Rngs(0))
+        wm.load_into(world, pickle.load(open(os.path.expanduser(a.ppo), "rb")))
     rec = run(a.policy, a.meadows, a.sheep, a.days * sim.DAY, a.seed, world, agent)
-    res = {"policy": a.policy if a.policy != "agent" else f"agent:{a.agent}", "meadows": a.meadows, "sheep": a.sheep, "days": a.days, **summarise(rec, a.days)}
+    res = {"policy": {"agent": f"agent:{a.agent}", "ppo": f"ppo:{a.ppo}"}.get(a.policy, a.policy), "meadows": a.meadows, "sheep": a.sheep, "days": a.days, **summarise(rec, a.days)}
     print(json.dumps(res))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

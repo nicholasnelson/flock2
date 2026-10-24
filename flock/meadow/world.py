@@ -129,3 +129,14 @@ def generate(key: jax.Array, n_sheep: int = 40) -> State:
     )
     meadow = Meadow(water=water, grass=grass, obj_kind=obj_kind, obj_variant=obj_variant, obj_pos=obj_pos, obj_present=obj_present)
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))
+
+
+def random_start(key: jax.Array, n_sheep: int = 40) -> State:
+    """A new meadow with the flock at a random place, a random time of day and each sheep's levels
+    drawn from [0.2, 1.0] (the agent's ``--varied`` starts)."""
+    k1, k2, k3, k4 = jax.random.split(key, 4)
+    st = generate(k1, n_sheep)
+    centre = jax.random.uniform(k2, (2,), minval=24.0, maxval=N_TILES - 24.0)
+    pos = jnp.clip(st.flock.pos - N_TILES / 2 + centre, 1.0, N_TILES - 1.0)
+    levels = jax.random.uniform(k3, (n_sheep, st.flock.levels.shape[1]), minval=0.2, maxval=1.0)
+    return st._replace(flock=st.flock._replace(pos=pos, levels=levels), t=jax.random.randint(k4, (), 0, 1200))  # 1200 = sim.DAY (sim imports this module)

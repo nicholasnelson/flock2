@@ -43,7 +43,7 @@ from flock import ac, wm
 from flock.meadow import drives as D, sim
 from flock.meadow.rollouts import pack, unpack
 from flock.meadow.views import view_one
-from flock.meadow.world import generate, ground_state
+from flock.meadow.world import generate, ground_state, random_start
 
 import importlib.util
 
@@ -84,17 +84,7 @@ def collect(world, agent, states, mems, key, steps, rec_idx):
     return states, mems, recs
 
 
-def fresh(key, sheep):
-    """A new meadow with the flock at a random place, a random time of day and random levels."""
-    k1, k2, k3, k4 = jax.random.split(key, 4)
-    st = generate(k1, sheep)
-    centre = jax.random.uniform(k2, (2,), minval=24.0, maxval=sim.N_TILES - 24.0)
-    pos = jnp.clip(st.flock.pos - sim.N_TILES / 2 + centre, 1.0, sim.N_TILES - 1.0)
-    levels = jax.random.uniform(k3, (sheep, D.N_DRIVES), minval=0.2, maxval=1.0)
-    return st._replace(flock=st.flock._replace(pos=pos, levels=levels), t=jax.random.randint(k4, (), 0, sim.DAY))
-
-
-fresh_many = jax.jit(jax.vmap(fresh, in_axes=(0, None)), static_argnums=1)
+fresh_many = jax.jit(jax.vmap(random_start, in_axes=(0, None)), static_argnums=1)
 
 
 @nnx.jit
