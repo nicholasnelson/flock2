@@ -12,6 +12,12 @@ which the untrained, near-uniform actor acts) ``--ac_steps`` actor-critic update
 states inferred on replay sequences. Worlds restart (new layout, levels from [0.2, 1.0]) every
 ``--reset_every`` steps, staggered; no sequence spans a restart. Checkpoints ``wm.pkl``,
 ``agent.pkl`` and ``config.json``; scored by ``scripts/grid_eval.py``.
+
+Since the third review of 2026-10-24: ``--gamma``, ``--slowtar``, ``--norm`` (default "ret"),
+``--critic_lr`` and ``--repval`` (the replay value loss on real replayed rewards, on by default)
+set the actor-critic as in ``flock.ac``; ``--view full`` shows the whole map instead of the 8x8
+window; each iteration's updates run as one compiled call (``burst``), and the log records the
+time spent collecting and training.
 """
 
 from __future__ import annotations
@@ -30,16 +36,16 @@ from flax import nnx
 
 from flock import ac, wm
 from flock.grid import world as Wd
-from flock.grid.brain import GRID
+from flock.grid import brain
 
 
 def step_one(world, agent, s, mem, key):
     """One step for one world: the sheep sees, updates its model state, acts."""
     h, z, a_prev = mem
     k1, k2 = jax.random.split(key)
-    v = Wd.view(s)
+    v = Wd.observe(s, VIEW)
     feel = Wd.felt(s)
-    embed = world.encoder(jax.nn.one_hot(v, Wd.N_CLASSES)) + world.intero_in(feel)
+    embed = world.encoder(jax.nn.one_hot(v, world.cfg.n_classes)) + world.intero_in(feel)
     h = world.transition(h, z, jax.nn.one_hot(a_prev, Wd.N_ACTIONS))
     z = wm._sample(world.posterior(h, embed), k1)
     a = agent.act(ac.feat_of(h, z), k2)
@@ -61,25 +67,44 @@ def collect(world, agent, states, mems, key, steps):
     return states, mems, recs
 
 
-@nnx.jit
-def wm_step(world, opt, views, actions, felt, reward, key):
-    (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, views, actions, key, felt, reward)
-    opt.update(world, g)
-    return aux
+VIEW = "local"
 
 
-@nnx.jit
-def start_states(world, views, actions, felt, key):
-    s = world.observe(views, actions, key, felt)
-    return s.h.reshape(-1, s.h.shape[-1]), s.z.reshape(-1, s.z.shape[-1])
+@nnx.jit(static_argnums=(10,))
+def burst(world, wm_opt, agent, ac_opt, V, A, F, R, wm_keys, ac_keys, do_ac):
+    """One iteration's updates in one compiled call: for each of the K minibatches (V, A, F, R
+    stacked on a leading axis), a world-model step, then (``do_ac``) an actor-critic step from
+    the model states inferred on the next minibatch, with its real rewards for the replay value
+    loss. Returns the stacked aux dicts."""
+    wm_aux, ac_aux = [], []
+    K = V.shape[0]
+    for i in range(K):
+        (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, V[i], A[i], wm_keys[i], F[i], R[i])
+        wm_opt.update(world, g)
+        wm_aux.append(aux)
+    if do_ac:
+        for i in range(K):
+            j = (i + 1) % K
+            k1, k2 = jax.random.split(ac_keys[i])
+            s = world.observe(V[j], A[j], k1, F[j])
+            h0, z0 = s.h.reshape(-1, s.h.shape[-1]), s.z.reshape(-1, s.z.shape[-1])
+            real = jax.lax.stop_gradient(ac.feat_of(s.h, s.z)).swapaxes(0, 1)  # (L, B, F)
+            ac_aux.append(_ac_step(world, agent, ac_opt, h0, z0, k2, real, R[j].swapaxes(0, 1)))
+    stack = lambda xs: jax.tree.map(lambda *v: jnp.stack(v), *xs) if xs else {}
+    return stack(wm_aux), stack(ac_aux)
+
+
+def _ac_step(world, agent, opt, h0, z0, key, real_feats, real_rewards):
+    feats, acts, extrinsic, dis = ac.imagine(world, agent, h0, z0, key)
+    return ac._update(agent, opt, feats, acts, extrinsic, dis, real_feats, real_rewards)
 
 
 fresh = jax.jit(jax.vmap(lambda k: Wd.generate(k)))
 
 
 class Replay:
-    def __init__(self, cap, length):
-        self.v = np.zeros((cap, length, Wd.V, Wd.V), np.uint8)
+    def __init__(self, cap, length, size=Wd.V):
+        self.v = np.zeros((cap, length, size, size), np.uint8)
         self.a = np.zeros((cap, length), np.int32)
         self.f = np.zeros((cap, length, Wd.N_FELT), np.float32)
         self.r = np.zeros((cap, length), np.float32)
@@ -91,8 +116,8 @@ class Replay:
         self.i = (self.i + len(v)) % self.cap
         self.n = min(self.n + len(v), self.cap)
 
-    def sample(self, rng, B):
-        idx = rng.integers(self.n, size=B)
+    def sample(self, rng, B, K=None):
+        idx = rng.integers(self.n, size=B if K is None else (K, B))
         return self.v[idx].astype(np.int32), self.a[idx], self.f[idx], self.r[idx]
 
 
@@ -115,30 +140,43 @@ def main():
     p.add_argument("--twohot", action="store_true")
     p.add_argument("--ac_lr", type=float, default=3e-5)
     p.add_argument("--entropy", type=float, default=ac.ENTROPY)
-    p.add_argument("--norm", choices=("adv", "ret"), default="adv")
+    p.add_argument("--norm", choices=("adv", "ret"), default="ret")
+    p.add_argument("--gamma", type=float, default=ac.GAMMA)
+    p.add_argument("--slowtar", action="store_true", help="bootstrap from the slow critic (the old ac.py)")
+    p.add_argument("--critic_lr", type=float, default=None, help="default: --ac_lr")
+    p.add_argument("--repval", type=float, default=ac.REPVAL, help="weight of the replay value loss (0: off)")
+    p.add_argument("--view", choices=("local", "full"), default="local")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
+    global VIEW
+    VIEW = a.view
+    cfg = brain.config(a.view)
+    size = cfg.h
+    assert a.ac_steps == a.wm_steps, "updates run in bursts of K world-model + K actor-critic steps"
     os.makedirs(a.out, exist_ok=True)
     json.dump(vars(a), open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=Wd.N_FELT, reward=True, ensemble=a.ensemble, cfg=GRID)
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=Wd.N_FELT, reward=True, ensemble=a.ensemble, cfg=cfg)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
-    agent = ac.Agent(nnx.Rngs(a.seed + 1), curiosity=a.curiosity, center=not a.no_center, twohot=a.twohot, cfg=GRID, entropy=a.entropy, norm=a.norm)
-    ac_opt = ac.make_optimizer(agent, a.ac_lr)
-    replay = Replay(a.replay, a.length)
-    window = Replay(a.worlds, a.length)
+    agent = ac.Agent(nnx.Rngs(a.seed + 1), curiosity=a.curiosity, center=not a.no_center, twohot=a.twohot, cfg=cfg, entropy=a.entropy, norm=a.norm, gamma=a.gamma, slowtar=a.slowtar, repval=a.repval)
+    ac_opt = ac.make_optimizer(agent, a.ac_lr, a.critic_lr)
+    replay = Replay(a.replay, a.length, size)
+    window = Replay(a.worlds, a.length, size)
     fill = np.zeros(a.worlds, int)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
     key, k = jax.random.split(key)
     states = fresh(jax.random.split(k, a.worlds))
-    mems = (jnp.zeros((a.worlds, GRID.deter)), jnp.zeros((a.worlds, GRID.stoch * GRID.classes)), jnp.zeros(a.worlds, jnp.int32))
+    mems = (jnp.zeros((a.worlds, cfg.deter)), jnp.zeros((a.worlds, cfg.stoch * cfg.classes)), jnp.zeros(a.worlds, jnp.int32))
     age = np.arange(a.worlds) * (a.reset_every // a.worlds) if a.reset_every >= a.worlds else rng.integers(0, a.reset_every, a.worlds)
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for it in range(1, a.iters + 1):
+        t_a = time.time()
         key, k = jax.random.split(key)
         states, mems, recs = collect(world, agent, states, mems, k, a.collect)
+        jax.block_until_ready(states)
+        t_collect = time.time() - t_a
         T = a.collect
         seq = lambda x: np.asarray(x).swapaxes(0, 1)  # (T, B, ...) -> (B, T, ...)
         new = (seq(recs["view"]), seq(recs["action"]), seq(recs["felt"]), seq(recs["reward"]))
@@ -161,16 +199,13 @@ def main():
             fill[reset] = 0
         if replay.n < a.batch:
             continue
-        wm_aux, ac_aux = [], []
-        for _ in range(a.wm_steps):
-            v, ac_, f, r = replay.sample(rng, a.batch)
-            key, k = jax.random.split(key)
-            wm_aux.append(wm_step(world, wm_opt, v, ac_, f, r, k))
-        for _ in range(a.ac_steps if it > a.ac_start else 0):
-            v, ac_, f, _ = replay.sample(rng, a.batch)
-            key, k1, k2 = jax.random.split(key, 3)
-            h0, z0 = start_states(world, v, ac_, f, k1)
-            ac_aux.append(ac.train_step(world, agent, ac_opt, h0, z0, k2))
+        t_b = time.time()
+        V, A, F, R = replay.sample(rng, a.batch, a.wm_steps)
+        key, k1, k2 = jax.random.split(key, 3)
+        wm_st, ac_st = burst(world, wm_opt, agent, ac_opt, V, A, F, R, jax.random.split(k1, a.wm_steps), jax.random.split(k2, a.wm_steps), it > a.ac_start)
+        wm_aux = {k2: float(np.mean(np.asarray(v))) for k2, v in wm_st.items()}
+        ac_aux = {k2: float(np.mean(np.asarray(v))) for k2, v in ac_st.items()}
+        t_train = time.time() - t_b
         acts = np.asarray(recs["action"])
         nA = max(1, int((acts == Wd.EAT).sum())), max(1, int((acts == Wd.DRINK).sum()))
         rec = {
@@ -182,13 +217,15 @@ def main():
             "eat_success": float(np.asarray(recs["ate"]).sum() / nA[0]),
             "drink_success": float(np.asarray(recs["drank"]).sum() / nA[1]),
             "bad_taste": float(np.asarray(recs["bad"]).mean()),
-            **{f"wm_{k2}": float(np.mean([float(x[k2]) for x in wm_aux])) for k2 in wm_aux[0]},
-            **({f"ac_{k2}": float(np.mean([float(x[k2]) for x in ac_aux])) for k2 in ac_aux[0]} if ac_aux else {}),
+            "t_collect": t_collect,
+            "t_train": t_train,
+            **{f"wm_{k2}": v for k2, v in wm_aux.items()},
+            **{f"ac_{k2}": v for k2, v in ac_aux.items()},
         }
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if it % 25 == 0:
-            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "levels", "eat_success", "drink_success", "bad_taste", "ac_entropy", "ac_return", "ac_abs_adv", "wm_pixel_acc")}), flush=True)
+            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "levels", "eat_success", "drink_success", "bad_taste", "ac_entropy", "ac_return", "ac_value_start", "ac_value_corr", "ac_abs_adv", "wm_pixel_acc", "t_collect", "t_train")}), flush=True)
         if it % 50 == 0 or it == a.iters:
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(world))), open(os.path.join(a.out, "wm.pkl"), "wb"))
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(agent))), open(os.path.join(a.out, "agent.pkl"), "wb"))

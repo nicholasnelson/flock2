@@ -19,6 +19,9 @@ worlds run in parallel.
   4 water.
 
 No day, night, warmth, other sheep or rendering.
+
+``view_full`` is the whole map instead (the sheep's own tile marked ``SHEEP``), for separating
+memory and search from learning (third review of 2026-10-24, S4).
 """
 
 from __future__ import annotations
@@ -32,6 +35,8 @@ G = 16
 V = 8
 N_CLASSES = 5
 WALL, BARE, GRASS, LUSH, WATER = range(N_CLASSES)
+SHEEP = N_CLASSES  # only in view_full
+N_CLASSES_FULL = N_CLASSES + 1
 N_ACTIONS = 7
 NORTH, SOUTH, EAST, WEST, STAY, EAT, DRINK = range(N_ACTIONS)
 ACTION_NAMES = ("north", "south", "east", "west", "stay", "eat", "drink")
@@ -131,3 +136,12 @@ def view(s: State) -> jax.Array:
     """(V, V) cell classes around the sheep (it sits at row and column V // 2); outside is wall."""
     padded = jnp.pad(classes(s), V, constant_values=WALL)
     return jax.lax.dynamic_slice(padded, (s.pos[0] + V - V // 2, s.pos[1] + V - V // 2), (V, V))
+
+
+def view_full(s: State) -> jax.Array:
+    """(G, G) the whole map, the sheep's tile marked SHEEP."""
+    return classes(s).at[s.pos[0], s.pos[1]].set(SHEEP)
+
+
+def observe(s: State, mode: str = "local") -> jax.Array:
+    return view(s) if mode == "local" else view_full(s)

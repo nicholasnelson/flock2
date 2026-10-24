@@ -29,6 +29,7 @@ from flax import nnx
 from flock import ac, wm
 from flock.grid import world as Wd
 from flock.grid.brain import GRID
+from flock.grid import brain
 
 H = 32
 

@@ -123,3 +123,19 @@ def test_a_centred_twohot_critic_learns_the_offset_delayed_bandit():
     # first hundreds of updates the critic barely moves in either form, so the lag dominates
     p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=True, twohot=True), _OffsetDelayedBandit(), 300)
     assert p > 0.3, p
+
+
+def test_the_replay_value_loss_and_health_readings():
+    world = wm.WorldModel(nnx.Rngs(0), n_intero=5, reward=True)
+    agent = ac.Agent(nnx.Rngs(1))
+    opt = ac.make_optimizer(agent, 3e-5, critic_lr=1e-4)
+    h0 = jax.random.normal(jax.random.PRNGKey(0), (6, wm.DETER))
+    z0 = jax.nn.one_hot(jax.random.randint(jax.random.PRNGKey(1), (6, wm.STOCH), 0, wm.CLASSES), wm.CLASSES).reshape(6, -1)
+    real_feats = jax.random.normal(jax.random.PRNGKey(2), (10, 4, ac.FEAT))
+    real_rewards = -jnp.ones((10, 4)) + 0.1 * jax.random.normal(jax.random.PRNGKey(3), (10, 4))
+    slow_before = np.asarray(agent.slow_critic.c.kernel[...]).copy()
+    aux = ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(4), real_feats, real_rewards)
+    for k in ("repval_loss", "value_corr", "real_return", "value_start"):
+        assert np.isfinite(float(aux[k])), k
+    # the slow critic is only averaged toward the critic, never trained directly
+    assert np.allclose(np.asarray(agent.slow_critic.c.kernel[...]), 0.98 * slow_before + 0.02 * np.asarray(agent.critic.c.kernel[...]), atol=1e-6)

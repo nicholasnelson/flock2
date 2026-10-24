@@ -6,6 +6,7 @@
     python scripts/grid_eval.py --policy scripted
     python scripts/grid_eval.py --policy stay
     python scripts/grid_eval.py --policy agent --agent ~/flock2_data/grid/run1 [--greedy]
+    python scripts/grid_eval.py --policy true --agent ~/flock2_data/grid/true_s0   # actor on the true state (S1)
 
 Reported (and written to ``--out`` as JSON), with standard errors across worlds where marked:
 reward per step (± SE); mean food and water over the last quarter (± SE); ``depleted``, the share
@@ -28,10 +29,24 @@ from flax import nnx
 
 from flock import ac, wm
 from flock.grid import scripted, world as Wd
-from flock.grid.brain import GRID
+from flock.grid import brain
 
 
-def run(policy, n_worlds, steps, world=None, agent=None, greedy=False, seed=0):
+def _true_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("grid_true_ac", os.path.join(os.path.dirname(__file__), "grid_true_ac.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _true_features(s):
+    return _true_module().features(s)
+
+
+def run(policy, n_worlds, steps, world=None, agent=None, greedy=False, seed=0, view="local"):
+    GRID = brain.config(view)
     states = jax.vmap(lambda k: Wd.generate(k, jnp.array([0.7, 0.7])))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_worlds)]))
     mems = (jnp.zeros((n_worlds, GRID.deter)), jnp.zeros((n_worlds, GRID.stoch * GRID.classes)), jnp.zeros(n_worlds, jnp.int32))
     modes = jnp.zeros(n_worlds, jnp.int32)
@@ -40,12 +55,15 @@ def run(policy, n_worlds, steps, world=None, agent=None, greedy=False, seed=0):
         k1, k2 = jax.random.split(k)
         if policy == "agent":
             h, z, a_prev = mem
-            embed = w.encoder(jax.nn.one_hot(Wd.view(s), Wd.N_CLASSES)) + w.intero_in(Wd.felt(s))
+            embed = w.encoder(jax.nn.one_hot(Wd.observe(s, view), GRID.n_classes)) + w.intero_in(Wd.felt(s))
             h = w.transition(h, z, jax.nn.one_hot(a_prev, Wd.N_ACTIONS))
             z = wm._sample(w.posterior(h, embed), k1)
             logits = ac.policy_logp(g.actor(ac.feat_of(h, z)))
             a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
             mem = (h, z, a)
+        elif policy == "true":
+            logits = ac.policy_logp(g.actor(_true_features(s)))
+            a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
         elif policy == "scripted":
             a, mode = scripted.policy(s, k2, mode)
         elif policy == "stay":
@@ -93,7 +111,7 @@ def summarise(rec):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent"), required=True)
+    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent", "true"), required=True)
     p.add_argument("--agent", default=None)
     p.add_argument("--greedy", action="store_true")
     p.add_argument("--worlds", type=int, default=64)
@@ -101,14 +119,20 @@ def main():
     p.add_argument("--out", default=None)
     a = p.parse_args()
     world = agent = None
+    view = "local"
     if a.policy == "agent":
         d = os.path.expanduser(a.agent)
         cfg = json.load(open(os.path.join(d, "config.json")))
-        world = wm.WorldModel(nnx.Rngs(0), n_intero=Wd.N_FELT, reward=True, ensemble=cfg.get("ensemble", 0), cfg=GRID)
+        view = cfg.get("view", "local")
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=Wd.N_FELT, reward=True, ensemble=cfg.get("ensemble", 0), cfg=brain.config(view))
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
-        agent = ac.Agent(nnx.Rngs(1), twohot=cfg.get("twohot", False), cfg=GRID)
+        agent = ac.Agent(nnx.Rngs(1), twohot=cfg.get("twohot", False), cfg=brain.config(view))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
-    res = {"policy": a.policy + (f":{a.agent}" if a.agent else "") + (" greedy" if a.greedy else ""), **summarise(run(a.policy, a.worlds, a.steps, world, agent, a.greedy))}
+    if a.policy == "true":
+        d = os.path.expanduser(a.agent)
+        agent = _true_module().make_agent(0)
+        wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
+    res = {"policy": a.policy + (f":{a.agent}" if a.agent else "") + (" greedy" if a.greedy else ""), **summarise(run(a.policy, a.worlds, a.steps, world, agent, a.greedy, view=view))}
     print(json.dumps(res))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

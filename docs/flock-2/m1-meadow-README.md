@@ -516,3 +516,27 @@ python scripts/m1_watch.py --agent ~/flock2_data/m1_agent/run3 --out runs/m1/wat
 World-model runs 2 and 3: `--intero --init <run1>` and `--intero --reward --init <run2>`, 10,000
 steps each. Agent runs 1 and 2 used the defaults in force at commits 13d9d4c/bfcd156 and 59d2d1b
 (settings in the table above); run 3 the defaults at 10a72ed.
+
+# The grid world — a test bed for the learner (2026-10-24, owner's proposal)
+
+A deliberately simple world (`flock/grid/`): one sheep, two needs (food, water), an 8 × 8
+top-down view (or the whole map, `--view full`), the same world model and actor-critic code as
+the meadow at a small size (`flock/grid/brain.py`). Scripts: `grid_agent.py` (learning from
+birth), `grid_true_ac.py` (the actor-critic on the true simulator), `grid_eval.py` (64 fixed
+worlds, 1,000 steps, standard errors, greedy option), `grid_gap.py` (imagined vs real). Results
+in `grid-results/`. Baselines: stay −1.31, random −1.12 ± 0.01 (94 % depleted), scripted
+(whole-map, privileged) −0.098 ± 0.0003 (0 % depleted).
+
+## Pre-registered criteria (written before the runs, third review of 2026-10-24)
+
+- **S1, actor-critic on the true simulator** (`grid_true_ac.py`, whole-map one-hot + felt, no
+  world model), γ ∈ {0.98, 0.997} × seeds {0, 1, 2}. *Worked if* at γ = 0.98 every seed beats
+  random on `grid_eval` by more than 5 SE, keeps food and water above 0.3, and the mean centred
+  value at start states (`value_start`) stays within ±5. If it fails at both γ: PPO on the same
+  features; if that succeeds, the fault is in `ac.py`'s update rule.
+- **S2, the learned-model agent with the critic fixes** (one critic for target and baseline,
+  return normalisation, replay value loss 0.3, health logs), at the γ S1 picks, seeds {0, 1, 2}.
+  *Worked if* `value_corr` exceeds 0.7, `ac_return` stays bounded, and the evaluation criteria
+  of S1 hold.
+- **S3, action-conditional gap.** *Worked if* drink is ranked first beside water and eat first on
+  grass when hungry in more than 80 % of those states.
