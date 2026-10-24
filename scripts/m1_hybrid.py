@@ -12,7 +12,9 @@ policy; the logged sheep's last 64 steps go to the world model's replay; ``--wm_
 world-model updates; then (after ``--ppo_start`` iterations of world-model-only infancy, in which
 the near-uniform initial policy acts but is not trained) PPO epochs on the collected
 (state, action, reward) samples, the state taken as fixed input (no gradient into the world
-model). Rewards are the simulator's (``drives.reward``); no curiosity. GAE bootstraps the last
+model). Rewards are the simulator's (``drives.reward``), centred by default (``--no_center``
+turns it off): a running mean of the reward is subtracted before GAE (Naik et al. 2024,
+arXiv:2405.09999), so value targets are small; no curiosity. GAE bootstraps the last
 step with the value of the last state seen (the state after it is not computed). Meadows start as
 ``world.random_start`` and restart every ``--reset_every`` steps, staggered, between rollouts.
 Checkpoints: ``wm.pkl`` and ``policy.pkl``; scored by ``m1_eval.py --policy hybrid``.
@@ -127,6 +129,7 @@ def main():
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--reset_every", type=int, default=1200)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--no_center", action="store_true", help="do not centre the reward")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
@@ -145,6 +148,7 @@ def main():
     mems = (jnp.zeros((a.meadows, a.sheep, wm.DETER)), jnp.zeros((a.meadows, a.sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((a.meadows, a.sheep), jnp.int32))
     age = np.arange(a.meadows) * (a.reset_every // a.meadows)
     rec_idx = jnp.arange(a.record)
+    r_bar = None  # running mean of the reward, for centring
     # compile (and autotune) both update steps before acting, while the GPU is empty, on throwaway
     # copies (XLA's autotuning ran out of memory otherwise)
     w_tmp, o_tmp, p_tmp, q_tmp = nnx.clone(world), nnx.clone(wm_opt), nnx.clone(policy), nnx.clone(opt)
@@ -175,7 +179,10 @@ def main():
         # PPO on the real experience
         ppo_aux = []
         if it > a.ppo_start:
-            adv = gae(recs["all_reward"], recs["value"], a.gamma, a.lam)
+            r_mean = float(np.asarray(recs["all_reward"]).mean())
+            r_bar = r_mean if r_bar is None else 0.9 * r_bar + 0.1 * r_mean
+            centred = recs["all_reward"] - (0.0 if a.no_center else r_bar)
+            adv = gae(centred, recs["value"], a.gamma, a.lam)
             ret = adv + recs["value"]
             flat = lambda x: np.asarray(x).reshape((-1,) + x.shape[3:])
             obs, act_, lp, ad, rt = flat(recs["feat"]), flat(recs["all_actions"]), flat(recs["logp"]), flat(adv), flat(ret)

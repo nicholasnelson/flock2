@@ -19,6 +19,9 @@ def test_lambda_returns_match_a_hand_computation():
 
 def test_an_actor_critic_step_runs_and_changes_only_the_agent():
     world = wm.WorldModel(nnx.Rngs(0), n_intero=5, reward=True)
+    # a reward head that is not all zeros, so the update has something to follow
+    k = world.reward_head.b.kernel
+    k[...] = 0.1 * jax.random.normal(jax.random.PRNGKey(9), k[...].shape)
     agent = ac.Agent(nnx.Rngs(1))
     opt = ac.make_optimizer(agent)
     h0 = jax.random.normal(jax.random.PRNGKey(0), (6, wm.DETER))
@@ -81,3 +84,35 @@ def test_the_curiosity_scale_is_frozen_after_the_first_update():
     first = float(agent.intr_scale[...])
     ac.train_step(world, agent, opt, 3 * h0, z0, jax.random.PRNGKey(3))
     assert float(agent.intr_scale[...]) == first
+
+
+class _OffsetDelayedBandit(nnx.Module):
+    """The second review's harder bandit: every reward is shifted by -1 and depends on the action
+    taken one step *before* the last (h[:9] holds the last action, h[9:18] the one before), so
+    the critic must carry value across a step at a value scale of ~ -1 / (1 - gamma)."""
+
+    ensemble = None
+
+    def transition(self, h, z, a_onehot):
+        n = wm.N_ACTIONS
+        return jnp.zeros_like(h).at[..., :n].set(a_onehot).at[..., n : 2 * n].set(h[..., :n])
+
+    def prior(self, h):
+        return jnp.zeros(h.shape[:-1] + (wm.STOCH, wm.CLASSES))
+
+    def reward(self, feat):
+        return feat[..., wm.N_ACTIONS + 3] - 1.0
+
+
+def _bandit_preference(agent, world, updates, seed=0):
+    opt = ac.make_optimizer(agent)
+    h0 = jnp.zeros((64, wm.DETER))
+    z0 = jnp.zeros((64, wm.STOCH * wm.CLASSES))
+    for i in range(updates):
+        ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(seed + i))
+    return float(jnp.exp(ac.policy_logp(agent.actor(ac.feat_of(h0, z0))))[:, 3].mean())
+
+
+def test_a_centred_actor_critic_learns_the_offset_delayed_bandit():
+    p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=True), _OffsetDelayedBandit(), 300)
+    assert p > 0.3, p

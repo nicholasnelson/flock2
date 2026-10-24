@@ -13,6 +13,14 @@ arXiv:2301.04104), on the homeostatic reward (Milestone 1, step 3).
   disagreement at the first actor-critic update (the end of infancy), then frozen — so curiosity
   pays about ``curiosity`` per step at first and fades as the model learns. (Until the review of
   2026-10-24 the divisor was a running mean, so curiosity paid ~``curiosity`` per step forever.)
+- Reward centring (``center``, on by default since the second review of 2026-10-24): the
+  extrinsic reward has a running mean of itself subtracted before returns are computed (Naik, Wan,
+  Tomar & Sutton 2024, "Reward Centering", arXiv:2405.09999). In a task that never ends this
+  removes the state-independent part of every value, r_bar / (1 - gamma) (~ -333 here), and
+  leaves the small part that differs between states; it changes no policy's ranking. Without
+  it the critic, a scalar output starting at zero and trained at Adam 3e-5, was still drifting
+  toward -333 after 38,000 updates, so the actor's advantages were mostly the critic's lag.
+  (Valid while sheep cannot die; revisit when they can.)
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
   percentile range of the *advantages* (returns minus the critic's value), with a small entropy
@@ -36,6 +44,7 @@ GAMMA, LAMBDA = 0.997, 0.95
 ENTROPY = 3e-4  # as DreamerV3 (3e-3 kept M1 run 2's policy uniform for 530 iterations)
 SLOW_DECAY = 0.98
 RETURN_DECAY = 0.99
+CENTER_DECAY = 0.99  # EMA of the imagined extrinsic reward, for centring
 UNIMIX = 0.01
 FEAT = wm.DETER + wm.STOCH * wm.CLASSES
 
@@ -60,13 +69,15 @@ def policy_logp(logits: jax.Array) -> jax.Array:
 
 
 class Agent(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0):
+    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True):
         self.actor = Head(wm.N_ACTIONS, rngs)
         self.critic = Head(1, rngs)
         self.slow_critic = Head(1, rngs)
         nnx.update(self.slow_critic, nnx.state(self.critic))
         self.ret_scale = nnx.Variable(jnp.float32(1.0))
         self.curiosity = nnx.Variable(jnp.float32(curiosity))
+        self.center = center
+        self.r_bar = nnx.Variable(jnp.float32(jnp.nan))  # running mean of the extrinsic reward (nan: unset)
         self.intr_scale = nnx.Variable(jnp.float32(0.0))  # mean disagreement at the first update, then frozen (0: unset)
 
     def act(self, feat: jax.Array, key: jax.Array) -> jax.Array:
@@ -137,7 +148,10 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     intr_scale = jnp.where(old > 0, old, dis.mean())
     agent.intr_scale[...] = intr_scale
     intrinsic = agent.curiosity[...] * dis / jnp.maximum(intr_scale, 1e-8)
-    rewards = extrinsic + intrinsic
+    old_bar = agent.r_bar[...]
+    r_bar = jnp.where(jnp.isnan(old_bar), extrinsic.mean(), CENTER_DECAY * old_bar + (1 - CENTER_DECAY) * extrinsic.mean())
+    agent.r_bar[...] = r_bar
+    rewards = (extrinsic - r_bar if agent.center else extrinsic) + intrinsic
     scale = agent.ret_scale[...]
     (loss, (aux, raw_adv)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
     opt.update(agent, grads)
@@ -149,6 +163,7 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     nnx.update(agent.slow_critic, jax.tree.map(lambda s, f: SLOW_DECAY * s + (1 - SLOW_DECAY) * f, slow, fast))
     aux["ret_scale"] = agent.ret_scale[...]
     aux["extrinsic"] = jnp.mean(extrinsic)
+    aux["r_bar"] = r_bar
     aux["intrinsic"] = jnp.mean(intrinsic)
     aux["disagreement"] = jnp.mean(dis)
     return aux
