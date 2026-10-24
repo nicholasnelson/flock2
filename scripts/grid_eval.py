@@ -61,6 +61,9 @@ def run(policy, n_worlds, steps, world=None, agent=None, greedy=False, seed=0, v
             logits = ac.policy_logp(g.actor(ac.feat_of(h, z)))
             a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
             mem = (h, z, a)
+        elif policy == "ppo_true":
+            logits = g(_true_features(s))[0]
+            a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
         elif policy == "true":
             logits = ac.policy_logp(g.actor(_true_features(s)))
             a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
@@ -111,7 +114,7 @@ def summarise(rec):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent", "true"), required=True)
+    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent", "true", "ppo_true"), required=True)
     p.add_argument("--agent", default=None)
     p.add_argument("--greedy", action="store_true")
     p.add_argument("--worlds", type=int, default=64)
@@ -128,6 +131,14 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         agent = ac.Agent(nnx.Rngs(1), twohot=cfg.get("twohot", False), cfg=brain.config(view))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
+    if a.policy == "ppo_true":
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("grid_ppo_true", os.path.join(os.path.dirname(__file__), "grid_ppo_true.py"))
+        mp = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mp)
+        agent = mp.make_policy(0)
+        wm.load_into(agent, pickle.load(open(os.path.join(os.path.expanduser(a.agent), "ppo.pkl"), "rb")))
     if a.policy == "true":
         d = os.path.expanduser(a.agent)
         agent = _true_module().make_agent(0)
