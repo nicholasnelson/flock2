@@ -13,8 +13,9 @@ decision log at the end.*
   relied on a stack of nine channel interventions (below), not on the game alone. The human
   quiz was not run. Record: `m0-toy-README.md`.
 - **M1 (meadow, drives, world model): in progress.** World, views, drives, world model, actor-
-  critic and evaluation built and tested. No learned policy yet beats a random flock on the
-  fixed evaluation. Record: `m1-meadow-README.md`; review: `review-2026-10-24.md`.
+  critic and evaluation built and tested. No sheep learning from vision through the world model
+  yet beats a random flock on the fixed evaluation; PPO on privileged features beats the scripted
+  flock, so the meadow is learnable. Record: `m1-meadow-README.md`; review: `review-2026-10-24.md`.
 
 ## The meadow (`flock/meadow/world.py`, `sim.py`)
 
@@ -95,7 +96,8 @@ days; levels at each dusk and dawn (mean, 10th percentile), the share depleted (
 hydration or warmth ≤ 0.05), reward per step, feeding success, bad taste, the day/night action
 mix, resting near cover at night. Baselines (2026-10-24): random −1.02 per step, rest-always
 −1.06, scripted −0.41 (20 % depleted by dawn of day 3). Upper bound: PPO on privileged features
-(`scripts/m1_ppo.py`) — pending.
+(`scripts/m1_ppo.py`), −0.39 after 2,000 updates (9 % depleted). The learned sheep (both seeds of
+the post-review configuration) score −1.07 and −1.11.
 
 ## M0's channel stack (carried to M4)
 

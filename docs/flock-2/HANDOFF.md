@@ -19,7 +19,7 @@ interoception and reward head), `flock/ac.py` (actor-critic in imagination); scr
 the sheep's own behaviour (no scripted pretraining), with a curiosity reward from the
 disagreement of five heads. birth1 (curiosity about the next view) fixed the false drinking
 belief but learned to spin in place, then to run; birth2 (curiosity about the body's stores,
-varied starts and daily meadow resets, per-action energy use) improved the model but grazed and drank where there is nothing, led by curiosity; birth3 (Keramati & Gutkin's convex drive, an innate bad taste for ingesting nothing, curiosity 0.02) is the current run. Details,
+varied starts and daily meadow resets, per-action energy use) improved the model but grazed and drank where there is nothing, led by curiosity; birth3 (Keramati & Gutkin's convex drive, an innate bad taste for ingesting nothing, curiosity 0.02) did not beat random either. After the outside review (`review-2026-10-24.md`): a fixed evaluation with baselines, two actor-critic fixes (two seeds, still at random level), a bandit learning test, and privileged PPO, which beats the scripted flock — so the meadow is learnable and the failure is in learning from imagination. Details,
 numbers and reasoning in the README's step 3 sections from "The change of approach" on.
 
 **Gotchas added.** Data and checkpoints live on the WSL filesystem (`~/flock2_data/`), not in

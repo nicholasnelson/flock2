@@ -8,7 +8,7 @@ result here: [`m1-results/`](m1-results/) (copied from the local runs, which are
 | --- | --- |
 | 1. Meadow sim, first-person views, viewer, scripted flock | Done. |
 | 2. Logged rollouts, world-model pretraining | Done; surprise not yet selective. |
-| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. Three runs on a scripted-pretrained world model and two learning from birth (birth1, birth2): no learned behaviour that beats a random flock yet; causes found for each (§ Step 3). birth3 (convex drive, bad taste, less curiosity) running. |
+| 3. Drives and the actor-critic in imagination | Built and tested. No sheep learning from vision through the world model beats a random flock yet (seven runs); privileged PPO beats the scripted flock, so the meadow is learnable (§ After the review). |
 | 4. Behavioural and stability evaluation | Not started. |
 
 # Step 1 — sim, first-person views, viewer, scripted flock
@@ -433,7 +433,73 @@ Agreed with the owner (2026-10-24):
 3. **Curiosity 0.1 → 0.02.**
 
 **Run:** `--wm none --scripted none --ensemble 5 --curiosity 0.02 --ac_start 300 --varied
---reset_every 1200 --replay 8192 --iters 1500` (`runs/birth3.sh`). Results: pending.
+--reset_every 1200 --replay 8192 --iters 1500` (`runs/birth3.sh`); stopped at 516 iterations
+after the review (`m1-results/agent_birth3_log.jsonl`). By iterations 379–400 the policy stood
+with its head up (59 % of day steps, 72 % of night): a real but small social gain that the model
+overestimated; bare grazing fell to zero (the taste worked); by iteration 500 energy was 0.46 and
+reward below the random flock's. On the fixed evaluation below it scores −1.15 per step, worse
+than random.
+
+## After the review (2026-10-24)
+
+An outside review (`review-2026-10-24.md`, from reading only) found two flaws in the
+actor-critic's reward handling and gaps in method; the owner chose the order of work. What was
+done and found:
+
+**A fixed evaluation** (`scripts/m1_eval.py`, `m1_eval_table.py`; `m1-results/eval/`): every
+policy on the same 8 meadows × 40 sheep (seeds 10,000 + i, not training meadows), from dawn with
+`generate`'s starting levels, for two days; levels at each dusk and dawn, share depleted (energy,
+hydration or warmth ≤ 0.05 at the end), reward per step, feeding, bad taste, action mix, resting
+near cover at night.
+
+**A test that the actor-critic learns** (`tests/test_ac.py`): on a nine-armed bandit it raises the
+rewarded action's probability from 0.11 to ~0.42 in 300 updates. It learns; slowly at Adam 3e-5.
+
+**The two fixes** (`flock/ac.py`): the actor's scale S is now the 5th–95th percentile range of the
+*advantages*, not of the returns (in birth2, with varied starts, the return range grew to ~140 and
+divided the action signal away; the actor's loss fell to −0.007); curiosity is divided by the
+mean disagreement at the first update and then frozen, so it can fade (a running mean made it
+pay its weight forever). Note: birth3's S had stayed at ~15, so the first fix could not have
+been what stopped birth3.
+
+**The privileged upper bound** (`flock/meadow/privileged.py`, `scripts/m1_ppo.py`; logs in
+`m1-results/ppo/`): a 128-unit MLP on true-state features — levels and taste, time of day,
+egocentric direction and distance to the nearest water, biteable grass and cover — trained with
+PPO ([Schulman et al. 2017](https://arxiv.org/abs/1707.06347)) and GAE
+([Schulman et al. 2015](https://arxiv.org/abs/1506.02438)) directly in the simulator on the
+sheep's own reward. No world model, no imagination, no curiosity, no vision. 300 updates take
+82 s; 2,000 take 8.5 min.
+
+**The fixed configuration on two seeds**: birth3's settings plus only the two fixes, 900
+iterations each (`m1-results/agent_fix_s{0,1}_log.jsonl`).
+
+| Policy | Reward / step | Depleted by dawn 3 | Dawn-3 means: energy / water / warmth / social / interest | Ingesting nothing (share of steps) | Resting near cover at night | Main actions |
+| --- | --- | --- | --- | --- | --- | --- |
+| random | −1.02 | 100 % | 1.14 / 0.04 / 0.02 / 0.38 / 1.03 | 11 % | 0 % | uniform |
+| rest always | −1.06 | 100 % | 0.05 / 0.00 / 1.15 / 1.00 / 0.00 | 0 % | 0 % | rest |
+| scripted flock | −0.41 | 20 % | 0.60 / 0.43 / 1.02 / 0.96 / 0.79 | 0.5 % | 65 % | walk; rest at night |
+| PPO, privileged, 300 updates | −0.46 | 15 % | 0.70 / 1.10 / 0.20 / 0.98 / 0.67 | 5 % | 0 % | rest, turn |
+| **PPO, privileged, 2,000 updates** | **−0.39** | **9 %** | 0.78 / 1.09 / 0.34 / 0.98 / 0.69 | 3 % | 0.5 % | rest, head up, turn |
+| birth3, iteration ~500 | −1.15 | 100 % | 0.10 / 0.00 / 0.00 / 0.89 / 0.72 | 1 % | 0 % | head up |
+| fixed, seed 0 | −1.07 | 100 % | 0.89 / 0.03 / 0.00 / 0.89 / 1.06 | 46 % | 0 % | drink 51 %, trot |
+| fixed, seed 1 | −1.11 | 100 % | 1.15 / 0.00 / 0.00 / 0.74 / 0.98 | 34 % | 0 % | drink 35 %, walk, graze |
+
+Reading *(judgement)*:
+
+- **The meadow, drives and reward are learnable.** Model-free PPO on privileged features beats the
+  scripted flock within minutes and loses fewer sheep. It drinks at water (55 % of its drink
+  actions succeed against ~0 % for the learned sheep) and grazes successfully 91 % of the time.
+  It has not learned night shelter (it rests in the open, ~18 tiles from cover, so warmth sinks)
+  and over-drinks to ~1.09 — the longest-range plan in the meadow is still unsolved even here.
+- **The review's two fixes are correct but do not rescue the learning sheep.** Both seeds stay at
+  or below the random flock. On the evaluation's healthy dawn starts their policies fall back on
+  drinking on dry ground, a third to half of all steps, despite the bad taste — the drinking
+  delusion from the scripted-pretraining era, now arising in states the from-birth model has
+  seen little of.
+- So the failure is in learning from imagination with this world model, not in the meadow or the
+  reward. Next: the review's sanity ladder continues (proposed to the owner).
+
+## Reproduce
 
 ## Reproduce
 
