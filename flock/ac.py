@@ -55,8 +55,8 @@ FEAT = wm.DETER + wm.STOCH * wm.CLASSES
 
 
 class Head(nnx.Module):
-    def __init__(self, out: int, rngs: nnx.Rngs, hidden: int = 256):
-        self.a = nnx.Linear(FEAT, hidden, rngs=rngs)
+    def __init__(self, out: int, rngs: nnx.Rngs, hidden: int = 256, n_in: int = FEAT):
+        self.a = nnx.Linear(n_in, hidden, rngs=rngs)
         self.na = nnx.LayerNorm(hidden, rngs=rngs)
         self.b = nnx.Linear(hidden, hidden, rngs=rngs)
         self.nb = nnx.LayerNorm(hidden, rngs=rngs)
@@ -74,11 +74,12 @@ def policy_logp(logits: jax.Array) -> jax.Array:
 
 
 class Agent(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True, twohot: bool = False):
-        self.actor = Head(wm.N_ACTIONS, rngs)
+    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True, twohot: bool = False, cfg: wm.Config = wm.MEADOW, hidden: int = 256):
+        self.n_actions = cfg.n_actions
+        self.actor = Head(cfg.n_actions, rngs, hidden, cfg.feat)
         self.twohot = twohot
-        self.critic = Head(wm.REWARD_BINS if twohot else 1, rngs)
-        self.slow_critic = Head(wm.REWARD_BINS if twohot else 1, rngs)
+        self.critic = Head(wm.REWARD_BINS if twohot else 1, rngs, hidden, cfg.feat)
+        self.slow_critic = Head(wm.REWARD_BINS if twohot else 1, rngs, hidden, cfg.feat)
         nnx.update(self.slow_critic, nnx.state(self.critic))
         self.ret_scale = nnx.Variable(jnp.float32(1.0))
         self.curiosity = nnx.Variable(jnp.float32(curiosity))
@@ -116,7 +117,7 @@ def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
         k1, k2 = jax.random.split(k)
         f = feat_of(h, z)
         a = agent.act(jax.lax.stop_gradient(f), k1)
-        h2 = world.transition(h, z, jax.nn.one_hot(a, wm.N_ACTIONS))
+        h2 = world.transition(h, z, jax.nn.one_hot(a, agent.n_actions))
         z2 = wm._sample(world.prior(h2), k2)
         return (h2, z2), (f, a)
 
@@ -124,7 +125,7 @@ def imagine(world: wm.WorldModel, agent: Agent, h, z, key):
     feats = jnp.concatenate([feats, feat_of(hT, zT)[None]], 0)
     rewards = world.reward(feats[1:])
     if world.ensemble is not None:
-        dis = world.disagreement(feats[:-1], jax.nn.one_hot(acts, wm.N_ACTIONS))
+        dis = world.disagreement(feats[:-1], jax.nn.one_hot(acts, agent.n_actions))
     else:
         dis = jnp.zeros_like(rewards)
     sg = jax.lax.stop_gradient

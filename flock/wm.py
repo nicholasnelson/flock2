@@ -41,6 +41,8 @@ first-person strip (``flock.fpv``: 64 x 256, 16 palette colours) and their actio
   0.1, each with 1 nat of free bits (all as in DreamerV3).
 
 Sizes are chosen to land in the plan's 2-8M parameters; ``count_params`` reports the real number.
+They live in a ``Config``: ``MEADOW`` (the default, the meadow's first-person strip) and any other,
+e.g. the grid world's (``flock.grid``), so one implementation serves both.
 """
 
 from __future__ import annotations
@@ -70,42 +72,71 @@ ENC_CH = (32, 64, 96, 128, 192)  # 64x256 -> 32x128 -> 16x64 -> 8x32 -> 4x16 -> 
 BOTTOM = (2, 8)
 
 
+class Config(NamedTuple):
+    """Sizes of a world model. Observations are (h, w) grids of class indices (n_classes), seen
+    one-hot; the encoder halves (h, w) at each stage down to ``bottom``."""
+
+    h: int = H
+    w: int = W
+    n_classes: int = N_COLOURS
+    n_actions: int = N_ACTIONS
+    enc_ch: tuple = ENC_CH
+    bottom: tuple = BOTTOM
+    deter: int = DETER
+    hidden: int = HIDDEN
+    stoch: int = STOCH
+    classes: int = CLASSES
+    embed: int = EMBED
+    body_dims: tuple = BODY_DIMS  # which felt numbers the body-curiosity ensemble predicts
+    intero_weight: float = INTERO_WEIGHT
+
+    @property
+    def feat(self) -> int:
+        return self.deter + self.stoch * self.classes
+
+
+MEADOW = Config()
+
+
 def _act(x):
     return jax.nn.silu(x)
 
 
 class Encoder(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs):
-        ch = (N_COLOURS,) + ENC_CH
-        self.convs = nnx.List([nnx.Conv(ch[i], ch[i + 1], (4, 4), strides=2, padding="SAME", rngs=rngs) for i in range(len(ENC_CH))])
-        self.norms = nnx.List([nnx.LayerNorm(c, rngs=rngs) for c in ENC_CH])
-        self.out = nnx.Linear(BOTTOM[0] * BOTTOM[1] * ENC_CH[-1], EMBED, rngs=rngs)
+    def __init__(self, rngs: nnx.Rngs, cfg: Config = MEADOW):
+        ch = (cfg.n_classes,) + cfg.enc_ch
+        self.embed = cfg.embed
+        self.convs = nnx.List([nnx.Conv(ch[i], ch[i + 1], (4, 4), strides=2, padding="SAME", rngs=rngs) for i in range(len(cfg.enc_ch))])
+        self.norms = nnx.List([nnx.LayerNorm(c, rngs=rngs) for c in cfg.enc_ch])
+        self.out = nnx.Linear(cfg.bottom[0] * cfg.bottom[1] * cfg.enc_ch[-1], cfg.embed, rngs=rngs)
 
     def __call__(self, x: jax.Array) -> jax.Array:
-        """x: (..., 64, 256, 16) one-hot -> (..., EMBED)."""
+        """x: (..., h, w, n_classes) one-hot -> (..., embed)."""
         lead = x.shape[:-3]
         h = x.reshape((-1,) + x.shape[-3:])
         for conv, norm in zip(self.convs, self.norms):
             h = _act(norm(conv(h)))
-        return self.out(h.reshape(h.shape[0], -1)).reshape(lead + (EMBED,))
+        return self.out(h.reshape(h.shape[0], -1)).reshape(lead + (self.embed,))
 
 
 class Decoder(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs):
-        self.inp = nnx.Linear(DETER + STOCH * CLASSES, BOTTOM[0] * BOTTOM[1] * ENC_CH[-1], rngs=rngs)
-        ch = ENC_CH[::-1] + (N_COLOURS,)
-        self.deconvs = nnx.List([nnx.ConvTranspose(ch[i], ch[i + 1], (4, 4), strides=(2, 2), padding="SAME", rngs=rngs) for i in range(len(ENC_CH))])
+    def __init__(self, rngs: nnx.Rngs, cfg: Config = MEADOW):
+        self.cfg = cfg
+        self.inp = nnx.Linear(cfg.feat, cfg.bottom[0] * cfg.bottom[1] * cfg.enc_ch[-1], rngs=rngs)
+        ch = cfg.enc_ch[::-1] + (cfg.n_classes,)
+        self.deconvs = nnx.List([nnx.ConvTranspose(ch[i], ch[i + 1], (4, 4), strides=(2, 2), padding="SAME", rngs=rngs) for i in range(len(cfg.enc_ch))])
         self.norms = nnx.List([nnx.LayerNorm(c, rngs=rngs) for c in ch[1:-1]])
 
     def __call__(self, feat: jax.Array) -> jax.Array:
-        """feat: (..., DETER + STOCH*CLASSES) -> logits (..., 64, 256, 16)."""
+        """feat: (..., feat) -> logits (..., h, w, n_classes)."""
+        c = self.cfg
         lead = feat.shape[:-1]
-        h = self.inp(feat.reshape(-1, feat.shape[-1])).reshape((-1,) + BOTTOM + (ENC_CH[-1],))
+        h = self.inp(feat.reshape(-1, feat.shape[-1])).reshape((-1,) + tuple(c.bottom) + (c.enc_ch[-1],))
         for i, dc in enumerate(self.deconvs):
             h = dc(h)
             if i < len(self.norms):
                 h = _act(self.norms[i](h))
-        return h.reshape(lead + (H, W, N_COLOURS))
+        return h.reshape(lead + (c.h, c.w, c.n_classes))
 
 
 class GRU(nnx.Module):
@@ -125,10 +156,10 @@ class GRU(nnx.Module):
 
 
 class MLP(nnx.Module):
-    def __init__(self, inp: int, out: int, rngs: nnx.Rngs):
-        self.a = nnx.Linear(inp, HIDDEN, rngs=rngs)
-        self.n = nnx.LayerNorm(HIDDEN, rngs=rngs)
-        self.b = nnx.Linear(HIDDEN, out, rngs=rngs)
+    def __init__(self, inp: int, out: int, rngs: nnx.Rngs, hidden: int = HIDDEN):
+        self.a = nnx.Linear(inp, hidden, rngs=rngs)
+        self.n = nnx.LayerNorm(hidden, rngs=rngs)
+        self.b = nnx.Linear(hidden, out, rngs=rngs)
 
     def __call__(self, x):
         return self.b(_act(self.n(self.a(x))))
@@ -137,14 +168,15 @@ class MLP(nnx.Module):
 class EnsembleHead(nnx.Module):
     """A prediction from the state, one output branch per action (see the module docstring)."""
 
-    def __init__(self, rngs: nnx.Rngs, out: int, hidden: int = 256):
+    def __init__(self, rngs: nnx.Rngs, out: int, hidden: int = 256, cfg: Config = MEADOW):
         self.out = out
-        self.a = nnx.Linear(DETER + STOCH * CLASSES, hidden, rngs=rngs)
+        self.n_actions = cfg.n_actions
+        self.a = nnx.Linear(cfg.feat, hidden, rngs=rngs)
         self.n = nnx.LayerNorm(hidden, rngs=rngs)
-        self.b = nnx.Linear(hidden, N_ACTIONS * out, rngs=rngs)
+        self.b = nnx.Linear(hidden, cfg.n_actions * out, rngs=rngs)
 
     def __call__(self, feat: jax.Array, a_onehot: jax.Array) -> jax.Array:
-        y = self.b(_act(self.n(self.a(feat)))).reshape(feat.shape[:-1] + (N_ACTIONS, self.out))
+        y = self.b(_act(self.n(self.a(feat)))).reshape(feat.shape[:-1] + (self.n_actions, self.out))
         return jnp.einsum("...a,...ao->...o", a_onehot, y)
 
 
@@ -157,15 +189,16 @@ class Step(NamedTuple):
 
 def _probs(logits):
     p = jax.nn.softmax(logits, -1)
-    return (1 - UNIMIX) * p + UNIMIX / CLASSES
+    return (1 - UNIMIX) * p + UNIMIX / logits.shape[-1]
 
 
 def _sample(logits, key):
+    """(..., stoch, classes) logits -> (..., stoch * classes) straight-through one-hot sample."""
     p = _probs(logits)
     idx = jax.random.categorical(key, jnp.log(p), -1)
-    onehot = jax.nn.one_hot(idx, CLASSES)
+    onehot = jax.nn.one_hot(idx, logits.shape[-1])
     st = onehot + p - jax.lax.stop_gradient(p)
-    return st.reshape(st.shape[:-2] + (STOCH * CLASSES,))
+    return st.reshape(st.shape[:-2] + (st.shape[-2] * st.shape[-1],))
 
 
 def symlog(x):
@@ -195,47 +228,50 @@ def kl(post_logits, prior_logits):
 
 
 class WorldModel(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0, reward: bool = False, ensemble: int = 0, ensemble_target: str = "body"):
+    def __init__(self, rngs: nnx.Rngs, n_intero: int = 0, reward: bool = False, ensemble: int = 0, ensemble_target: str = "body", cfg: Config = MEADOW):
+        self.cfg = cfg
+        c = cfg
         self.n_intero = n_intero
-        self.encoder = Encoder(rngs)
-        self.decoder = Decoder(rngs)
-        self.intero_in = nnx.Linear(n_intero, EMBED, rngs=rngs) if n_intero else None
-        self.intero_head = MLP(DETER + STOCH * CLASSES, n_intero, rngs) if n_intero else None
-        self.reward_head = MLP(DETER + STOCH * CLASSES, REWARD_BINS, rngs) if reward else None
+        self.encoder = Encoder(rngs, c)
+        self.decoder = Decoder(rngs, c)
+        self.intero_in = nnx.Linear(n_intero, c.embed, rngs=rngs) if n_intero else None
+        self.intero_head = MLP(c.feat, n_intero, rngs, c.hidden) if n_intero else None
+        self.reward_head = MLP(c.feat, REWARD_BINS, rngs, c.hidden) if reward else None
         if reward:  # zero-initialised output, as in DreamerV3
             self.reward_head.b.kernel[...] = jnp.zeros_like(self.reward_head.b.kernel[...])
         assert ensemble_target in ("body", "z") and (ensemble_target == "z" or not ensemble or n_intero)
         self.ensemble_target = ensemble_target
-        out = len(BODY_DIMS) if ensemble_target == "body" else STOCH * CLASSES
-        self.ensemble = nnx.List([EnsembleHead(rngs, out) for _ in range(ensemble)]) if ensemble else None
-        self.img_in = MLP(STOCH * CLASSES + N_ACTIONS, HIDDEN, rngs)
-        self.gru = GRU(HIDDEN, DETER, rngs)
-        self.prior_net = MLP(DETER, STOCH * CLASSES, rngs)
-        self.post_net = MLP(DETER + EMBED, STOCH * CLASSES, rngs)
+        out = len(c.body_dims) if ensemble_target == "body" else c.stoch * c.classes
+        self.ensemble = nnx.List([EnsembleHead(rngs, out, cfg=c) for _ in range(ensemble)]) if ensemble else None
+        self.img_in = MLP(c.stoch * c.classes + c.n_actions, c.hidden, rngs, c.hidden)
+        self.gru = GRU(c.hidden, c.deter, rngs)
+        self.prior_net = MLP(c.deter, c.stoch * c.classes, rngs, c.hidden)
+        self.post_net = MLP(c.deter + c.embed, c.stoch * c.classes, rngs, c.hidden)
 
     # --- one step -----------------------------------------------------------------------------
     def transition(self, h, z, a_onehot):
         return self.gru(_act(self.img_in(jnp.concatenate([z, a_onehot], -1))), h)
 
     def prior(self, h):
-        return self.prior_net(h).reshape(h.shape[:-1] + (STOCH, CLASSES))
+        return self.prior_net(h).reshape(h.shape[:-1] + (self.cfg.stoch, self.cfg.classes))
 
     def posterior(self, h, embed):
-        return self.post_net(jnp.concatenate([h, embed], -1)).reshape(h.shape[:-1] + (STOCH, CLASSES))
+        return self.post_net(jnp.concatenate([h, embed], -1)).reshape(h.shape[:-1] + (self.cfg.stoch, self.cfg.classes))
 
     def initial(self, batch: int):
-        return jnp.zeros((batch, DETER)), jnp.zeros((batch, STOCH * CLASSES))
+        return jnp.zeros((batch, self.cfg.deter)), jnp.zeros((batch, self.cfg.stoch * self.cfg.classes))
 
     # --- sequences ----------------------------------------------------------------------------
     def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None) -> Step:
-        """views (B, T, 64, 256) palette indices, actions (B, T) (taken after each view),
+        """views (B, T, h, w) class indices, actions (B, T) (taken after each view),
         intero (B, T, n_intero) the drive levels felt with each view (if the model has them).
         Returns the posterior rollout (time-major fields are (B, T, ...))."""
         B, T = views.shape[:2]
-        embed = self.encoder(jax.nn.one_hot(views, N_COLOURS))
+        nA = self.cfg.n_actions
+        embed = self.encoder(jax.nn.one_hot(views, self.cfg.n_classes))
         if self.intero_in is not None:
             embed = embed + self.intero_in(intero)
-        a_prev = jnp.concatenate([jnp.zeros((B, 1, N_ACTIONS)), jax.nn.one_hot(actions[:, :-1], N_ACTIONS)], 1)
+        a_prev = jnp.concatenate([jnp.zeros((B, 1, nA)), jax.nn.one_hot(actions[:, :-1], nA)], 1)
         h0, z0 = self.initial(B)
 
         def body(carry, x):
@@ -265,7 +301,7 @@ class WorldModel(nnx.Module):
             return (h, z), Step(h, z, prior, prior)
 
         keys = jax.random.split(key, K)
-        _, out = jax.lax.scan(body, (h, z), (jax.nn.one_hot(actions, N_ACTIONS).swapaxes(0, 1), keys))
+        _, out = jax.lax.scan(body, (h, z), (jax.nn.one_hot(actions, self.cfg.n_actions).swapaxes(0, 1), keys))
         return jax.tree.map(lambda x: x.swapaxes(0, 1), out)
 
     def decode(self, s: Step) -> jax.Array:
@@ -278,7 +314,7 @@ class WorldModel(nnx.Module):
         """(..., FEAT), (..., N_ACTIONS) -> (K, ..., len(BODY_DIMS)) predicted store changes x BODY_SCALE,
         or (K, ..., STOCH, CLASSES) next-z logits."""
         y = jnp.stack([e(feat, a_onehot) for e in self.ensemble])
-        return y if self.ensemble_target == "body" else y.reshape(y.shape[:-1] + (STOCH, CLASSES))
+        return y if self.ensemble_target == "body" else y.reshape(y.shape[:-1] + (self.cfg.stoch, self.cfg.classes))
 
     def ensemble_logits(self, feat: jax.Array, a_onehot: jax.Array) -> jax.Array:
         return self.ensemble_predict(feat, a_onehot)
@@ -311,7 +347,7 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     aux = {"recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
     if model.intero_head is not None:
         err = jnp.mean(jnp.sum((model.decode_intero(s) - intero) ** 2, -1))
-        loss = loss + INTERO_WEIGHT * err
+        loss = loss + model.cfg.intero_weight * err
         aux["intero_mse"] = err
     if model.reward_head is not None:
         r_logits = model.reward_head(jnp.concatenate([s.h, s.z], -1))[:, 1:]  # state t+1 <- reward of step t
@@ -322,9 +358,9 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     if model.ensemble is not None:
         sg = jax.lax.stop_gradient
         feat = sg(jnp.concatenate([s.h, s.z], -1))[:, :-1]
-        a = jax.nn.one_hot(actions[:, :-1], N_ACTIONS)
+        a = jax.nn.one_hot(actions[:, :-1], model.cfg.n_actions)
         if model.ensemble_target == "body":
-            body = intero[..., jnp.array(BODY_DIMS)]
+            body = intero[..., jnp.array(model.cfg.body_dims)]
             target = BODY_SCALE * (body[:, 1:] - body[:, :-1])
             e_loss = jnp.mean(jnp.sum((model.ensemble_predict(feat, a) - target[None]) ** 2, -1))
             aux["ensemble_mse"] = e_loss
