@@ -8,7 +8,7 @@ result here: [`m1-results/`](m1-results/) (copied from the local runs, which are
 | --- | --- |
 | 1. Meadow sim, first-person views, viewer, scripted flock | Done. |
 | 2. Logged rollouts, world-model pretraining | Done; surprise not yet selective. |
-| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. Three runs on a scripted-pretrained world model and one learning from birth (birth1): no useful learned behaviour yet, causes found (§ Step 3). birth2 (body curiosity, varied starts, action costs) running. |
+| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. Three runs on a scripted-pretrained world model and two learning from birth (birth1, birth2): no learned behaviour that beats a random flock yet; causes found for each (§ Step 3). birth3 (convex drive, bad taste, less curiosity) running. |
 | 4. Behavioural and stability evaluation | Not started. |
 
 # Step 1 — sim, first-person views, viewer, scripted flock
@@ -147,10 +147,12 @@ as deviation, so over-eating is penalised):
 | social | — (instantaneous, not a store) | number of other sheep in view (in range, outside the blind wedge) / 8, capped at 1 |
 | interest | 0.0004 | entering an 8×8-tile cell of the meadow: +0.08 / √(1 + previous visits by this sheep), blind to other sheep |
 
-The drive is the L4 norm of the deviations from the set-points, D = (Σ|1 − hᵢ|⁴)^¼ — close to
-the worst deficit, so topping up a small deficit is worth less than fixing the largest one (the
-non-substitutable norm the survey calls for, after
-[Keramati & Gutkin 2014](https://elifesciences.org/articles/04811)). Rates were chosen so that a
+The drive is D = (Σ|1 − hᵢ|⁴)^(m/4) — close to the worst deficit, so topping up a small deficit
+is worth less than fixing the largest one (the non-substitutable form the survey calls for, after
+[Keramati & Gutkin 2014](https://elifesciences.org/articles/04811)). **m = 2 from birth3**, as the
+paper requires (n > m > 1), so the drive grows as the square of a single deficit; through birth2
+it was m = 1, the plain L4 norm (§ birth3). Also from birth3, an innate **bad taste** for
+ingesting nothing costs 0.05 per mouthful (§ birth3). Rates were chosen so that a
 sensible flock can keep up with them over the 1,200-step day *(judgement)*. The scripted flock,
 given hysteresis (top up to 0.95 once started), keeps the *mean* levels up: over its third day
 from dawn (8 meadows × 40 sheep, `scripts/m1_scripted_check.py`) energy 0.66, hydration 0.53,
@@ -384,7 +386,54 @@ model, [Kim et al. 2020](https://arxiv.org/abs/2007.07853)) — to be added if b
 survive but are incurious about what they see.
 
 **Run:** `--wm none --scripted none --ensemble 5 --curiosity 0.1 --ac_start 300 --varied
---reset_every 1200 --replay 8192 --iters 1500` (`runs/birth2.sh`). Results: pending.
+--reset_every 1200 --replay 8192 --iters 1500` (`runs/birth2.sh`). Stopped at 731 iterations
+(80 min) for birth3 (`m1-results/agent_birth2_log.jsonl`).
+
+| Iterations | Reward | Energy | Water | Warmth | Social | Interest | Main actions | Drinks on dry ground | Bare-ground grazing (share of all actions) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 204–303 (infancy) | −0.97 | 0.90 | 0.22 | 0.38 | 0.68 | 0.70 | uniform | 100 % | 0.4 % |
+| 304–403 | −0.98 | 0.93 | 0.26 | 0.32 | 0.70 | 0.81 | trot 27 %, right 18 %, graze 17 % | 97 % | 3 % |
+| 404–503 | −1.00 | 0.72 | 0.28 | 0.26 | 0.88 | 0.79 | trot 35 %, graze 34 % | 94 % | **26 %** |
+| 504–603 | −1.01 | 0.83 | 0.23 | 0.26 | 0.78 | 0.94 | trot 38 %, graze 27 % | 98 % | 10 % |
+| 604–703 | −1.00 | 0.85 | 0.24 | 0.24 | 0.75 | 0.91 | trot 31 %, right 22 %, graze 21 %, drink 18 % | 87 % | 6 % |
+| 704–734 | −1.01 | 1.01 | **0.35** | 0.14 | 0.81 | 0.87 | trot 30 %, graze 31 %, right 20 %, drink 14 % | **53 %** | 12 % |
+
+What improved on birth1: no spinning; the varied starts fixed the model's pessimism — on the probe
+(`m1-results/probe_birth2.json`, iteration 450, 120 healthy scripted sheep) it predicts the
+reward almost exactly (−0.56 over 8 steps against −0.55) and correctly predicts that drinking on
+dry ground does nothing (hydration −0.007 against −0.006) and that grazing on grass helps (energy
++0.036 against +0.065). By the end, sheep were learning to drink at water (dry share 53 %, water
+0.35). What went wrong: grazing and drinking where there is nothing, up to a quarter of all
+actions, and almost no resting (1 %), so warmth sank; reward never beat the random flock. The
+probe says why: ensemble disagreement is 3–5× higher for actions that change the body (graze
+6–7e-4, drink 4.8e-4, walk 5.6e-4) than for stop, rest or head up (1.3–2.2e-4), while every
+action's real reward over 8 steps lies within ±0.01 of the others — the drives move slowly — so a
+curiosity bonus of ~0.1 per step outweighed the real reward many times over. (Only 4 of the
+probe's sheep stood on bare ground, so its estimate there is weak.)
+
+## Learning from birth: birth3 (convex drive, bad taste, less curiosity)
+
+Agreed with the owner (2026-10-24):
+
+1. **Convex drive, m = 2.** The owner asked whether a need's pull should grow faster than
+   linearly as it approaches zero — and Keramati & Gutkin's drive does:
+   D = (Σᵢ |hᵢ* − hᵢ|ⁿ)^(m/n) with n > m > 1 ([eLife 2014](https://elifesciences.org/articles/04811),
+   eq. 1; they list "deprivation potentiation", an outcome worth more the more deprived the
+   animal, and risk aversion among its consequences). This module had m = 1, a plain norm, so a
+   single deficit d gave D = d — **a departure from the paper, now corrected**: with m = 2,
+   D = d² for one deficit (0.1 → 0.01, 0.5 → 0.25, 0.9 → 0.81). A desperate sheep's choices now
+   matter far more than a comfortable one's — which also leaves curiosity room to act when the
+   sheep is comfortable and makes it small beside the stakes when it is not (the owner's other
+   proposal, curiosity that fades when things are bad, is held back: the convex drive does much
+   of it, and it would be a fourth change).
+2. **An innate bad taste** for ingesting nothing — drinking away from water, grazing where the
+   grass is too short to bite: 0.05 off the step's reward (a good bite at a deficit of 0.5 is
+   worth ~0.012), and felt as a sixth internal sense (`Flock.taste`, −1 after a bad mouthful) so
+   the world model can learn to predict it. Not a drive, never pleasant for real food.
+3. **Curiosity 0.1 → 0.02.**
+
+**Run:** `--wm none --scripted none --ensemble 5 --curiosity 0.02 --ac_start 300 --varied
+--reset_every 1200 --replay 8192 --iters 1500` (`runs/birth3.sh`). Results: pending.
 
 ## Reproduce
 
