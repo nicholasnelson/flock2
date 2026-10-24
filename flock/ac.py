@@ -1,5 +1,5 @@
 """Actor-critic trained in imagination, in the DreamerV3 style (Hafner et al. 2023,
-arXiv:2301.04104), on the drive-reduction reward (Milestone 1, step 3).
+arXiv:2301.04104), on the homeostatic reward (Milestone 1, step 3).
 
 - Actor: an MLP over the model state (h, z) giving a categorical over the nine actions (1 %
   uniform mix). Critic: an MLP giving the value; a slow copy (EMA) supplies bootstrap targets and
@@ -9,12 +9,17 @@ arXiv:2301.04104), on the drive-reduction reward (Milestone 1, step 3).
   world model's reward head read at the state it leads to (the drive-reduction reward it was
   trained on, ``flock.meadow.drives.reward``).
 - Curiosity (optional, the world model having an ensemble): each imagined step also earns
-  ``curiosity`` x the ensemble's disagreement about (state, action) divided by a running mean of
-  the disagreement, so a typical step earns about ``curiosity``.
+  ``curiosity`` x the ensemble's disagreement about (state, action) divided by the mean
+  disagreement at the first actor-critic update (the end of infancy), then frozen — so curiosity
+  pays about ``curiosity`` per step at first and fades as the model learns. (Until the review of
+  2026-10-24 the divisor was a running mean, so curiosity paid ~``curiosity`` per step forever.)
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
-  percentile range of the returns, with a small entropy bonus; the critic regresses on the
-  returns and toward the slow critic. The world model is frozen inside these updates.
+  percentile range of the *advantages* (returns minus the critic's value), with a small entropy
+  bonus; the critic regresses on the returns and toward the slow critic. The world model is
+  frozen inside these updates. DreamerV3 takes S from the returns; with varied starting states
+  that range measured how differently good and bad states are valued (S grew to ~140 in birth2),
+  not what an action changes, and divided the action signal away (review of 2026-10-24, § 1).
 """
 
 from __future__ import annotations
@@ -62,7 +67,7 @@ class Agent(nnx.Module):
         nnx.update(self.slow_critic, nnx.state(self.critic))
         self.ret_scale = nnx.Variable(jnp.float32(1.0))
         self.curiosity = nnx.Variable(jnp.float32(curiosity))
-        self.intr_scale = nnx.Variable(jnp.float32(0.0))  # running mean of the disagreement (0: unset)
+        self.intr_scale = nnx.Variable(jnp.float32(0.0))  # mean disagreement at the first update, then frozen (0: unset)
 
     def act(self, feat: jax.Array, key: jax.Array) -> jax.Array:
         return jax.random.categorical(key, policy_logp(self.actor(feat)), -1)
@@ -116,11 +121,12 @@ def ac_loss(agent: Agent, feats, acts, rewards, scale):
     logp_all = policy_logp(agent.actor(feats[:-1]))
     logp = jnp.take_along_axis(logp_all, acts[..., None], -1)[..., 0]
     entropy = -jnp.sum(jnp.exp(logp_all) * logp_all, -1)
-    adv = jax.lax.stop_gradient((rets - values[:-1]) / jnp.maximum(1.0, scale))
+    raw_adv = jax.lax.stop_gradient(rets - values[:-1])
+    adv = raw_adv / jnp.maximum(1.0, scale)
     actor_loss = -jnp.mean(adv * logp) - ENTROPY * jnp.mean(entropy)
     critic_loss = jnp.mean(0.5 * (values[:-1] - rets) ** 2 + 0.5 * (values[:-1] - slow[:-1]) ** 2)
-    aux = {"actor_loss": actor_loss, "critic_loss": critic_loss, "entropy": jnp.mean(entropy), "imag_reward": jnp.mean(rewards), "return": jnp.mean(rets)}
-    return actor_loss + critic_loss, (aux, rets)
+    aux = {"actor_loss": actor_loss, "critic_loss": critic_loss, "entropy": jnp.mean(entropy), "imag_reward": jnp.mean(rewards), "return": jnp.mean(rets), "abs_adv": jnp.mean(jnp.abs(raw_adv))}
+    return actor_loss + critic_loss, (aux, raw_adv)
 
 
 @nnx.jit
@@ -128,15 +134,15 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     """One actor-critic update from start states (h0, z0) (N, ...)."""
     feats, acts, extrinsic, dis = imagine(world, agent, h0, z0, key)
     old = agent.intr_scale[...]
-    intr_scale = jnp.where(old > 0, RETURN_DECAY * old + (1 - RETURN_DECAY) * dis.mean(), dis.mean())
+    intr_scale = jnp.where(old > 0, old, dis.mean())
     agent.intr_scale[...] = intr_scale
     intrinsic = agent.curiosity[...] * dis / jnp.maximum(intr_scale, 1e-8)
     rewards = extrinsic + intrinsic
     scale = agent.ret_scale[...]
-    (loss, (aux, rets)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
+    (loss, (aux, raw_adv)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
     opt.update(agent, grads)
     # return-scale EMA and the slow critic
-    spread = jnp.percentile(rets, 95) - jnp.percentile(rets, 5)
+    spread = jnp.percentile(raw_adv, 95) - jnp.percentile(raw_adv, 5)
     agent.ret_scale[...] = RETURN_DECAY * scale + (1 - RETURN_DECAY) * spread
     slow = nnx.state(agent.slow_critic, nnx.Param)
     fast = nnx.state(agent.critic, nnx.Param)

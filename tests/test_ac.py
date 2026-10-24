@@ -40,3 +40,44 @@ def test_curiosity_adds_a_reward_of_about_its_weight():
     aux = ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(2))
     assert float(aux["disagreement"]) > 0
     assert abs(float(aux["intrinsic"]) - 0.5) < 0.05  # normalised by its own running mean on the first step
+
+
+class _BanditWorld(nnx.Module):
+    """A stand-in world: the state remembers the last action (h[:9] one-hot) and only action 3
+    is rewarded. A working actor-critic must learn to prefer it."""
+
+    ensemble = None
+
+    def transition(self, h, z, a_onehot):
+        return jnp.zeros_like(h).at[..., : wm.N_ACTIONS].set(a_onehot)
+
+    def prior(self, h):
+        return jnp.zeros(h.shape[:-1] + (wm.STOCH, wm.CLASSES))
+
+    def reward(self, feat):
+        return feat[..., 3]
+
+
+def test_the_actor_critic_learns_a_bandit():
+    world = _BanditWorld()
+    agent = ac.Agent(nnx.Rngs(3))
+    opt = ac.make_optimizer(agent)
+    h0 = jnp.zeros((64, wm.DETER))
+    z0 = jnp.zeros((64, wm.STOCH * wm.CLASSES))
+    p = lambda: float(jnp.exp(ac.policy_logp(agent.actor(ac.feat_of(h0, z0))))[:, 3].mean())
+    before = p()
+    for i in range(300):
+        ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(i))
+    assert before < 0.15 and p() > 0.3, (before, p())  # 0.11 -> ~0.42 in 300 updates at Adam 3e-5
+
+
+def test_the_curiosity_scale_is_frozen_after_the_first_update():
+    world = wm.WorldModel(nnx.Rngs(0), n_intero=5, reward=True, ensemble=3)
+    agent = ac.Agent(nnx.Rngs(1), curiosity=0.5)
+    opt = ac.make_optimizer(agent)
+    h0 = jax.random.normal(jax.random.PRNGKey(0), (6, wm.DETER))
+    z0 = jax.nn.one_hot(jax.random.randint(jax.random.PRNGKey(1), (6, wm.STOCH), 0, wm.CLASSES), wm.CLASSES).reshape(6, -1)
+    ac.train_step(world, agent, opt, h0, z0, jax.random.PRNGKey(2))
+    first = float(agent.intr_scale[...])
+    ac.train_step(world, agent, opt, 3 * h0, z0, jax.random.PRNGKey(3))
+    assert float(agent.intr_scale[...]) == first
