@@ -59,7 +59,8 @@ def act_and_step(world, agent, state, mem, key, rec_idx):
     n = state.flock.pos.shape[0]
     tiles = ground_state(state.meadow)
     views = jax.vmap(lambda i: view_one(state, i, tiles))(jnp.arange(n))
-    embed = world.encoder(jax.nn.one_hot(views, 16)) + world.intero_in(state.flock.levels)
+    feel = D.felt(state.flock.levels, state.flock.taste)
+    embed = world.encoder(jax.nn.one_hot(views, 16)) + world.intero_in(feel)
     h = world.transition(h, z, jax.nn.one_hot(a_prev, wm.N_ACTIONS))
     z = wm._sample(world.posterior(h, embed), k1)
     actions = agent.act(ac.feat_of(h, z), k2)
@@ -68,7 +69,7 @@ def act_and_step(world, agent, state, mem, key, rec_idx):
     r, c = sim._tile(state.meadow, state.flock.pos)
     dry_drink = (actions == sim.DRINK) & ~sim.near_water(state.meadow, state.flock.pos)
     bare_graze = (actions == sim.GRAZE) & (state.meadow.grass[r, c] < 1.0)
-    rec = dict(view=views[rec_idx].astype(jnp.uint8), action=actions[rec_idx], levels=state.flock.levels[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward, dry_drink=dry_drink, bare_graze=bare_graze)
+    rec = dict(view=views[rec_idx].astype(jnp.uint8), action=actions[rec_idx], levels=feel[rec_idx], reward=new.flock.reward[rec_idx], night=sim.is_night(state.t), all_actions=actions, all_levels=new.flock.levels, all_reward=new.flock.reward, dry_drink=dry_drink, bare_graze=bare_graze)
     return new, (h, z, actions), rec
 
 
@@ -108,7 +109,7 @@ class Replay:
     def __init__(self, capacity: int, length: int):
         self.v = np.zeros((capacity, length, wm.H, wm.W // 2), np.uint8)
         self.a = np.zeros((capacity, length), np.int32)
-        self.l = np.zeros((capacity, length, D.N_DRIVES), np.float32)
+        self.l = np.zeros((capacity, length, D.N_FELT), np.float32)
         self.r = np.zeros((capacity, length), np.float32)
         self.n, self.i, self.cap = 0, 0, capacity
 
@@ -148,9 +149,11 @@ def main():
     a = p.parse_args()
     if a.scripted == "none":
         a.wm_online = 4
+    else:
+        raise SystemExit("scripted shards log 5 levels; the sheep now feel D.N_FELT (levels + taste): re-log them first")
     os.makedirs(a.out, exist_ok=True)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_FELT, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
     if a.wm != "none":
         wm.load_into(world, pickle.load(open(os.path.expanduser(a.wm), "rb")))
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
@@ -180,7 +183,7 @@ def main():
     # throwaway copies, so the warm-up changes nothing
     pk = np.zeros((4, a.length, wm.H, wm.W // 2), np.uint8)
     ak = np.zeros((4, a.length), np.int32)
-    lk = np.ones((4, a.length, D.N_DRIVES), np.float32)
+    lk = np.ones((4, a.length, D.N_FELT), np.float32)
     rk = np.zeros((4, a.length), np.float32)
     w_tmp, g_tmp = nnx.clone(world), nnx.clone(agent)
     o_tmp, a_tmp = nnx.clone(wm_opt), nnx.clone(ac_opt)

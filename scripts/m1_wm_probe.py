@@ -47,7 +47,7 @@ def warm_and_record(key, meadows, sheep, warm):
         def rec(s, kk):
             v = jax.vmap(lambda i: views.view_one(s, i, ground_state(s.meadow)))(jnp.arange(sheep))
             a = scripted.policy(s, kk)
-            return sim.step(s, a), (v.astype(jnp.uint8), a, s.flock.levels)
+            return sim.step(s, a), (v.astype(jnp.uint8), a, D.felt(s.flock.levels, s.flock.taste))
 
         st, (v, a, lv) = jax.lax.scan(rec, st, jax.random.split(k4, CONTEXT))
         return st, v, a, lv
@@ -98,6 +98,7 @@ def main():
     p.add_argument("--warm", type=int, default=300)
     p.add_argument("--seed", type=int, default=123)
     p.add_argument("--ensemble", type=int, default=0, help="ensemble heads in the checkpoints")
+    p.add_argument("--n_intero", type=int, default=D.N_FELT, help="what the checkpoints feel: 6 (levels + taste, birth3 on) or 5 (levels only)")
     p.add_argument("--ensemble_target", default="body", help="what the checkpoints' ensemble predicts: body or z (birth1)")
     p.add_argument("--out", default=None, help="write the results as JSON here")
     a = p.parse_args()
@@ -107,7 +108,13 @@ def main():
     seq = lambda x: np.asarray(x).swapaxes(1, 2).reshape((-1, CONTEXT) + x.shape[3:])
     v, act, lv = seq(v), seq(act).astype(np.int32), seq(lv).astype(np.float32)
     near = np.asarray(jax.vmap(lambda st: sim.near_water(st.meadow, st.flock.pos))(states)).reshape(-1)
-    print(f"{near.size} sheep, {near.sum()} by water; mean hydration {lv[:, -1, D.HYDRATION].mean():.2f}", flush=True)
+
+    def grass_under(st):
+        r, c = sim._tile(st.meadow, st.flock.pos)
+        return st.meadow.grass[r, c] >= 1.0
+
+    on_grass = np.asarray(jax.vmap(grass_under)(states)).reshape(-1)
+    print(f"{near.size} sheep, {near.sum()} by water, {on_grass.sum()} on grass >= 1; mean hydration {lv[:, -1, D.HYDRATION].mean():.2f}", flush=True)
 
     true = {}
     for name in PROBED:
@@ -116,15 +123,16 @@ def main():
 
     results = {}
     for path in a.wm:
-        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=a.n_intero, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
         wm.load_into(world, pickle.load(open(os.path.expanduser(path), "rb")))
         res = {}
         for name in PROBED:
-            outs = [believe(world, v[i : i + 32], act[i : i + 32], lv[i : i + 32], sim.ACTION_NAMES.index(name), jax.random.PRNGKey(i)) for i in range(0, len(v), 32)]
+            outs = [believe(world, v[i : i + 32], act[i : i + 32], lv[i : i + 32, :, : a.n_intero], sim.ACTION_NAMES.index(name), jax.random.PRNGKey(i)) for i in range(0, len(v), 32)]
             p0, p1, pr, dis = (np.concatenate([np.asarray(o[j]) for o in outs]) for j in range(4))
             dl_true, r_true = true[name]
             row = {}
-            for where, m in (("by_water", near), ("away", ~near)):
+            groups = (("by_water", near), ("away", ~near)) if name != "graze" else (("on_grass", on_grass & ~near), ("bare", ~on_grass & ~near))
+            for where, m in groups:
                 if not m.any():
                     continue
                 row[where] = {

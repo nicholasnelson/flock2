@@ -51,6 +51,7 @@ class Flock(NamedTuple):
     levels: jax.Array  # (S, N_DRIVES) homeostatic levels, set-point 1 (``flock.meadow.drives``)
     visits: jax.Array  # (S, 16, 16) int: each sheep's visits to the interest cells (hashed counts)
     reward: jax.Array  # (S,) the reward of the last step (drives.reward)
+    taste: jax.Array  # (S,) -1 if the last step ingested nothing (drank away from water, grazed bare ground), else 0
 
 
 class State(NamedTuple):
@@ -124,6 +125,7 @@ def generate(key: jax.Array, n_sheep: int = 40) -> State:
         levels=jnp.concatenate([jax.random.uniform(jax.random.fold_in(k_s, 2), (n_sheep, 3), minval=0.6, maxval=0.9), jnp.full((n_sheep, 2), 0.8)], -1),
         visits=jnp.zeros((n_sheep, N_TILES // 8, N_TILES // 8), jnp.int32),
         reward=jnp.zeros((n_sheep,)),
+        taste=jnp.zeros((n_sheep,)),
     )
     meadow = Meadow(water=water, grass=grass, obj_kind=obj_kind, obj_variant=obj_variant, obj_pos=obj_pos, obj_present=obj_present)
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))

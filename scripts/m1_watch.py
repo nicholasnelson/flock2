@@ -63,7 +63,7 @@ def main():
         spec = importlib.util.spec_from_file_location("m1_agent", os.path.join(os.path.dirname(__file__), "m1_agent.py"))
         _agent = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(_agent)
-        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_DRIVES, reward=True)
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_FELT, reward=True)
         wm.load_into(world, pickle.load(open(os.path.join(os.path.expanduser(a.agent), "wm.pkl"), "rb")))
         agent = ac.Agent(nnx.Rngs(1))
         wm.load_into(agent, pickle.load(open(os.path.join(os.path.expanduser(a.agent), "agent.pkl"), "rb")))

@@ -106,6 +106,7 @@ def step(state: State, actions: jax.Array) -> State:
     grass = jnp.where(m.water, grass, grass + REGROW * (3.0 - grass))
 
     drinking = (a == DRINK) & near_water(m, pos)
+    bad_taste = ((a == DRINK) & ~drinking) | ((a == GRAZE) & ~grazing)
     resting = a == REST
     head_up = a == HEAD_UP
     night = is_night(state.t + 1)
@@ -130,5 +131,5 @@ def step(state: State, actions: jax.Array) -> State:
         n_visible=n_visible(pos, heading, view_range(night, head_up)),
         novelty=novelty,
     )
-    flock = Flock(pos=pos, heading=heading, resting=resting, head_up=head_up, levels=levels, visits=visits, reward=D.reward(f.levels, levels))
+    flock = Flock(pos=pos, heading=heading, resting=resting, head_up=head_up, levels=levels, visits=visits, reward=D.reward(f.levels, levels, bad_taste), taste=-bad_taste.astype(jnp.float32))
     return State(meadow=m._replace(grass=grass), flock=flock, t=state.t + 1)

@@ -25,6 +25,7 @@ def _empty(n_sheep=2, pos=((64.0, 64.0), (64.0, 70.0)), heading=(0.0, 0.0)):
         levels=jnp.full((n_sheep, 5), 0.5),
         visits=jnp.zeros((n_sheep, 16, 16), jnp.int32),
         reward=jnp.zeros(n_sheep),
+        taste=jnp.zeros(n_sheep),
     )
     return State(meadow=m, flock=f, t=jnp.int32(0))
 
@@ -142,3 +143,22 @@ def test_energy_use_depends_on_the_action():
     n = D.update(h, action=acts, grazed=jnp.zeros(3, bool), drank=jnp.zeros(3, bool), resting=acts == sim.REST, night=jnp.bool_(False), near_cover=jnp.zeros(3, bool), n_visible=jnp.zeros(3), novelty=jnp.zeros(3))
     e = np.asarray(n[:, D.ENERGY])
     assert e[0] > e[1] > e[2]  # resting saves energy, trotting burns it
+
+
+def test_drive_grows_faster_than_the_deficit():
+    from flock.meadow import drives as D
+
+    one = lambda d: jnp.array([[1.0 - d, 1.0, 1.0, 1.0, 1.0]])
+    small, big = float(D.drive(one(0.2))[0]), float(D.drive(one(0.8))[0])
+    assert abs(small - 0.2**D.DRIVE_M) < 1e-5 and big / small > 4  # superlinear: 16x for m = 2
+
+
+def test_ingesting_nothing_tastes_bad():
+    s = _empty(pos=((64.0, 64.0), (61.5, 49.5)))  # sheep 1 is beside the pond
+    s = s._replace(meadow=s.meadow._replace(grass=s.meadow.grass.at[64, 64].set(0.5)))  # sheep 0 on bare ground
+    s2 = sim.step(s, jnp.array([sim.GRAZE, sim.DRINK]))
+    assert float(s2.flock.taste[0]) == -1.0 and float(s2.flock.taste[1]) == 0.0
+    s3 = sim.step(s, jnp.array([sim.DRINK, sim.STOP]))  # drinking away from water
+    assert float(s3.flock.taste[0]) == -1.0
+    s4 = sim.step(s, jnp.array([sim.STOP, sim.STOP]))
+    assert float(s3.flock.reward[0]) < float(s4.flock.reward[0])

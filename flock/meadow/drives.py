@@ -1,11 +1,22 @@
 """Homeostatic drives and the reward (Milestone 1, step 3).
 
 Homeostatic RL (Keramati & Gutkin 2014, https://elifesciences.org/articles/04811): the internal
-state H is a vector of physiological levels with set-points; the drive is a norm of the
-deviations, D(H) = (sum_i |h*_i - h_i|^n)^(1/n). A large exponent n makes the norm close to the
+state H is a vector of physiological levels with set-points; the drive is
+D(H) = (sum_i |h*_i - h_i|^n)^(m/n), their eq. 1, with n > m > 1. A large n makes it follow the
 worst deficit, so topping up an already small deficit pays less than fixing the largest one (the
-research notes' structural guard against gaming a single drive). Levels may overshoot the
-set-point a little, and overshoot counts as deviation (over-satiation is penalised).
+research notes' structural guard against gaming a single drive); m > 1 makes it grow faster
+than linearly with the deficit (their "deprivation potentiation": an outcome is worth more the
+more deprived the animal is), so a desperate sheep's choices matter far more than a comfortable
+one's. Until birth3 this module used m = 1 — a departure from the paper, found by the owner.
+Levels may overshoot the set-point a little, and overshoot counts as deviation (over-satiation
+is penalised).
+
+Taste: an innate, fixed, aversive signal for ingesting nothing — drinking away from water,
+grazing where the grass is too short to bite. It is not a drive and not damage to the need the
+action resembles (eating dirt does not dehydrate): it costs ``TASTE_COST`` in the step's reward and
+is felt (``Flock.taste``, -1 after a bad mouthful, else 0) so the world model can learn to
+predict it. Never pleasant for real food: a reward for palatability outside the drives makes
+animals over-consume (Keramati & Gutkin's palatability pathology).
 
 The reward of a step is -D(H_{t+1}), the drive after it. Keramati & Gutkin define the reward as
 the drive reduction D(H_t) - D(H_{t+1}) and prove that maximising its discounted sum is the same
@@ -40,6 +51,9 @@ ENERGY, HYDRATION, WARMTH, SOCIAL, INTEREST = range(N_DRIVES)
 SETPOINT = jnp.ones(N_DRIVES)
 MAX_LEVEL = 1.15  # overshoot allowed (and penalised as deviation)
 NORM_N = 4.0
+DRIVE_M = 2.0  # was 1 (a plain norm) until birth3
+TASTE_COST = 0.05  # reward per bad mouthful; a good bite at a deficit of 0.5 is worth ~0.012
+N_FELT = 6  # what the sheep feels: the five levels and the last mouthful's taste
 REWARD_SCALE = 100.0  # for drive_reduction
 
 ENERGY_PER_BITE = 0.012  # a bite is BITE of biomass at grass level >= 1
@@ -57,7 +71,7 @@ CELL = 8  # tiles per interest cell (128 / 8 = 16 cells a side)
 
 def drive(h: jax.Array) -> jax.Array:
     """D(H) for levels (..., N_DRIVES)."""
-    return jnp.sum(jnp.abs(SETPOINT - h) ** NORM_N, -1) ** (1.0 / NORM_N)
+    return jnp.sum(jnp.abs(SETPOINT - h) ** NORM_N, -1) ** (DRIVE_M / NORM_N)
 
 
 def drive_reduction(h_before: jax.Array, h_after: jax.Array) -> jax.Array:
@@ -65,9 +79,16 @@ def drive_reduction(h_before: jax.Array, h_after: jax.Array) -> jax.Array:
     return REWARD_SCALE * (drive(h_before) - drive(h_after))
 
 
-def reward(h_before: jax.Array, h_after: jax.Array) -> jax.Array:
-    """The reward of a step: minus the drive after it (``h_before`` is unused)."""
-    return -drive(h_after)
+def reward(h_before: jax.Array, h_after: jax.Array, bad_taste: jax.Array | None = None) -> jax.Array:
+    """The reward of a step: minus the drive after it, minus TASTE_COST for a bad mouthful
+    (``h_before`` is unused)."""
+    r = -drive(h_after)
+    return r if bad_taste is None else r - TASTE_COST * bad_taste
+
+
+def felt(levels: jax.Array, taste: jax.Array) -> jax.Array:
+    """What a sheep feels, (..., N_FELT): its levels and the last mouthful's taste."""
+    return jnp.concatenate([levels, taste[..., None]], -1)
 
 
 def update(h, *, action, grazed, drank, resting, night, near_cover, n_visible, novelty):
