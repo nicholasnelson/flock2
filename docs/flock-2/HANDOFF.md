@@ -25,7 +25,10 @@ numbers and reasoning in the README's step 3 sections from "The change of approa
 **Gotchas added (late 2026-10-24).** Never run a `wsl` command in the foreground that might
 exceed the tool's 10-minute limit: when one did, every background `wsl` job was terminated at
 the same moment (exit 15). Start anything long with `run_in_background`. CPU-only jobs (grid
-runs, probes) can run alongside the GPU job; set `JAX_PLATFORMS=cpu` for them.
+runs, probes) can run alongside the GPU job; set `JAX_PLATFORMS=cpu` for them. **Memory:** WSL has 15 GB; when it runs out the kernel's OOM killer takes the
+whole distro down with every job in it (2026-10-24, twice). The meadow agent's replay alone is
+~4 GB of host RAM; each CPU JAX job compiles its own copy of the model. Keep to the GPU job plus
+about three CPU jobs.
 
 **Gotchas added.** Data and checkpoints live on the WSL filesystem (`~/flock2_data/`), not in
 git; `runs/` is git-ignored, so results worth keeping are copied to `docs/flock-2/m1-results/`.
