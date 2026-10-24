@@ -85,7 +85,7 @@ def test_reward_head_starts_at_zero_and_trains():
 def test_ensemble_learns_and_disagreement_falls_where_trained():
     import optax
 
-    m = wm.WorldModel(nnx.Rngs(8), n_intero=5, reward=True, ensemble=3)
+    m = wm.WorldModel(nnx.Rngs(8), n_intero=5, reward=True, ensemble=3, ensemble_target="z")
     feat = jax.random.normal(jax.random.PRNGKey(0), (16, wm.DETER + wm.STOCH * wm.CLASSES))
     a_seen = jax.nn.one_hot(jnp.zeros(16, jnp.int32), wm.N_ACTIONS)
     a_new = jax.nn.one_hot(jnp.full(16, 5), wm.N_ACTIONS)
@@ -110,10 +110,14 @@ def test_ensemble_learns_and_disagreement_falls_where_trained():
 
 
 def test_ensemble_loss_is_in_the_world_model_loss():
-    m = wm.WorldModel(nnx.Rngs(9), n_intero=5, reward=True, ensemble=2)
     views = jax.random.randint(jax.random.PRNGKey(0), (2, 4, wm.H, wm.W), 0, 16)
     acts = jax.random.randint(jax.random.PRNGKey(1), (2, 4), 0, wm.N_ACTIONS)
     intero = jax.random.uniform(jax.random.PRNGKey(2), (2, 4, 5))
-    (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views, acts, jax.random.PRNGKey(3), intero, jnp.zeros((2, 4)))
-    assert np.isfinite(float(aux["ensemble_ce"]))
-    assert float(jnp.abs(g.ensemble[0].b.kernel[...]).sum()) > 0
+    for target, key in (("z", "ensemble_ce"), ("body", "ensemble_mse")):
+        m = wm.WorldModel(nnx.Rngs(9), n_intero=5, reward=True, ensemble=2, ensemble_target=target)
+        (loss, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views, acts, jax.random.PRNGKey(3), intero, jnp.zeros((2, 4)))
+        assert np.isfinite(float(aux[key]))
+        assert float(jnp.abs(g.ensemble[0].b.kernel[...]).sum()) > 0
+    feat = jax.random.normal(jax.random.PRNGKey(4), (3, wm.DETER + wm.STOCH * wm.CLASSES))
+    assert m.ensemble_predict(feat, jax.nn.one_hot(jnp.zeros(3, jnp.int32), wm.N_ACTIONS)).shape == (2, 3, len(wm.BODY_DIMS))
+    assert m.disagreement(feat, jax.nn.one_hot(jnp.zeros(3, jnp.int32), wm.N_ACTIONS)).shape == (3,)

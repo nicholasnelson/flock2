@@ -32,7 +32,7 @@ from flock.meadow import drives as D, scripted, sim, views
 from flock.meadow.world import generate, ground_state
 
 CONTEXT, K = 16, 8
-PROBED = ("drink", "graze", "stop", "walk")
+PROBED = ("drink", "graze", "stop", "walk", "left", "head_up", "rest")
 
 
 def warm_and_record(key, meadows, sheep, warm):
@@ -82,7 +82,12 @@ def believe(world, views_, actions, levels, probe, key):
     acts = jnp.full((h.shape[0], K), probe, jnp.int32)
     im = world.imagine(h, z, acts, k2)
     feat = jnp.concatenate([im.h, im.z], -1)
-    return lv0, world.intero_head(feat[:, -1]), world.reward(feat).mean(1)
+    if world.ensemble is not None:
+        prev = jnp.concatenate([jnp.concatenate([h, z], -1)[:, None], feat[:, :-1]], 1)
+        dis = world.disagreement(prev, jax.nn.one_hot(acts, wm.N_ACTIONS)).mean(1)
+    else:
+        dis = jnp.zeros(h.shape[:1])
+    return lv0, world.intero_head(feat[:, -1]), world.reward(feat).mean(1), dis
 
 
 def main():
@@ -92,6 +97,8 @@ def main():
     p.add_argument("--sheep", type=int, default=40)
     p.add_argument("--warm", type=int, default=300)
     p.add_argument("--seed", type=int, default=123)
+    p.add_argument("--ensemble", type=int, default=0, help="ensemble heads in the checkpoints")
+    p.add_argument("--ensemble_target", default="body", help="what the checkpoints' ensemble predicts: body or z (birth1)")
     p.add_argument("--out", default=None, help="write the results as JSON here")
     a = p.parse_args()
 
@@ -109,12 +116,12 @@ def main():
 
     results = {}
     for path in a.wm:
-        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_DRIVES, reward=True)
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
         wm.load_into(world, pickle.load(open(os.path.expanduser(path), "rb")))
         res = {}
         for name in PROBED:
             outs = [believe(world, v[i : i + 32], act[i : i + 32], lv[i : i + 32], sim.ACTION_NAMES.index(name), jax.random.PRNGKey(i)) for i in range(0, len(v), 32)]
-            p0, p1, pr = (np.concatenate([np.asarray(o[j]) for o in outs]) for j in range(3))
+            p0, p1, pr, dis = (np.concatenate([np.asarray(o[j]) for o in outs]) for j in range(4))
             dl_true, r_true = true[name]
             row = {}
             for where, m in (("by_water", near), ("away", ~near)):
@@ -128,13 +135,16 @@ def main():
                     "d_energy_true": round(float(dl_true[m, D.ENERGY].mean()), 4),
                     "reward_pred": round(float(pr[m].mean()), 4),
                     "reward_true": round(float(r_true[m].mean()), 4),
+                    "d_social_pred": round(float((p1 - p0)[m, D.SOCIAL].mean()), 4),
+                    "d_social_true": round(float(dl_true[m, D.SOCIAL].mean()), 4),
+                    "disagreement": float(dis[m].mean()),
                 }
             res[name] = row
         results[path] = res
         print(json.dumps({"wm": path}), flush=True)
         for name in PROBED:
             for where, row in res[name].items():
-                print(f"  {name:6s} {where:9s} n={row['n']:4d}  d_hydration pred {row['d_hydration_pred']:+.3f} true {row['d_hydration_true']:+.3f}   d_energy pred {row['d_energy_pred']:+.3f} true {row['d_energy_true']:+.3f}   reward pred {row['reward_pred']:+.3f} true {row['reward_true']:+.3f}", flush=True)
+                print(f"  {name:6s} {where:9s} n={row['n']:4d}  d_hydration pred {row['d_hydration_pred']:+.3f} true {row['d_hydration_true']:+.3f}   d_energy pred {row['d_energy_pred']:+.3f} true {row['d_energy_true']:+.3f}   reward pred {row['reward_pred']:+.3f} true {row['reward_true']:+.3f}   d_social pred {row['d_social_pred']:+.3f} true {row['d_social_true']:+.3f}   disagreement {row['disagreement']:.2e}", flush=True)
     if a.out:
         json.dump(results, open(a.out, "w"), indent=1)
 

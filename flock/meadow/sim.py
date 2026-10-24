@@ -121,6 +121,7 @@ def step(state: State, actions: jax.Array) -> State:
     visits = f.visits.at[s_idx, cell[:, 0], cell[:, 1]].add(entered.astype(jnp.int32))
     levels = D.update(
         f.levels,
+        action=a,
         grazed=grazing,
         drank=drinking,
         resting=resting,

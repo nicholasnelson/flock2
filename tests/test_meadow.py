@@ -106,17 +106,17 @@ def test_drive_reward_signs():
     from flock.meadow import drives as D
 
     hungry = jnp.array([[0.3, 0.9, 0.9, 1.0, 0.9]])
-    after = D.update(hungry, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
+    after = D.update(hungry, action=jnp.array([5]), grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
     assert float(D.drive_reduction(hungry, after)[0]) > 0  # eating when hungry pays
     assert float(D.reward(hungry, after)[0]) > float(D.reward(hungry, hungry)[0])
     full = jnp.array([[1.1, 0.9, 0.9, 1.0, 0.9]])
-    over = D.update(full, grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
+    over = D.update(full, action=jnp.array([5]), grazed=jnp.array([True]), drank=jnp.array([False]), resting=jnp.array([False]), night=jnp.bool_(False), near_cover=jnp.array([False]), n_visible=jnp.array([8.0]), novelty=jnp.array([0.0]))
     assert float(D.drive_reduction(full, over)[0]) < 0  # over-eating past the set-point costs
     assert float(D.reward(full, over)[0]) < float(D.reward(full, full)[0])
     assert float(D.reward(full, jnp.ones((1, 5)))[0]) == 0.0  # at the set-points nothing is owed
     # warmth at night: the open chills faster than cover
     h = jnp.full((2, 5), 0.8)
-    n = D.update(h, grazed=jnp.zeros(2, bool), drank=jnp.zeros(2, bool), resting=jnp.zeros(2, bool), night=jnp.bool_(True), near_cover=jnp.array([False, True]), n_visible=jnp.zeros(2), novelty=jnp.zeros(2))
+    n = D.update(h, action=jnp.zeros(2, jnp.int32), grazed=jnp.zeros(2, bool), drank=jnp.zeros(2, bool), resting=jnp.zeros(2, bool), night=jnp.bool_(True), near_cover=jnp.array([False, True]), n_visible=jnp.zeros(2), novelty=jnp.zeros(2))
     assert float(n[0, D.WARMTH]) < float(n[1, D.WARMTH]) < 0.8
 
 
@@ -131,3 +131,14 @@ def test_social_counts_only_sheep_in_view_and_interest_rewards_new_cells():
     s2 = sim.step(s, jnp.array([sim.WALK]))
     assert float(s2.flock.levels[0, 4]) > before  # entering a fresh cell raised interest
     assert int(s2.flock.visits.sum()) == 1
+
+
+def test_energy_use_depends_on_the_action():
+    from flock.meadow import drives as D, sim
+
+    assert len(D.ENERGY_USE) == sim.N_ACTIONS
+    h = jnp.full((3, 5), 0.8)
+    acts = jnp.array([sim.REST, sim.WALK, sim.TROT])
+    n = D.update(h, action=acts, grazed=jnp.zeros(3, bool), drank=jnp.zeros(3, bool), resting=acts == sim.REST, night=jnp.bool_(False), near_cover=jnp.zeros(3, bool), n_visible=jnp.zeros(3), novelty=jnp.zeros(3))
+    e = np.asarray(n[:, D.ENERGY])
+    assert e[0] > e[1] > e[2]  # resting saves energy, trotting burns it

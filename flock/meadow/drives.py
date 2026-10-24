@@ -17,7 +17,8 @@ deep-HRRL work the notes cite) collapsed with drives at zero, so the reward is n
 itself (M1 step 3, owner's decision).
 
 Levels (set-point 1 for all):
-- energy: falls slowly; grazing restores it by a fixed amount while the grass under the sheep
+- energy: falls at a rate set by the action (``ENERGY_USE``: resting least, trotting most);
+  grazing restores it by a fixed amount while the grass under the sheep
   is at least 1 (of 3);
 - hydration: falls a little faster; drinking at the water's edge restores it;
 - warmth: falls slowly by day, fast at night in the open, less fast at night near cover; only
@@ -41,7 +42,10 @@ MAX_LEVEL = 1.15  # overshoot allowed (and penalised as deviation)
 NORM_N = 4.0
 REWARD_SCALE = 100.0  # for drive_reduction
 
-ENERGY_DECAY, ENERGY_PER_BITE = 0.0006, 0.012  # a bite is BITE of biomass at grass level >= 1
+ENERGY_PER_BITE = 0.012  # a bite is BITE of biomass at grass level >= 1
+# energy used per step by action, in sim's order: stop, walk, trot, left, right, graze, drink,
+# rest, head_up (was a flat 0.0006 until 2026-10-24: trotting and spinning cost nothing extra)
+ENERGY_USE = jnp.array([0.0005, 0.0008, 0.0016, 0.0006, 0.0006, 0.0005, 0.0005, 0.0003, 0.0005])
 HYDRATION_DECAY, HYDRATION_PER_SIP = 0.0008, 0.04
 WARMTH_DECAY_DAY, WARMTH_DECAY_NIGHT_OPEN, WARMTH_DECAY_NIGHT_COVER = 0.0002, 0.0016, 0.0007
 WARMTH_REST, WARMTH_REST_COVER = 0.003, 0.006
@@ -66,9 +70,9 @@ def reward(h_before: jax.Array, h_after: jax.Array) -> jax.Array:
     return -drive(h_after)
 
 
-def update(h, *, grazed, drank, resting, night, near_cover, n_visible, novelty):
-    """New levels (S, N_DRIVES) from the step's events (each (S,) except ``night`` ())."""
-    energy = h[:, ENERGY] - ENERGY_DECAY + jnp.where(grazed, ENERGY_PER_BITE, 0.0)
+def update(h, *, action, grazed, drank, resting, night, near_cover, n_visible, novelty):
+    """New levels (S, N_DRIVES) from the step's action and events (each (S,) except ``night`` ())."""
+    energy = h[:, ENERGY] - ENERGY_USE[action] + jnp.where(grazed, ENERGY_PER_BITE, 0.0)
     hydration = h[:, HYDRATION] - HYDRATION_DECAY + jnp.where(drank, HYDRATION_PER_SIP, 0.0)
     w_decay = jnp.where(night, jnp.where(near_cover, WARMTH_DECAY_NIGHT_COVER, WARMTH_DECAY_NIGHT_OPEN), WARMTH_DECAY_DAY)
     w_gain = jnp.where(resting, jnp.where(near_cover, WARMTH_REST_COVER, WARMTH_REST), 0.0)

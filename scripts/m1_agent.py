@@ -9,7 +9,11 @@ replay, fine-tune the world model, train the actor-critic in imagination; repeat
 data: the sheep learn from birth on their own behaviour. ``--ensemble K`` gives the world model
 K next-state heads whose disagreement, weighted ``--curiosity``, is added to the imagined reward.
 The actor-critic starts training after ``--ac_start`` iterations (before that the policy is
-uniform: an infancy of random behaviour while the world model learns).
+uniform: an infancy of random behaviour while the world model learns). ``--varied`` starts each
+meadow fresh — a new layout, the flock at a random place, a random time of day, every sheep's
+levels drawn from [0.2, 1.0] — and ``--reset_every`` steps (staggered across meadows) starts it
+fresh again, so the model sees healthy, hungry and thirsty sheep in every situation rather than
+one flock running down; no replay sequence spans a reset.
 
 Every sheep in every meadow acts from the actor, from its own world-model state (h, z) updated
 each step with its strip and its drive levels. Eight sheep per meadow are logged; each logged
@@ -79,6 +83,19 @@ def collect(world, agent, states, mems, key, steps, rec_idx):
     return states, mems, recs
 
 
+def fresh(key, sheep):
+    """A new meadow with the flock at a random place, a random time of day and random levels."""
+    k1, k2, k3, k4 = jax.random.split(key, 4)
+    st = generate(k1, sheep)
+    centre = jax.random.uniform(k2, (2,), minval=24.0, maxval=sim.N_TILES - 24.0)
+    pos = jnp.clip(st.flock.pos - sim.N_TILES / 2 + centre, 1.0, sim.N_TILES - 1.0)
+    levels = jax.random.uniform(k3, (sheep, D.N_DRIVES), minval=0.2, maxval=1.0)
+    return st._replace(flock=st.flock._replace(pos=pos, levels=levels), t=jax.random.randint(k4, (), 0, sim.DAY))
+
+
+fresh_many = jax.jit(jax.vmap(fresh, in_axes=(0, None)), static_argnums=1)
+
+
 @nnx.jit
 def start_states(world, packed, actions, levels, key):
     s = world.observe(unpack(packed).astype(jnp.int32), actions, key, levels)
@@ -123,14 +140,17 @@ def main():
     p.add_argument("--replay", type=int, default=2048)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--ensemble", type=int, default=0, help="curiosity ensemble heads in the world model (0: none)")
+    p.add_argument("--ensemble_target", default="body", help="body: curiosity about level changes; z: about the next view state (birth1)")
     p.add_argument("--curiosity", type=float, default=0.0, help="weight of the ensemble-disagreement reward")
     p.add_argument("--ac_start", type=int, default=0, help="iterations of world-model-only learning before the actor-critic trains")
+    p.add_argument("--varied", action="store_true", help="fresh meadows: random flock place, time and levels")
+    p.add_argument("--reset_every", type=int, default=0, help="with --varied: start each meadow fresh every this many steps (0: never)")
     a = p.parse_args()
     if a.scripted == "none":
         a.wm_online = 4
     os.makedirs(a.out, exist_ok=True)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble)
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_DRIVES, reward=True, ensemble=a.ensemble, ensemble_target=a.ensemble_target)
     if a.wm != "none":
         wm.load_into(world, pickle.load(open(os.path.expanduser(a.wm), "rb")))
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
@@ -144,10 +164,17 @@ def main():
     key = jax.random.PRNGKey(a.seed)
 
     key, k = jax.random.split(key)
-    states = jax.vmap(lambda kk: generate(kk, a.sheep))(jax.random.split(k, a.meadows))
-    key, k = jax.random.split(key)
-    states = states._replace(t=jax.random.randint(k, (a.meadows,), 0, sim.DAY))
+    if a.varied:
+        states = fresh_many(jax.random.split(k, a.meadows), a.sheep)
+    else:
+        states = jax.vmap(lambda kk: generate(kk, a.sheep))(jax.random.split(k, a.meadows))
+        key, k = jax.random.split(key)
+        states = states._replace(t=jax.random.randint(k, (a.meadows,), 0, sim.DAY))
     mems = (jnp.zeros((a.meadows, a.sheep, wm.DETER)), jnp.zeros((a.meadows, a.sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((a.meadows, a.sheep), jnp.int32))
+    # steps since each meadow started, staggered so resets are spread out; steps in each logged
+    # sheep's window since its meadow started (a window is pushed only when full)
+    age = (np.arange(a.meadows) * (a.reset_every // max(1, a.meadows))) if a.reset_every else np.zeros(a.meadows, int)
+    fill = np.zeros(n_rec, int)
     rec_idx = jnp.arange(a.record)
     # compile (and autotune) the two update steps before acting, while the GPU is empty; on
     # throwaway copies, so the warm-up changes nothing
@@ -175,8 +202,22 @@ def main():
         del recs["view"]
         for buf, x in zip((window.v, window.a, window.l, window.r), new):
             buf[:] = np.concatenate([buf[:, a.collect :], x], 1)
-        if it * a.collect >= a.length:
-            replay.add(window.v, window.a, window.l, window.r)
+        fill += a.collect
+        full = fill >= a.length
+        if full.any():
+            replay.add(window.v[full], window.a[full], window.l[full], window.r[full])
+        age += a.collect
+        if a.varied and a.reset_every:
+            reset = age >= a.reset_every
+            if reset.any():
+                key, k = jax.random.split(key)
+                new_states = fresh_many(jax.random.split(k, a.meadows), a.sheep)
+                m = jnp.asarray(reset)
+                pick = lambda old, nw: jnp.where(m.reshape((-1,) + (1,) * (old.ndim - 1)), nw, old)
+                states = jax.tree.map(pick, states, new_states)
+                mems = jax.tree.map(lambda old: pick(old, jnp.zeros_like(old)), mems)
+                age[reset] = 0
+                fill[np.repeat(reset, a.record)] = 0
         if replay.n < 4:
             continue
         # world model
@@ -218,7 +259,7 @@ def main():
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if it % 10 == 0 or it == 1:
-            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "levels", "drink_dry_share", "bare_graze", "ac_return", "ac_entropy", "ac_intrinsic", "wm_pixel_acc", "wm_reward_ce", "wm_ensemble_ce")}), flush=True)
+            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "levels", "drink_dry_share", "bare_graze", "ac_return", "ac_entropy", "ac_intrinsic", "wm_pixel_acc", "wm_reward_ce", "wm_ensemble_mse")}), flush=True)
         if it % 50 == 0 or it == a.iters:
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(world))), open(os.path.join(a.out, "wm.pkl"), "wb"))
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(agent))), open(os.path.join(a.out, "agent.pkl"), "wb"))
