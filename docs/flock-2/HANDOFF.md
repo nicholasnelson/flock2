@@ -15,9 +15,12 @@ interoception and reward head), `flock/ac.py` (actor-critic in imagination); scr
 `m1_agent_report`. Tests: `tests/test_meadow.py`, `test_wm.py`, `test_ac.py`, `test_fpv.py`
 (CPU: `JAX_PLATFORMS=cpu pytest -q tests/test_meadow.py tests/test_wm.py tests/test_ac.py`).
 
-**Next, agreed with the owner.** Run the world model and the policy together from birth on the
-sheep's own behaviour (no scripted pretraining), with a curiosity reward from the disagreement
-of five next-state heads (Plan2Explore). Details and reasoning in the README's § Next.
+**Current approach, agreed with the owner.** World model and policy learn together from birth on
+the sheep's own behaviour (no scripted pretraining), with a curiosity reward from the
+disagreement of five heads. birth1 (curiosity about the next view) fixed the false drinking
+belief but learned to spin in place, then to run; birth2 (curiosity about the body's stores,
+varied starts and daily meadow resets, per-action energy use) is the current run. Details,
+numbers and reasoning in the README's step 3 sections from "The change of approach" on.
 
 **Gotchas added.** Data and checkpoints live on the WSL filesystem (`~/flock2_data/`), not in
 git; `runs/` is git-ignored, so results worth keeping are copied to `docs/flock-2/m1-results/`.

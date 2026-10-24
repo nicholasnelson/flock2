@@ -8,7 +8,7 @@ result here: [`m1-results/`](m1-results/) (copied from the local runs, which are
 | --- | --- |
 | 1. Meadow sim, first-person views, viewer, scripted flock | Done. |
 | 2. Logged rollouts, world-model pretraining | Done; surprise not yet selective. |
-| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. **Three agent runs, no useful learned behaviour yet**; cause found (§ Step 3); next approach agreed with the owner. |
+| 3. Drives and the actor-critic in imagination | Drives, interoception, reward head and actor-critic built and tested. Three runs on a scripted-pretrained world model and one learning from birth (birth1): no useful learned behaviour yet, causes found (§ Step 3). birth2 (body curiosity, varied starts, action costs) running. |
 | 4. Behavioural and stability evaluation | Not started. |
 
 # Step 1 — sim, first-person views, viewer, scripted flock
@@ -141,7 +141,7 @@ as deviation, so over-eating is penalised):
 
 | Level | Falls per step | Restored by |
 | --- | --- | --- |
-| energy | 0.0006 | grazing: +0.012 per step on a tile with grass ≥ 1 (of 3); the bite (0.05) is removed from the tile, which regrows |
+| energy | by action since 2026-10-24: rest 0.0003; stop, graze, drink, head up 0.0005; turn 0.0006; walk 0.0008; trot 0.0016 (was a flat 0.0006 for every action through birth1) | grazing: +0.012 per step on a tile with grass ≥ 1 (of 3); the bite (0.05) is removed from the tile, which regrows |
 | hydration | 0.0008 | drinking within one tile of water: +0.04 per step |
 | warmth | 0.0002 by day; at night 0.0016 in the open, 0.0007 within 3 tiles of a tree or hut | resting only: +0.003, +0.006 beside cover |
 | social | — (instantaneous, not a store) | number of other sheep in view (in range, outside the blind wedge) / 8, capped at 1 |
@@ -151,9 +151,16 @@ The drive is the L4 norm of the deviations from the set-points, D = (Σ|1 − h�
 the worst deficit, so topping up a small deficit is worth less than fixing the largest one (the
 non-substitutable norm the survey calls for, after
 [Keramati & Gutkin 2014](https://elifesciences.org/articles/04811)). Rates were chosen so that a
-sensible flock can keep up with them over the 1,200-step day *(judgement)*: the scripted flock,
-given hysteresis (top up to 0.95 once started), holds energy ~0.75, hydration ~0.65, warmth
-~0.95, social ~0.9, interest ~0.85 indefinitely. Tests: `tests/test_meadow.py` (reward signs,
+sensible flock can keep up with them over the 1,200-step day *(judgement)*. The scripted flock,
+given hysteresis (top up to 0.95 once started), keeps the *mean* levels up: over its third day
+from dawn (8 meadows × 40 sheep, `scripts/m1_scripted_check.py`) energy 0.66, hydration 0.53,
+warmth 1.05, social 0.94, interest 0.79 with the flat energy use, and 0.66 / 0.54 / 1.06 / 0.95
+/ 0.82 with the per-action use. **Correction (2026-10-24):** this README earlier said the
+scripted flock holds the levels "indefinitely"; that was true of the means only. Its struggling
+tenth does not: the 10th percentile of energy reaches 0 by day 3 and of hydration by the first
+night, under either energy use. So the drives are survivable on average and the script loses
+some sheep (queueing at grass and water, or its hunger threshold of 0.3, are the likely causes;
+not investigated). Tests: `tests/test_meadow.py` (reward signs,
 night chill in the open vs cover, social counts only sheep in view, interest pays for new cells).
 
 **Reward.** First Keramati & Gutkin's drive reduction, r = 100·(D_t − D_{t+1}) (the ×100 as in
@@ -270,7 +277,7 @@ the model: in the scripted rollouts *drink* happens only at the water's edge, so
 hydration" and "drinking at water raises hydration" cannot be told apart. Run 2 hid the problem
 only because its high entropy kept the policy from acting on anything.
 
-## Next — agreed with the owner (2026-10-24)
+## The change of approach — agreed with the owner (2026-10-24)
 
 The owner's framing: in an animal, world model and behaviour are learned together from its own
 experience, with the reward circuitry built in rather than learned. The sheep already match this
@@ -309,6 +316,75 @@ unknown here is the *action*, not the image. The current location-novelty intere
 (it is part of the homeostatic reward); the disagreement reward is the first intrinsic term
 outside the drives, which the survey warns can shift set-points (the "palatability" pathology), so
 its weight is a measured choice *(judgement)*.
+
+## Learning from birth: birth1 (visual curiosity)
+
+**Built** (`flock/wm.py`, `flock/ac.py`, `scripts/m1_agent.py`): a curiosity ensemble of five
+heads on the world model; the actor-critic's imagined reward gains curiosity × disagreement /
+(its running mean), so a typical step earns about the weight; `--wm none --scripted none` starts
+the world model from random weights with no scripted data; `--ac_start` gives an infancy in which
+only the world model learns and the policy is uniform. One design change was forced by a test:
+with the action concatenated to the head's input (as Plan2Explore does), 9 action inputs beside
+896 state inputs, an action never tried got no more disagreement than a familiar one (5.6e-7 vs
+5.6e-7); each head now has a shared hidden layer and one output branch per action, so an untried
+branch keeps each head's own random weights and the heads disagree until it is trained
+(`tests/test_wm.py`).
+
+**Run** (`m1-results/agent_birth1_log.jsonl`): 4 meadows × 40 sheep, the heads predicting the next
+*view* state (z); curiosity 0.1; 300 iterations of infancy, then the actor-critic; replay of 8,192
+64-step sequences; otherwise as agent run 3. Stopped at 631 iterations (70 min).
+
+| Iterations | Reward | Water | Warmth | Social | Interest | Energy | What the policy does |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 4–303 (infancy) | −0.89 → −1.24 | 0.20 → 0.03 | 0.62 → 0.10 | 0.60 → 0.13 | ~1.0 | 1.07 → 1.14 | uniform; 99 % of drinks on dry ground |
+| 304–403 | −1.25 | 0.02 | 0.08 | 0.12 | 0.96 | 1.14 | near-uniform; *drink* stays at 0.10 (run 3: 0.72) |
+| 404–503 | −1.27 | 0.01 | 0.05 | 0.13 | 0.67 | 1.11 | turning 42 %, head up 24 %: standing and looking around |
+| 504–603 | −1.32 | 0.01 | 0.02 | 0.10 | 0.34 | 0.86 | turning 47 %, head up 21 % |
+| 604–634 | −1.30 | 0.01 | 0.01 | 0.13 | 0.68 | 0.50 | trotting 77 % by day |
+
+The probe on its iteration-450 model (`m1-results/probe_birth1.json`; 80 sheep, none by water):
+learning from birth fixed the false belief — drinking away from water is now predicted to *lower*
+hydration (−0.044 over 8 steps; true −0.006; the pretrained model said +0.160). But the model is
+pessimistic about the healthier sheep of the probe (reward −0.81 predicted, −0.55 true) and
+under-predicts grazing (+0.011 energy vs +0.065 true): in infancy the random flock sat at maximum
+energy and almost never at water, so it never saw grazing or drinking help. And turning drew the
+most disagreement (4.7e-3 against 3.5–3.8e-3 for the other actions): turning reveals new parts of
+the panorama, so visual curiosity paid ~30 % more for it than for anything else — larger than the
+real reward differences between actions — and the policy learned to spin. Then, with trotting
+free, to run (interest pays for new cells).
+
+## Learning from birth: birth2 (body curiosity, varied starts, action costs)
+
+Three changes, agreed with the owner (2026-10-24); the first is a fix to the world, the other two
+to how the sheep learn, so birth2 cannot say which of them mattered *(judgement: accepted
+because a world where running is free would have to be redone anyway)*:
+
+1. **Energy use by action** (§ Drives): resting saves energy, trotting burns it, spinning is no
+   longer free. Checked against the scripted flock first (§ Drives).
+2. **Body curiosity.** The ensemble predicts the change in the bodily stores — energy, hydration,
+   warmth, interest — instead of the next view state: curiosity about what an action does to the
+   sheep, not what it will see. Social is left out: it is an instantaneous count of the sheep in
+   view, so its changes (±1/8 whenever one enters or leaves the view, ×100 in the target) dominated
+   the error in the smoke test and would have made this curiosity about turning again.
+   `ensemble_target="z"` keeps birth1's version.
+3. **Varied starts.** Every meadow starts fresh — a new layout, the flock at a random place, a
+   random time of day, each sheep's levels drawn from [0.2, 1.0] — and is started fresh again
+   every 1,200 steps (one day), staggered across meadows; no replay sequence spans a reset. So the
+   model sees healthy, hungry and thirsty sheep in every situation, instead of one flock running
+   down.
+
+Discussed and deferred: an innate aversive *taste* for ingesting nothing (drinking on dry ground,
+grazing bare ground) — a separate fixed signal, not damage to the drive it resembles (eating dirt
+does not dehydrate), and never a pleasant taste for real food (the palatability pathology); to be
+added if birth2's sheep keep making those mistakes (logged as `drink_dry_share`, `bare_graze`).
+And visual curiosity as *learning progress* — the improvement of a slow copy of the ensemble's
+predictions against the current one, rewarded only when positive, so a sheep gets bored of what
+it never gets better at predicting (the owner's proposal; progress curiosity against a delayed
+model, [Kim et al. 2020](https://arxiv.org/abs/2007.07853)) — to be added if birth2's sheep
+survive but are incurious about what they see.
+
+**Run:** `--wm none --scripted none --ensemble 5 --curiosity 0.1 --ac_start 300 --varied
+--reset_every 1200 --replay 8192 --iters 1500` (`runs/birth2.sh`). Results: pending.
 
 ## Reproduce
 
