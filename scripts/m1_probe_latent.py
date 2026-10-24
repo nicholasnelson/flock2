@@ -14,7 +14,9 @@ underfoot, near cover, night) the balanced accuracy at threshold 0.5 against 0.5
 continuous ones (the five levels, the egocentric direction and distance to water, grass, cover)
 R² on the held-out meadows. Direction and distance targets are also scored only on samples where
 that target is within the daytime view range (12 tiles) and inside the 300° field of view
-(``*_in_view``), since a sheep cannot know where water it cannot see is.
+(``*_in_view``), since a sheep cannot know where water it cannot see is. ``--mlp`` replaces the
+ridge regressions with a small nonlinear probe (896 -> 256 -> 256 -> 1, ReLU, Adam 1e-3, squared
+error, 8 epochs), for information the state holds in a form a straight-line readout cannot use.
 """
 
 from __future__ import annotations
@@ -74,6 +76,38 @@ def ridge(x, y, lam=1.0):
     return lambda q: np.concatenate([(q - mu) / sd, np.ones((q.shape[0], 1))], 1) @ w
 
 
+def mlp_probe(x, y, epochs=8, seed=0):
+    import optax
+
+    mu, sd = x.mean(0), x.std(0) + 1e-6
+    ym, ys = y.mean(), y.std() + 1e-6
+    k1, k2, k3 = jax.random.split(jax.random.PRNGKey(seed), 3)
+    init = lambda k, i, o: (jax.random.normal(k, (i, o)) * np.sqrt(2.0 / i), jnp.zeros(o))
+    params = [init(k1, x.shape[1], 256), init(k2, 256, 256), init(k3, 256, 1)]
+
+    def f(ps, q):
+        for w, b in ps[:-1]:
+            q = jax.nn.relu(q @ w + b)
+        return (q @ ps[-1][0] + ps[-1][1])[:, 0]
+
+    opt = optax.adam(1e-3)
+    st = opt.init(params)
+
+    @jax.jit
+    def step(ps, st, xb, yb):
+        l, g = jax.value_and_grad(lambda q: jnp.mean((f(q, xb) - yb) ** 2))(ps)
+        u, st = opt.update(g, st)
+        return optax.apply_updates(ps, u), st
+
+    xs, yn = ((x - mu) / sd).astype(np.float32), ((y - ym) / ys).astype(np.float32)
+    rng = np.random.default_rng(seed)
+    for _ in range(epochs):
+        for mb in np.array_split(rng.permutation(len(xs)), max(1, len(xs) // 512)):
+            params, st = step(params, st, xs[mb], yn[mb])
+    fj = jax.jit(f)
+    return lambda q: np.asarray(fj(params, ((q - mu) / sd).astype(np.float32))) * ys + ym
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--wm", required=True)
@@ -82,6 +116,7 @@ def main():
     p.add_argument("--warm", type=int, default=200)
     p.add_argument("--steps", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--mlp", action="store_true", help="nonlinear probes instead of ridge regressions")
     p.add_argument("--out", default=None)
     a = p.parse_args()
     world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_FELT, reward=True)
@@ -91,20 +126,21 @@ def main():
     tr = lambda x: x[:, :split].reshape((-1,) + x.shape[3:])
     te = lambda x: x[:, split:].reshape((-1,) + x.shape[3:])
     xtr, xte = tr(feat), te(feat)
-    res = {"wm": a.wm, "train_samples": int(xtr.shape[0]), "test_samples": int(xte.shape[0])}
+    fit = mlp_probe if a.mlp else ridge
+    res = {"wm": a.wm, "probe": "mlp" if a.mlp else "ridge", "train_samples": int(xtr.shape[0]), "test_samples": int(xte.shape[0])}
     for name, i in BINARY.items():
         ytr, yte = tr(priv)[:, i] > 0.5, te(priv)[:, i] > 0.5
         if ytr.all() or not ytr.any() or yte.all() or not yte.any():
             res[name] = {"balanced_acc": None, "positive_rate": float(yte.mean())}
             continue
-        pred = ridge(xtr, ytr.astype(np.float64))(xte) > 0.5
+        pred = fit(xtr, ytr.astype(np.float64))(xte) > 0.5
         bal = 0.5 * ((pred & yte).sum() / yte.sum() + (~pred & ~yte).sum() / (~yte).sum())
         res[name] = {"balanced_acc": round(float(bal), 3), "positive_rate": round(float(yte.mean()), 3)}
     def r2_of(mtr, mte, i):
         ytr, yte = tr(priv)[mtr, i], te(priv)[mte, i]
         if len(ytr) < 50 or len(yte) < 20:
             return None
-        pred = ridge(xtr[mtr], ytr)(xte[mte])
+        pred = fit(xtr[mtr], ytr)(xte[mte])
         return round(float(1 - ((pred - yte) ** 2).sum() / max(1e-9, ((yte - yte.mean()) ** 2).sum())), 3)
 
     every_tr, every_te = np.ones(len(xtr), bool), np.ones(len(xte), bool)

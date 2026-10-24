@@ -1,0 +1,94 @@
+{
+ "wm": "/home/nnels/flock2_data/m1_agent/fix_s0/wm.pkl",
+ "probe": "mlp",
+ "train_samples": 108000,
+ "test_samples": 36000,
+ "near_water": {
+  "balanced_acc": 0.893,
+  "positive_rate": 0.038
+ },
+ "grass_underfoot": {
+  "balanced_acc": 0.919,
+  "positive_rate": 0.98
+ },
+ "near_cover": {
+  "balanced_acc": 0.981,
+  "positive_rate": 0.494
+ },
+ "night": {
+  "balanced_acc": 1.0,
+  "positive_rate": 0.66
+ },
+ "level_energy": {
+  "r2": 0.978
+ },
+ "level_hydration": {
+  "r2": 0.967
+ },
+ "level_warmth": {
+  "r2": 0.983
+ },
+ "level_social": {
+  "r2": 0.932
+ },
+ "level_interest": {
+  "r2": 0.965
+ },
+ "water_fwd": {
+  "r2": 0.124
+ },
+ "water_left": {
+  "r2": -0.649
+ },
+ "water_dist": {
+  "r2": -0.085
+ },
+ "grass_fwd": {
+  "r2": -0.406
+ },
+ "grass_left": {
+  "r2": -0.459
+ },
+ "grass_dist": {
+  "r2": -0.165
+ },
+ "cover_fwd": {
+  "r2": 0.548
+ },
+ "cover_left": {
+  "r2": -0.267
+ },
+ "cover_dist": {
+  "r2": 0.485
+ },
+ "water_in_view_share": 0.224,
+ "water_fwd_in_view": {
+  "r2": -0.885
+ },
+ "water_left_in_view": {
+  "r2": -0.232
+ },
+ "water_dist_in_view": {
+  "r2": 0.022
+ },
+ "grass_in_view_share": 0.827,
+ "grass_fwd_in_view": {
+  "r2": -0.444
+ },
+ "grass_left_in_view": {
+  "r2": -0.362
+ },
+ "grass_dist_in_view": {
+  "r2": -0.175
+ },
+ "cover_in_view_share": 0.708,
+ "cover_fwd_in_view": {
+  "r2": 0.355
+ },
+ "cover_left_in_view": {
+  "r2": 0.119
+ },
+ "cover_dist_in_view": {
+  "r2": 0.54
+ }
+}
