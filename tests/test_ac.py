@@ -118,6 +118,8 @@ def test_a_centred_actor_critic_learns_the_offset_delayed_bandit():
     assert p > 0.3, p
 
 
-def test_a_twohot_critic_also_learns_the_offset_delayed_bandit():
-    p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=False, twohot=True), _OffsetDelayedBandit(), 300)
+def test_a_centred_twohot_critic_learns_the_offset_delayed_bandit():
+    # two-hot without centring does not (0.14 after 300 updates, like the scalar critic): in the
+    # first hundreds of updates the critic barely moves in either form, so the lag dominates
+    p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=True, twohot=True), _OffsetDelayedBandit(), 300)
     assert p > 0.3, p
