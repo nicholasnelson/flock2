@@ -66,7 +66,7 @@ def main():
     p.add_argument("--lr", type=float, default=3e-5)
     p.add_argument("--critic_lr", type=float, default=None)
     p.add_argument("--entropy", type=float, default=ac.ENTROPY)
-    p.add_argument("--norm", choices=("adv", "ret"), default="ret")
+    p.add_argument("--norm", choices=("adv", "ret", "std"), default="ret")
     p.add_argument("--reset_every", type=int, default=400)
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()

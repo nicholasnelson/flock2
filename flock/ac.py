@@ -89,10 +89,12 @@ class Agent(nnx.Module):
         repval: float = REPVAL,
         n_in: int | None = None,
     ):
-        """``norm``: what sets the actor's scale S — the spread of the returns ("ret", DreamerV3's)
-        or of the advantages ("adv"). ``n_in``: the feature size (default the world model's state;
+        """``norm``: how the actor's advantages are scaled — divided by max(1, S), S the spread of
+        the returns ("ret", DreamerV3's) or of the advantages ("adv"); or standardised per batch
+        to zero mean and unit standard deviation ("std", as PPO; added after the true-simulator
+        rung showed the actor barely moving under "ret"). ``n_in``: the feature size (default the world model's state;
         set it for an agent on other features, e.g. the true grid state)."""
-        assert norm in ("adv", "ret")
+        assert norm in ("adv", "ret", "std")
         n_in = cfg.feat if n_in is None else n_in
         self.n_actions = cfg.n_actions
         self.entropy, self.norm, self.gamma, self.slowtar, self.repval = entropy, norm, gamma, slowtar, repval
@@ -180,7 +182,10 @@ def ac_loss(agent: Agent, feats, acts, rewards, scale, real_feats=None, real_rew
     logp = jnp.take_along_axis(logp_all, acts[..., None], -1)[..., 0]
     entropy = -jnp.sum(jnp.exp(logp_all) * logp_all, -1)
     raw_adv = sg(rets - values[:-1])
-    adv = raw_adv / jnp.maximum(1.0, scale)
+    if agent.norm == "std":
+        adv = (raw_adv - raw_adv.mean()) / (raw_adv.std() + 1e-8)
+    else:
+        adv = raw_adv / jnp.maximum(1.0, scale)
     actor_loss = -jnp.mean(adv * logp) - agent.entropy * jnp.mean(entropy)
     critic_loss = jnp.mean(_critic_fit(agent, feats[:-1], rets) + _critic_fit(agent, feats[:-1], slow[:-1]))
     aux = {"actor_loss": actor_loss, "critic_loss": critic_loss, "entropy": jnp.mean(entropy), "imag_reward": jnp.mean(rewards),

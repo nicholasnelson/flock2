@@ -140,7 +140,7 @@ def main():
     p.add_argument("--twohot", action="store_true")
     p.add_argument("--ac_lr", type=float, default=3e-5)
     p.add_argument("--entropy", type=float, default=ac.ENTROPY)
-    p.add_argument("--norm", choices=("adv", "ret"), default="ret")
+    p.add_argument("--norm", choices=("adv", "ret", "std"), default="ret")
     p.add_argument("--gamma", type=float, default=ac.GAMMA)
     p.add_argument("--slowtar", action="store_true", help="bootstrap from the slow critic (the old ac.py)")
     p.add_argument("--critic_lr", type=float, default=None, help="default: --ac_lr")
