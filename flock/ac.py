@@ -21,6 +21,11 @@ arXiv:2301.04104), on the homeostatic reward (Milestone 1, step 3).
   it the critic, a scalar output starting at zero and trained at Adam 3e-5, was still drifting
   toward -333 after 38,000 updates, so the actor's advantages were mostly the critic's lag.
   (Valid while sheep cannot die; revisit when they can.)
+- Critic output (``twohot``, off by default until tested): a scalar trained by squared error, or
+  as in DreamerV3 a categorical over the 255 symlog bins of ``wm.BINS`` trained by cross-entropy
+  against the two-hot encoding of symlog(return), the value being symexp of the expected bin — so
+  a value of -300 is an ordinary target rather than one the output weights must grow to reach.
+  The port used the scalar head until the second review of 2026-10-24 found the discrepancy.
 - Returns: lambda-returns (gamma 0.997, lambda 0.95) bootstrapped by the slow critic. The actor
   is trained by REINFORCE on advantages divided by max(1, S), S an EMA of the 5th-95th
   percentile range of the *advantages* (returns minus the critic's value), with a small entropy
@@ -69,10 +74,11 @@ def policy_logp(logits: jax.Array) -> jax.Array:
 
 
 class Agent(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True):
+    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True, twohot: bool = False):
         self.actor = Head(wm.N_ACTIONS, rngs)
-        self.critic = Head(1, rngs)
-        self.slow_critic = Head(1, rngs)
+        self.twohot = twohot
+        self.critic = Head(wm.REWARD_BINS if twohot else 1, rngs)
+        self.slow_critic = Head(wm.REWARD_BINS if twohot else 1, rngs)
         nnx.update(self.slow_critic, nnx.state(self.critic))
         self.ret_scale = nnx.Variable(jnp.float32(1.0))
         self.curiosity = nnx.Variable(jnp.float32(curiosity))
@@ -82,6 +88,18 @@ class Agent(nnx.Module):
 
     def act(self, feat: jax.Array, key: jax.Array) -> jax.Array:
         return jax.random.categorical(key, policy_logp(self.actor(feat)), -1)
+
+
+def value_of(agent: Agent, head: Head, feats: jax.Array) -> jax.Array:
+    """The value a critic head gives (..., FEAT) -> (...)."""
+    out = head(feats)
+    if agent.twohot:
+        return wm.symexp(jnp.sum(jax.nn.softmax(out, -1) * wm.BINS, -1))
+    return out[..., 0]
+
+
+def _twohot_ce(logits, target):
+    return -jnp.sum(wm.twohot(wm.symlog(target)) * jax.nn.log_softmax(logits, -1), -1)
 
 
 def feat_of(h, z):
@@ -126,8 +144,8 @@ def lambda_returns(rewards, values):
 
 
 def ac_loss(agent: Agent, feats, acts, rewards, scale):
-    values = agent.critic(feats)[..., 0]
-    slow = jax.lax.stop_gradient(agent.slow_critic(feats)[..., 0])
+    values = value_of(agent, agent.critic, feats)
+    slow = jax.lax.stop_gradient(value_of(agent, agent.slow_critic, feats))
     rets = jax.lax.stop_gradient(lambda_returns(rewards, slow))
     logp_all = policy_logp(agent.actor(feats[:-1]))
     logp = jnp.take_along_axis(logp_all, acts[..., None], -1)[..., 0]
@@ -135,7 +153,11 @@ def ac_loss(agent: Agent, feats, acts, rewards, scale):
     raw_adv = jax.lax.stop_gradient(rets - values[:-1])
     adv = raw_adv / jnp.maximum(1.0, scale)
     actor_loss = -jnp.mean(adv * logp) - ENTROPY * jnp.mean(entropy)
-    critic_loss = jnp.mean(0.5 * (values[:-1] - rets) ** 2 + 0.5 * (values[:-1] - slow[:-1]) ** 2)
+    if agent.twohot:
+        logits = agent.critic(feats[:-1])
+        critic_loss = jnp.mean(_twohot_ce(logits, rets) + _twohot_ce(logits, slow[:-1]))
+    else:
+        critic_loss = jnp.mean(0.5 * (values[:-1] - rets) ** 2 + 0.5 * (values[:-1] - slow[:-1]) ** 2)
     aux = {"actor_loss": actor_loss, "critic_loss": critic_loss, "entropy": jnp.mean(entropy), "imag_reward": jnp.mean(rewards), "return": jnp.mean(rets), "abs_adv": jnp.mean(jnp.abs(raw_adv))}
     return actor_loss + critic_loss, (aux, raw_adv)
 

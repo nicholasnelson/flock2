@@ -116,3 +116,8 @@ def _bandit_preference(agent, world, updates, seed=0):
 def test_a_centred_actor_critic_learns_the_offset_delayed_bandit():
     p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=True), _OffsetDelayedBandit(), 300)
     assert p > 0.3, p
+
+
+def test_a_twohot_critic_also_learns_the_offset_delayed_bandit():
+    p = _bandit_preference(ac.Agent(nnx.Rngs(4), center=False, twohot=True), _OffsetDelayedBandit(), 300)
+    assert p > 0.3, p
