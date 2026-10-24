@@ -1,9 +1,9 @@
-"""SPIKE (not used by M0 or M1 yet): a first-person, Doom-style view for the sheep.
+"""The sheep's first-person, Doom-style view (Milestone 1 on; ``flock.meadow.views`` renders it for
+every sheep).
 
-Proposed in the Q9 addendum (``docs/flock-2/02-design-questions.md``, 2026-10-23): agents see a
-first-person view with billboard sprites instead of the rotated isometric view, as a ~300°
-strip; humans keep the isometric display. This module exists to benchmark that view against
-``iso.render_view`` before anything is decided.
+Proposed in the Q9 addendum (``docs/flock-2/02-design-questions.md``, 2026-10-23) and adopted by
+the owner after the benchmark (``scripts/bench_fpv.py``) against ``iso.render_view``: agents see
+a first-person view with billboard sprites as a ~300° strip; humans keep the isometric display.
 
 Projection: cylindrical (a panorama). Column x is a view angle, linear across the field of view;
 row y is an elevation angle, linear, with the same angle per pixel (square pixels in angle). A

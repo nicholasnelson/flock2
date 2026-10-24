@@ -357,6 +357,9 @@ the two-channel experiment: does sound take urgency and drawing take information
 
 - Stamps rendered into the 4×4-tile footprint (or whatever M0 found legible) with ForMIC-style
   exponential decay; the automatic close look at full resolution when adjacent; bubbles at 16×16.
+  *(Superseded: M0 closed on a 32 × 32 stroke drawing, and agents now see a first-person strip,
+  so marks are read by looking down at them — see [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md) and the
+  Q9 addendum. To be redesigned when M4 starts.)*
 - Curriculum: bubbles first (immediate feedback), then stamps; seed early training with
   hand-authored iconic marks (grass glyph near grass, fox glyph at the treeline) so readers learn
   to trust marks before writers learn to make them.
@@ -558,7 +561,7 @@ re-architecting.
 2. **v0.4 is not a constraint.** Its crate structure, Rust renderer, persistence and camera
    designs are discarded as requirements; 2.0's architecture is decided on its own merits (Q10).
 3. **Milestone order.** Fox before sound, as planned.
-4. **Perception scale.** 4 px/tile, 64×64 heading-aligned view, 16×16 canvas, multi-pixel
+4. **Perception scale** *(superseded — see `CURRENT-DESIGN.md`)*. 4 px/tile, 64×64 heading-aligned view, 16×16 canvas, multi-pixel
    sprites (Q8, Q9), from M0 onward.
 5. **M0 referent set.** K ≈ 6 object types × 4 directions; no specific objects requested.
 6. **Human-readability test.** At least two people (you plus one other).

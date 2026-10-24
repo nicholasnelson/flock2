@@ -72,7 +72,9 @@ in from the start.
 
 ---
 
-The original handoff from the cloud session follows, kept for history.
+The original handoff from the cloud session follows, kept for history; it is out of date in
+places (e.g. the isometric renderer has since been trained on throughout M0). For the current
+design read [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md).
 
 Written at the end of the cloud planning/prototyping session, 2026-10-22. Branch:
 `claude/compassionate-babbage-jtl1o1`. Everything below is pushed.

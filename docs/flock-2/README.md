@@ -19,6 +19,8 @@ stand.
 | [`02-design-questions.md`](02-design-questions.md) | Recommendations for the seven open design questions, with reasoning and evidence. |
 | [`03-implementation-plan.md`](03-implementation-plan.md) | Staged milestones, each watchable or testable on its own, starting with the Milestone 0 toy. |
 | [`research/`](research/) | Per-topic research notes with citations. The survey above is built from these. |
+| [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md) | The design as it stands in the code, one page, with a dated decision log. Where other documents disagree, this one is current. |
+| [`review-2026-10-24.md`](review-2026-10-24.md) | An outside review of progress at 12abf7d (reading only) and its recommendations. |
 | [`HANDOFF.md`](HANDOFF.md) | Where things stand, what to read first, practical gotchas. Newest update at the top. |
 | [`m0-toy-README.md`](m0-toy-README.md) | Milestone 0: the toy drawing game — design, every experiment grid, the result. |
 | [`m1-meadow-README.md`](m1-meadow-README.md) | Milestone 1: the meadow, drives, world model and actor-critic — what was built, every run, the diagnosis, what is next. |

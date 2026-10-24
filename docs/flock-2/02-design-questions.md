@@ -430,6 +430,10 @@ is not.
 
 ### Recommendation
 
+*Superseded (2026-10-23/24): the art is 16 × 8 px isometric tiles at a 128² view, the drawing a
+32 × 32 stroke canvas, and agents see a first-person strip — [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md).
+The reasoning below is kept as history.*
+
 **Change the perception scale to 4 px per tile with a 64×64 egocentric view (16-tile range),
 and keep the drawing canvas at 16×16.** Objects become multi-pixel sprites: a sheep ≈ 6×6 px, a
 fox ≈ 6×6, a tree ≈ 8×8 over 2×2 tiles, grass/pond/salt as textured tiles. A 16×16 canvas stamped
@@ -679,6 +683,10 @@ unfamiliar.
 ---
 
 ## Summary table
+
+*As recommended at plan review (2026-10-22). Rows 1, 8 and 9 are superseded: the drawing is
+32 × 32 strokes, the isometric view 16 × 8 px tiles at 128², and agents see a first-person 300°
+strip — see [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md).*
 
 | # | Question | Recommendation (short) | Confidence | Tested at |
 | --- | --- | --- | --- | --- |

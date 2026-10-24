@@ -28,7 +28,7 @@
 
   <!-- title -->
   <text x="20" y="28" font-size="19" font-weight="bold" fill="#1f2933">One sheep's brain in Milestone 1 (all sheep share the weights; each keeps its own state h, z)</text>
-  <text x="20" y="48" class="s">World model 8.71 M parameters (flock/wm.py) + actor-critic 0.60 M (flock/ac.py). Shapes are height × width or vector length. Dashed orange = planned, not built.</text>
+  <text x="20" y="48" class="s">World model 8.71 M parameters + curiosity ensemble 1.2 M (flock/wm.py) + actor-critic 0.60 M (flock/ac.py). Shapes are height × width or vector length. Orange = curiosity (added 2026-10-24). Diagram as of the review fixes.</text>
 
   <!-- ===== A: inputs ===== -->
   <text x="20" y="80" class="t">Inputs at step t</text>
@@ -39,10 +39,10 @@
   <text x="30" y="160" class="s">→ one-hot: 64 × 256 × 16</text>
 
   <rect x="20" y="380" width="200" height="88" class="inp" rx="6"/>
-  <text x="30" y="400" class="t">Drive levels (felt)</text>
+  <text x="30" y="400" class="t">Felt (6 numbers)</text>
   <text x="30" y="418" class="s">energy, hydration, warmth,</text>
-  <text x="30" y="434" class="s">social, interest: 5 numbers</text>
-  <text x="30" y="450" class="s">in [0, 1.15], set-point 1</text>
+  <text x="30" y="434" class="s">social, interest in [0, 1.15];</text>
+  <text x="30" y="450" class="s">taste (−1 after a bad mouthful)</text>
 
   <!-- ===== B: encoder ===== -->
   <rect x="250" y="70" width="310" height="268" class="grp" rx="8"/>
@@ -65,7 +65,7 @@
 
   <rect x="250" y="390" width="310" height="66" class="box" rx="6"/>
   <text x="262" y="410" class="t">Interoception in  (3 K)</text>
-  <text x="262" y="428" class="m">Linear 5 → 512</text>
+  <text x="262" y="428" class="m">Linear 6 → 512</text>
   <text x="262" y="445" class="n">so the state carries how the sheep feels</text>
   <path d="M220,424 L250,424" class="line" marker-end="url(#arr)"/>
 
@@ -149,26 +149,26 @@
 
   <rect x="980" y="306" width="500" height="62" class="head" rx="8"/>
   <text x="992" y="326" class="t">Interoception head  (0.35 M)</text>
-  <text x="992" y="344" class="m">MLP 896 → 384 → 5 levels</text>
+  <text x="992" y="344" class="m">MLP 896 → 384 → 6 felt numbers</text>
   <text x="992" y="360" class="s">predicts how the sheep will feel; weight 1,000 on squared error</text>
   <path d="M950,337 L980,337" class="line" marker-end="url(#arr)"/>
 
   <rect x="980" y="384" width="500" height="80" class="head" rx="8"/>
   <text x="992" y="404" class="t">Reward head  (0.44 M)</text>
   <text x="992" y="422" class="m">MLP 896 → 384 → 255 bins (symlog space, −20…20)</text>
-  <text x="992" y="438" class="s">two-hot cross-entropy, zero-initialised output; predicts r = −drive</text>
+  <text x="992" y="438" class="s">two-hot cross-entropy, zero-init output; r = −drive − 0.05·bad taste</text>
   <text x="992" y="454" class="s">of the step that led here: the reward the actor imagines</text>
   <path d="M950,424 L980,424" class="line" marker-end="url(#arr)"/>
 
-  <rect x="980" y="480" width="500" height="132" class="plan" rx="8"/>
-  <text x="992" y="500" class="t pl">Curiosity ensemble × 5  (planned, ~2.7 M)</text>
-  <text x="992" y="518" class="m">each head k: MLP [feat 896 ⊕ action 9] → 384</text>
-  <text x="992" y="534" class="m">             → distribution of the next state</text>
-  <text x="992" y="552" class="s">Same data, different random starts. Where experience is plentiful</text>
-  <text x="992" y="568" class="s">they agree; where it is missing they disagree. Curiosity reward =</text>
-  <text x="992" y="584" class="s">disagreement across the 5. Random events give agreement (each head</text>
-  <text x="992" y="600" class="s">learns the same spread), so "noisy TV" is not rewarded. Plan2Explore.</text>
-  <path d="M950,546 L980,546" class="pline" marker-end="url(#arrp)"/>
+  <rect x="980" y="480" width="500" height="132" class="plan" rx="8" style="stroke-dasharray:none"/>
+  <text x="992" y="500" class="t pl">Curiosity ensemble × 5  (1.2 M)</text>
+  <text x="992" y="518" class="m">each head: 896 → 256 · LN · SiLU → 9 branches × 4</text>
+  <text x="992" y="534" class="m">(one per action): Δ energy, water, warmth, interest ×100</text>
+  <text x="992" y="552" class="s">Same data, different random starts: they agree where experience is</text>
+  <text x="992" y="568" class="s">plentiful, disagree where it is missing; an untried action keeps its</text>
+  <text x="992" y="584" class="s">random branch. Curiosity = 0.02 × variance across the 5 / its mean at</text>
+  <text x="992" y="600" class="s">the end of infancy (then frozen, so it fades). After Plan2Explore.</text>
+  <path d="M950,546 L980,546" class="line" marker-end="url(#arr)"/>
 
   <rect x="980" y="628" width="500" height="196" class="agent" rx="8"/>
   <text x="992" y="648" class="t">Actor-critic  (separate module, 0.60 M)</text>
@@ -199,11 +199,11 @@
   <text x="44" y="954" class="m">+ 0.1 · max(1, KL[post ‖ sg(prior)])    representation: stay guessable</text>
   <text x="44" y="972" class="m">+ 1000 · Σ (predicted level − felt level)²</text>
   <text x="44" y="990" class="m">+ reward cross-entropy (two-hot of symlog r)</text>
-  <text x="44" y="1008" class="m pl">+ ensemble negative log-likelihood (planned)</text>
+  <text x="44" y="1008" class="m pl">+ ensemble squared error (Δ stores ×100)</text>
   <text x="32" y="1034" class="s">sg = stop-gradient; 1 nat of free bits; settings as DreamerV3 (Hafner et al. 2023).</text>
-  <text x="32" y="1056" class="s">Until now pretrained on a scripted flock, then fine-tuned online. The scripted sheep only</text>
-  <text x="32" y="1072" class="s">drink at water, so the model learned "drinking raises hydration" everywhere. Planned:</text>
-  <text x="32" y="1088" class="s pl">learn from birth on the sheep's own behaviour, with the curiosity ensemble.</text>
+  <text x="32" y="1056" class="s">Learns from birth on the sheep's own behaviour (random weights, no scripted</text>
+  <text x="32" y="1072" class="s">data; 300 iterations of infancy with a uniform policy). Scripted pretraining</text>
+  <text x="32" y="1088" class="s">taught it that drinking works anywhere (M1 README, the probe).</text>
   <text x="32" y="1112" class="n">Code: flock/wm.py (loss_fn), scripts/m1_wm_train.py, scripts/m1_agent.py.</text>
 
   <rect x="740" y="850" width="740" height="290" class="grp" rx="8"/>
@@ -211,14 +211,14 @@
   <text x="752" y="898" class="s">1. Start from posterior states feat(t) inferred on real sequences of the sheep's own play.</text>
   <text x="752" y="918" class="s">2. Imagine H = 32 steps: the actor picks an action, img_in + GRU step h, the prior samples z.</text>
   <text x="752" y="938" class="s">3. Reward of each imagined step from the reward head</text>
-  <text x="1068" y="938" class="s pl">(+ weighted curiosity, planned).</text>
+  <text x="1068" y="938" class="s pl">+ curiosity.</text>
   <text x="752" y="958" class="s">4. λ-returns (γ 0.997, λ 0.95), bootstrapped by the slow critic.</text>
-  <text x="752" y="978" class="s">5. Actor: REINFORCE on advantage / max(1, S), S = EMA of the 5–95 % return spread,</text>
+  <text x="752" y="978" class="s">5. Actor: REINFORCE on advantage / max(1, S), S = EMA of the 5–95 % advantage spread,</text>
   <text x="772" y="996" class="s">plus entropy bonus 3e-4. Critic: regress on the returns and toward the slow critic.</text>
   <text x="772" y="1014" class="s">Adam 3e-5, gradient clip 100.</text>
   <text x="752" y="1040" class="s">Loop (scripts/m1_agent.py), per iteration: every sheep acts 16 steps from its own state;</text>
-  <text x="752" y="1056" class="s">logged sheep's last 64 steps go to the replay; 64 world-model updates (3 of 4 sequences</text>
-  <text x="752" y="1072" class="s">online); 64 actor-critic updates. Rewards: r = −drive(levels), the drives are fixed and</text>
-  <text x="752" y="1088" class="s">internal (homeostatic); only their prediction is learned.</text>
+  <text x="752" y="1056" class="s">logged sheep's last 64 steps go to the replay; 64 world-model and 64 actor-critic updates.</text>
+  <text x="752" y="1072" class="s">Reward −D, D = (Σ|1−h|⁴)^(2/4): fixed and internal (homeostatic), growing as the square</text>
+  <text x="752" y="1088" class="s">of the worst deficit; only its prediction is learned.</text>
   <text x="752" y="1112" class="n">Code: flock/ac.py (imagine, lambda_returns, ac_loss, train_step), flock/meadow/drives.py.</text>
 </svg>
