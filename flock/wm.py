@@ -89,6 +89,8 @@ class Config(NamedTuple):
     embed: int = EMBED
     body_dims: tuple = BODY_DIMS  # which felt numbers the body-curiosity ensemble predicts
     intero_weight: float = INTERO_WEIGHT
+    recon_weight: float = 1.0  # loss rebalancing (third review, S3): <1 lets reward and felt levels count more
+    reward_weight: float = REWARD_WEIGHT
 
     @property
     def feat(self) -> int:
@@ -342,7 +344,7 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     sg = jax.lax.stop_gradient
     dyn = jnp.mean(jnp.maximum(kl(sg(s.post), s.prior), FREE_NATS))
     rep = jnp.mean(jnp.maximum(kl(s.post, sg(s.prior)), FREE_NATS))
-    loss = recon + KL_DYN * dyn + KL_REP * rep
+    loss = model.cfg.recon_weight * recon + KL_DYN * dyn + KL_REP * rep
     acc = jnp.mean(jnp.argmax(logits, -1) == views)
     aux = {"recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
     if model.intero_head is not None:
@@ -353,7 +355,7 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
         r_logits = model.reward_head(jnp.concatenate([s.h, s.z], -1))[:, 1:]  # state t+1 <- reward of step t
         target = twohot(symlog(reward[:, :-1]))
         r_ce = -jnp.mean(jnp.sum(target * jax.nn.log_softmax(r_logits, -1), -1))
-        loss = loss + REWARD_WEIGHT * r_ce
+        loss = loss + model.cfg.reward_weight * r_ce
         aux["reward_ce"] = r_ce
     if model.ensemble is not None:
         sg = jax.lax.stop_gradient

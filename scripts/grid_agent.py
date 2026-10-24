@@ -146,11 +146,13 @@ def main():
     p.add_argument("--critic_lr", type=float, default=None, help="default: --ac_lr")
     p.add_argument("--repval", type=float, default=ac.REPVAL, help="weight of the replay value loss (0: off)")
     p.add_argument("--view", choices=("local", "full"), default="local")
+    p.add_argument("--recon_weight", type=float, default=1.0, help="world-model loss rebalancing (S3)")
+    p.add_argument("--reward_weight", type=float, default=1.0)
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     global VIEW
     VIEW = a.view
-    cfg = brain.config(a.view)
+    cfg = brain.config(a.view)._replace(recon_weight=a.recon_weight, reward_weight=a.reward_weight)
     size = cfg.h
     assert a.ac_steps == a.wm_steps, "updates run in bursts of K world-model + K actor-critic steps"
     os.makedirs(a.out, exist_ok=True)
