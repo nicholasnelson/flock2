@@ -74,8 +74,13 @@ def policy_logp(logits: jax.Array) -> jax.Array:
 
 
 class Agent(nnx.Module):
-    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True, twohot: bool = False, cfg: wm.Config = wm.MEADOW, hidden: int = 256):
+    def __init__(self, rngs: nnx.Rngs, curiosity: float = 0.0, center: bool = True, twohot: bool = False, cfg: wm.Config = wm.MEADOW, hidden: int = 256, entropy: float = ENTROPY, norm: str = "adv"):
+        """``norm``: what sets the actor's scale S — the spread of the advantages ("adv", since the
+        first review) or of the returns ("ret", DreamerV3's)."""
+        assert norm in ("adv", "ret")
         self.n_actions = cfg.n_actions
+        self.entropy = entropy
+        self.norm = norm
         self.actor = Head(cfg.n_actions, rngs, hidden, cfg.feat)
         self.twohot = twohot
         self.critic = Head(wm.REWARD_BINS if twohot else 1, rngs, hidden, cfg.feat)
@@ -153,14 +158,14 @@ def ac_loss(agent: Agent, feats, acts, rewards, scale):
     entropy = -jnp.sum(jnp.exp(logp_all) * logp_all, -1)
     raw_adv = jax.lax.stop_gradient(rets - values[:-1])
     adv = raw_adv / jnp.maximum(1.0, scale)
-    actor_loss = -jnp.mean(adv * logp) - ENTROPY * jnp.mean(entropy)
+    actor_loss = -jnp.mean(adv * logp) - agent.entropy * jnp.mean(entropy)
     if agent.twohot:
         logits = agent.critic(feats[:-1])
         critic_loss = jnp.mean(_twohot_ce(logits, rets) + _twohot_ce(logits, slow[:-1]))
     else:
         critic_loss = jnp.mean(0.5 * (values[:-1] - rets) ** 2 + 0.5 * (values[:-1] - slow[:-1]) ** 2)
     aux = {"actor_loss": actor_loss, "critic_loss": critic_loss, "entropy": jnp.mean(entropy), "imag_reward": jnp.mean(rewards), "return": jnp.mean(rets), "abs_adv": jnp.mean(jnp.abs(raw_adv))}
-    return actor_loss + critic_loss, (aux, raw_adv)
+    return actor_loss + critic_loss, (aux, raw_adv if agent.norm == "adv" else rets)
 
 
 @nnx.jit
@@ -176,10 +181,10 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     agent.r_bar[...] = r_bar
     rewards = (extrinsic - r_bar if agent.center else extrinsic) + intrinsic
     scale = agent.ret_scale[...]
-    (loss, (aux, raw_adv)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
+    (loss, (aux, spread_of)), grads = nnx.value_and_grad(ac_loss, has_aux=True)(agent, feats, acts, rewards, scale)
     opt.update(agent, grads)
-    # return-scale EMA and the slow critic
-    spread = jnp.percentile(raw_adv, 95) - jnp.percentile(raw_adv, 5)
+    # the actor's scale (EMA of the 5-95 % spread of the advantages or the returns) and the slow critic
+    spread = jnp.percentile(spread_of, 95) - jnp.percentile(spread_of, 5)
     agent.ret_scale[...] = RETURN_DECAY * scale + (1 - RETURN_DECAY) * spread
     slow = nnx.state(agent.slow_critic, nnx.Param)
     fast = nnx.state(agent.critic, nnx.Param)
@@ -192,6 +197,6 @@ def train_step(world: wm.WorldModel, agent: Agent, opt: nnx.Optimizer, h0, z0, k
     return aux
 
 
-def make_optimizer(agent: Agent) -> nnx.Optimizer:
+def make_optimizer(agent: Agent, lr: float = 3e-5) -> nnx.Optimizer:
     wrt = nnx.All(nnx.Param, nnx.Not(nnx.PathContains("slow_critic")))
-    return nnx.Optimizer(agent, optax.chain(optax.clip_by_global_norm(100.0), optax.adam(3e-5, eps=1e-5)), wrt=wrt)
+    return nnx.Optimizer(agent, optax.chain(optax.clip_by_global_norm(100.0), optax.adam(lr, eps=1e-5)), wrt=wrt)
