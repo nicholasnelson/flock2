@@ -1,6 +1,6 @@
 # FLOCK 2.0 — current design
 
-*The design as it stands in the code (checked 2026-10-24, at the commit that adds this file).
+*The design as it stands in the code (last checked 2026-10-24, late, after the third review).
 The plan (`03-implementation-plan.md`), the design questions (`02-design-questions.md`) and the
 milestone READMEs record how it got here; where they disagree with this page, this page is
 current. When the design changes, change this page in the same commit and add a line to the
@@ -13,9 +13,13 @@ decision log at the end.*
   relied on a stack of nine channel interventions (below), not on the game alone. The human
   quiz was not run. Record: `m0-toy-README.md`.
 - **M1 (meadow, drives, world model): in progress.** World, views, drives, world model, actor-
-  critic and evaluation built and tested. No sheep learning from vision through the world model
-  yet beats a random flock on the fixed evaluation; PPO on privileged features beats the scripted
-  flock, so the meadow is learnable. Record: `m1-meadow-README.md`; review: `review-2026-10-24.md`.
+  critic and evaluation built and tested. No sheep learning in imagination yet beats a random
+  flock on the fixed evaluation; PPO on privileged features beats the scripted flock, so the
+  meadow is learnable; PPO on the world model's state (the hybrid) beats random (−0.79 / −0.75)
+  but cannot find water, and probes show the world model's state lacks the direction to water.
+  The grid world (below) is now the test bed for the learner: there, too, the imagination
+  learner fails, and the world model does not rank actions (S3). Records: `m1-meadow-README.md`,
+  three reviews (`review-2026-10-24.md`, `…b.md`, `…c.md`).
 
 ## The meadow (`flock/meadow/world.py`, `sim.py`)
 
@@ -72,11 +76,30 @@ One set of weights shared by all sheep; each sheep keeps its own recurrent state
   change in energy, hydration, warmth and interest (×100). Loss: pixel cross-entropy summed over
   the strip, KL balancing 0.5 / 0.1 with 1 nat free bits, 1,000 × level squared error, reward
   cross-entropy, ensemble squared error. Adam 1e-4.
-- **Actor-critic** (0.6 M): actor and critic MLPs (896 → 256 → 256 → 9 / 1); slow critic EMA
-  0.98. Trained in imagination: 32 steps rolled from the prior from states inferred on real
-  sequences; rewards from the reward head plus curiosity = 0.02 × ensemble disagreement / (its
-  mean at the first update, then frozen). λ-returns (γ 0.997, λ 0.95); REINFORCE on advantages
-  divided by max(1, S), S an EMA of the 5–95 % range of the advantages; entropy 3e-4; Adam 3e-5.
+- **Actor-critic** (0.6 M): actor and critic MLPs (896 → 256 → 256 → 9 / 1); the critic's
+  output a scalar trained by squared error (a 255-bin two-hot symlog head is an option, off);
+  slow critic EMA 0.98, as a regulariser only. Trained in imagination: 32 steps rolled from the
+  prior from states inferred on real sequences; rewards from the reward head, **centred** (a
+  running mean subtracted; Naik et al. 2024), plus curiosity = 0.02 × ensemble disagreement /
+  (its mean at the first update, then frozen). λ-returns (γ a setting, 0.997 by default; λ 0.95)
+  bootstrapped by the critic itself; REINFORCE on advantages divided by max(1, S), S an EMA of
+  the 5–95 % range of the **returns** (DreamerV3's); a **replay value loss** (weight 0.3) on
+  λ-returns of real replayed rewards; entropy 3e-4; Adam 3e-5 (critic rate a setting). Health
+  readings: mean centred value at start states; correlation of value with real return.
+  (These defaults follow the third review and DreamerV3's current `configs.yaml`; the meadow runs
+  recorded so far used the earlier settings.)
+
+## The grid world (`flock/grid/`) — the learner's test bed
+
+One sheep per world, 16 × 16 walled grid, one pond, regrowing grass on fertile clumps; actions
+north / south / east / west / stay / eat / drink; two needs, food (−0.004 per step, +0.08 per
+bite) and water (−0.006, +0.1 per sip beside the pond); the same drive (n = 4, m = 2) and bad
+taste; an 8 × 8 top-down view (or the whole map, `--view full`); the same `wm.py` and `ac.py` at
+~0.5 M parameters (`brain.GRID`). Evaluation (`scripts/grid_eval.py`): 64 fixed worlds, 1,000
+steps, standard errors. Baselines: random −1.12, scripted (whole-map, privileged) −0.10. Rungs:
+`grid_true_ac.py` (the actor-critic on the true simulator), `grid_agent.py` (learning from
+birth with the world model), `grid_gap_actions.py` (does the model rank actions?),
+`grid_probe.py` (does it remember the pond?).
 
 ## How it learns (`scripts/m1_agent.py`)
 
@@ -119,3 +142,6 @@ default. Each closed a cheat in the toy; which are load-bearing in the meadow is
 | 2026-10-24 | Energy use by action; body curiosity (not social); varied starts with daily restarts | § birth2 |
 | 2026-10-24 | Drive exponent m = 2 (was 1, a departure from Keramati & Gutkin); innate bad taste; curiosity 0.02 | § birth3 |
 | 2026-10-24 | After the review: advantages (not returns) set the actor's scale; curiosity scale frozen after infancy; fixed evaluation with baselines; sanity ladder (PPO upper bound, bandit test) | `review-2026-10-24.md`; § After the review |
+| 2026-10-24 | Hybrid rung (PPO on the world model's state); latent probes; reward centring; two-hot critic as an option | `review-2026-10-24b.md`; commit log; M1 README § The grid world |
+| 2026-10-24 | Grid world adopted as the learner's test bed (owner's proposal); `wm.Config` makes one model serve both worlds | M1 README § The grid world |
+| 2026-10-24 | Third review: one critic for target and baseline, return normalisation, replay value loss, γ as a setting; success criteria written before runs; three seeds per comparison | `review-2026-10-24c.md`; M1 README § Pre-registered criteria |

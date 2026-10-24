@@ -22,6 +22,11 @@ belief but learned to spin in place, then to run; birth2 (curiosity about the bo
 varied starts and daily meadow resets, per-action energy use) improved the model but grazed and drank where there is nothing, led by curiosity; birth3 (Keramati & Gutkin's convex drive, an innate bad taste for ingesting nothing, curiosity 0.02) did not beat random either. After the outside review (`review-2026-10-24.md`): a fixed evaluation with baselines, two actor-critic fixes (two seeds, still at random level), a bandit learning test, and privileged PPO, which beats the scripted flock — so the meadow is learnable and the failure is in learning from imagination. Details,
 numbers and reasoning in the README's step 3 sections from "The change of approach" on.
 
+**Gotchas added (late 2026-10-24).** Never run a `wsl` command in the foreground that might
+exceed the tool's 10-minute limit: when one did, every background `wsl` job was terminated at
+the same moment (exit 15). Start anything long with `run_in_background`. CPU-only jobs (grid
+runs, probes) can run alongside the GPU job; set `JAX_PLATFORMS=cpu` for them.
+
 **Gotchas added.** Data and checkpoints live on the WSL filesystem (`~/flock2_data/`), not in
 git; `runs/` is git-ignored, so results worth keeping are copied to `docs/flock-2/m1-results/`.
 Compile the training steps before the first acting step in a long-running loop, or XLA's
