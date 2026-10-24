@@ -11,7 +11,9 @@ rolls ``ac.HORIZON`` real steps from where it is, the actor choosing; ``ac._upda
 applied to that real rollout exactly as it is to an imagined one (rewards real and centred; no
 reward head, no curiosity; the critic bootstraps the last state). Worlds continue from where the
 rollout ended and restart every ``--reset_every`` steps, staggered. Checkpoint ``agent.pkl``,
-``config.json``; scored by ``grid_eval.py --policy true``.
+``config.json``; scored by ``grid_eval.py --policy true``. ``--epochs K`` applies the update K
+times to each rollout (returns and values recomputed each time), so the actor-critic gets about as
+many gradient steps per sample as PPO does (PPO: 4 epochs x 8 minibatches).
 """
 
 from __future__ import annotations
@@ -41,8 +43,8 @@ def make_agent(seed, **kw):
     return ac.Agent(nnx.Rngs(seed), cfg=brain.GRID, n_in=N_IN, **kw)
 
 
-@nnx.jit
-def rollout_and_update(agent, opt, states, key):
+@nnx.jit(static_argnums=(4,))
+def rollout_and_update(agent, opt, states, key, epochs=1):
     def step(st, k):
         f = jax.vmap(features)(st)
         a = agent.act(f, k)
@@ -51,7 +53,8 @@ def rollout_and_update(agent, opt, states, key):
 
     end, (feats, acts, rew, lv, eat, drink, bad) = jax.lax.scan(step, states, jax.random.split(key, ac.HORIZON))
     feats = jnp.concatenate([feats, jax.vmap(features)(end)[None]], 0)
-    aux = ac._update(agent, opt, feats, acts, rew, jnp.zeros_like(rew))
+    for _ in range(epochs):
+        aux = ac._update(agent, opt, feats, acts, rew, jnp.zeros_like(rew))
     aux.update(reward=rew.mean(), food=lv[..., 0].mean(), water=lv[..., 1].mean(), bad_taste=bad.mean())
     aux["actions"] = jnp.stack([(acts == i).mean() for i in range(Wd.N_ACTIONS)])
     return end, aux
@@ -69,6 +72,7 @@ def main():
     p.add_argument("--norm", choices=("adv", "ret", "std"), default="ret")
     p.add_argument("--reset_every", type=int, default=400)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--epochs", type=int, default=1, help="updates per rollout")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
     json.dump({**vars(a), "kind": "true"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
@@ -83,7 +87,7 @@ def main():
     t0 = time.time()
     for u in range(1, a.updates + 1):
         key, k = jax.random.split(key)
-        states, aux = rollout_and_update(agent, opt, states, k)
+        states, aux = rollout_and_update(agent, opt, states, k, a.epochs)
         age += ac.HORIZON
         reset = age >= a.reset_every
         if reset.any():
