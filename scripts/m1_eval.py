@@ -7,6 +7,7 @@ same statistics for every policy, so "beats a random flock" is a number.
     python scripts/m1_eval.py --policy rest
     python scripts/m1_eval.py --policy agent --agent ~/flock2_data/m1_agent/birth3
     python scripts/m1_eval.py --policy ppo --ppo ~/flock2_data/m1_ppo/run1/ppo.pkl   # privileged upper bound
+    python scripts/m1_eval.py --policy hybrid --agent ~/flock2_data/m1_hybrid/s0      # world model + PPO
 
 Every policy runs on the same ``--meadows`` generated meadows (seeds 10,000 + i, so not the
 training meadows), ``--sheep`` per meadow, from dawn (t = 0) with ``generate``'s starting levels
@@ -44,6 +45,13 @@ from flock.meadow.world import HUT, TREE, generate
 STORES = (D.ENERGY, D.HYDRATION, D.WARMTH)
 
 
+def _load(name):
+    spec = importlib.util.spec_from_file_location(name, os.path.join(os.path.dirname(__file__), f"{name}.py"))
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
 def _agent_module():
     spec = importlib.util.spec_from_file_location("m1_agent", os.path.join(os.path.dirname(__file__), "m1_agent.py"))
     m = importlib.util.module_from_spec(spec)
@@ -76,11 +84,15 @@ def run(policy, meadows, sheep, steps, seed, world=None, agent=None):
     states = jax.vmap(lambda k: generate(k, sheep))(jnp.stack([jax.random.PRNGKey(10_000 + i) for i in range(meadows)]))
     mems = (jnp.zeros((meadows, sheep, wm.DETER)), jnp.zeros((meadows, sheep, wm.STOCH * wm.CLASSES)), jnp.zeros((meadows, sheep), jnp.int32))
     am = _agent_module() if policy == "agent" else None
+    hm = _load("m1_hybrid") if policy == "hybrid" else None
 
     def body(w, g, carry, k):
         def one_meadow(st, mem, kk):
             if policy == "agent":
                 new, mem, _ = am.act_and_step(w, g, st, mem, kk, jnp.arange(1))
+                actions = mem[2]
+            elif policy == "hybrid":
+                new, mem, _ = hm.hybrid_step(w, g, st, mem, kk, jnp.arange(1))
                 actions = mem[2]
             elif policy == "ppo":
                 actions = jax.random.categorical(kk, w(privileged.observe(st))[0], -1)
@@ -138,9 +150,10 @@ def summarise(rec, days):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "scripted", "rest", "agent", "ppo"), required=True)
+    p.add_argument("--policy", choices=("random", "scripted", "rest", "agent", "ppo", "hybrid"), required=True)
     p.add_argument("--ppo", default=None, help="ppo.pkl from m1_ppo.py (policy ppo)")
     p.add_argument("--agent", default=None, help="directory with wm.pkl and agent.pkl (policy agent)")
+    p.add_argument("--hidden", type=int, default=256, help="policy width (policy hybrid)")
     p.add_argument("--meadows", type=int, default=8)
     p.add_argument("--sheep", type=int, default=40)
     p.add_argument("--days", type=int, default=2)
@@ -154,6 +167,12 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         agent = ac.Agent(nnx.Rngs(1))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
+    if a.policy == "hybrid":
+        d = os.path.expanduser(a.agent)
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=D.N_FELT, reward=True)
+        wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
+        agent = _load("m1_ppo").Policy(nnx.Rngs(1), hidden=a.hidden, n_in=ac.FEAT)
+        wm.load_into(agent, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
     if a.policy == "ppo":
         spec = importlib.util.spec_from_file_location("m1_ppo", os.path.join(os.path.dirname(__file__), "m1_ppo.py"))
         mp = importlib.util.module_from_spec(spec)
@@ -161,7 +180,7 @@ def main():
         world = mp.Policy(nnx.Rngs(0))
         wm.load_into(world, pickle.load(open(os.path.expanduser(a.ppo), "rb")))
     rec = run(a.policy, a.meadows, a.sheep, a.days * sim.DAY, a.seed, world, agent)
-    res = {"policy": {"agent": f"agent:{a.agent}", "ppo": f"ppo:{a.ppo}"}.get(a.policy, a.policy), "meadows": a.meadows, "sheep": a.sheep, "days": a.days, **summarise(rec, a.days)}
+    res = {"policy": {"agent": f"agent:{a.agent}", "hybrid": f"hybrid:{a.agent}", "ppo": f"ppo:{a.ppo}"}.get(a.policy, a.policy), "meadows": a.meadows, "sheep": a.sheep, "days": a.days, **summarise(rec, a.days)}
     print(json.dumps(res))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
