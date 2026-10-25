@@ -17,7 +17,9 @@ turns it off): a running mean of the reward is subtracted before GAE (Naik et al
 arXiv:2405.09999), so value targets are small; no curiosity. GAE bootstraps the last
 step with the value of the last state seen (the state after it is not computed). Meadows start as
 ``world.random_start`` and restart every ``--reset_every`` steps, staggered, between rollouts.
-Checkpoints: ``wm.pkl`` and ``policy.pkl``; scored by ``m1_eval.py --policy hybrid``.
+Checkpoints: ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m1_eval.py --policy
+hybrid``. ``--recon_balance C`` (third review, S5) weights each pixel of the reconstruction loss by
+its class's inverse frequency in the batch, capped at C, so that rare water counts.
 """
 
 from __future__ import annotations
@@ -130,10 +132,12 @@ def main():
     p.add_argument("--reset_every", type=int, default=1200)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_center", action="store_true", help="do not centre the reward")
+    p.add_argument("--recon_balance", type=float, default=0.0, help="class-balanced reconstruction cap (0: off)")
     a = p.parse_args()
     os.makedirs(a.out, exist_ok=True)
+    json.dump({**vars(a), "kind": "hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
-    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_FELT, reward=True)
+    world = wm.WorldModel(nnx.Rngs(a.seed), n_intero=D.N_FELT, reward=True, cfg=wm.MEADOW._replace(recon_balance=a.recon_balance))
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     policy = _ppo.Policy(nnx.Rngs(a.seed + 1), hidden=a.hidden, n_in=ac.FEAT)
     opt = nnx.Optimizer(policy, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)

@@ -37,8 +37,8 @@ class Policy(nnx.Module):
     """Separate actor and critic MLPs (tanh) on an observation of ``n_in`` numbers: the privileged
     features here, the world model's state (h, z) in ``m1_hybrid.py``."""
 
-    def __init__(self, rngs: nnx.Rngs, hidden: int = 128, n_in: int = P.N_OBS):
-        self.pi = nnx.Sequential(nnx.Linear(n_in, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, sim.N_ACTIONS, rngs=rngs, kernel_init=nnx.initializers.normal(0.01)))
+    def __init__(self, rngs: nnx.Rngs, hidden: int = 128, n_in: int = P.N_OBS, n_out: int = sim.N_ACTIONS):
+        self.pi = nnx.Sequential(nnx.Linear(n_in, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, n_out, rngs=rngs, kernel_init=nnx.initializers.normal(0.01)))
         self.v = nnx.Sequential(nnx.Linear(n_in, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, hidden, rngs=rngs), jnp.tanh, nnx.Linear(hidden, 1, rngs=rngs))
 
     def __call__(self, obs):

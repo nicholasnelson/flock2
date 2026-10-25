@@ -553,3 +553,68 @@ in `grid-results/`. Baselines: stay −1.31, random −1.12 ± 0.01 (94 % deplet
   of S1 hold.
 - **S3, action-conditional gap.** *Worked if* drink is ranked first beside water and eat first on
   grass when hungry in more than 80 % of those states.
+
+## Grid results so far (2026-10-25)
+
+All on `grid_eval.py`: 64 fixed worlds, 1,000 steps, starting from food and water 0.7. Reward per
+step is ± one standard error across worlds. Food and water are means over the last quarter.
+"Depleted" is the share of worlds whose sheep ends with a level ≤ 0.05. Policies are sampled;
+greedy (argmax) scores are in the same folder (`grid-results/eval/*_greedy.json`). Each cell lists
+seeds 0 / 1 / 2.
+
+| Policy (inputs) | Reward / step | Food | Water | Depleted |
+| --- | --- | --- | --- | --- |
+| stay | −1.31 | 0.00 | 0.00 | 100 % |
+| random | −1.12 ± 0.01 | 0.21 | 0.03 | 94 % |
+| scripted (whole map, privileged) | −0.098 ± 0.000 | 0.79 | 0.78 | 0 % |
+| learned model + `ac.py` in imagination, 8 × 8 view (plain, seed 0) | −1.19 ± 0.01 | 0.14 | 0.00 | 100 % |
+| S1: `ac.py` on the true state, γ 0.98 | −1.02 / −1.03 / −1.03 | 0.51–0.53 | 0.00–0.01 | 97–100 % |
+| S1: `ac.py` on the true state, γ 0.997 | −1.01 / −1.03 / −1.02 | 0.52–0.59 | 0.01 | 95–98 % |
+| `ac.py`, true state, advantages standardised (`--norm std`) | −1.00 / −1.03 / −1.03 | 0.54–0.61 | 0.01 | 95–98 % |
+| `ac.py`, true state, learning rate 3e-4 | −0.91 / −0.92 / −0.90 | 0.57–0.62 | 0.11–0.17 | 77–84 % |
+| `ac.py`, true state, std + learning rate 3e-4 | −0.86 / −0.89 / −0.95 | 0.50–0.56 | 0.13–0.18 | 75–81 % |
+| … + 8 updates per rollout | −1.23 / −1.12 / −1.09 | 0.05–0.42 | 0.00–0.02 | 98–100 % |
+| … + 8 updates + entropy 0.01 | −0.84 / −1.26 / −0.95 | 0.02–0.71 | 0.00–0.18 | 73–100 % |
+| **PPO on the true state** (`grid_ppo_true.py`) | **−0.17 / −0.13 / −0.21** | 0.73–0.86 | 0.95–0.98 | 5–9 % |
+
+The S3 action-conditional gap (`grid_gap_actions.py`, plain seed 0, `eval/gap_actions_plain_s0.json`):
+beside water while thirsty, the model ranks drink first in 10 % of 59 states; the truth is 95 %.
+On grass while hungry, it ranks eat first in 10 % of 166 states; the truth is 90 %. Its ranking of
+actions over 8 or 32 imagined steps is uncorrelated with the real ranking (r ≈ 0). S4 pond-memory
+probe (`grid_probe.py`, `eval/probe_plain_s0.json`): R² for the pond's row offset is 0.59 overall and
+0.67 out of view; for the column offset, 0.44 and 0.59; for distance, 0.31 and −0.25.
+
+Criteria: S1 failed at both γ (no seed beats random by 5 SE with water above 0.3). The fallback
+was taken: PPO on the same features learns, so the fault is in `ac.py`'s update rule. S2 was not
+run, since its precondition (a working update rule) failed. S3 failed. A caveat on the PPO rows:
+`grid_ppo_true.py` used `m1_ppo.Policy` with the meadow's 9 outputs. The grid has 7 actions, and
+`Wd.step` reads actions 7 and 8 through a clamped index as a move-less no-op, i.e. two extra
+"stay" actions. This does not help the learner, but its action counts in `grid_eval` omit them.
+`m1_ppo.Policy` now takes `n_out`, and new grid scripts use 7.
+
+Reading *(judgement)*: the critic looks healthy. On γ 0.98 seed 0, its final loss is 2.0 against
+PPO's mean squared value error of about 1.9 (its logged `vf` is half that), and `value_start`
+stays near 0 (−0.02). The likely cause is that `ac.py`'s actor update is a plain policy gradient,
+with no importance ratio and no clipping. Nothing stops each update overshooting, which fits more
+updates per rollout making it worse. This is not proven.
+
+## The hybrid in the grid and the meadow (owner's choice, 2026-10-25)
+
+The policy learns with PPO from real experience on the world model's state (h, z); the world
+model learns from the sheep's own view as before. Imagination is no longer used for the policy.
+Scripts: `grid_hybrid.py` (grid) and `m1_hybrid.py` (meadow). Both now take `--recon_balance`.
+
+Pre-registered criteria (written before the runs):
+
+- **Grid hybrid, 8 × 8 view, seeds {0, 1, 2}, 600 iterations, all settings default.** *Worked if*
+  every seed beats random by more than 5 SE on `grid_eval` (sampled), with food and water above 0.3.
+  *Strong result* if the mean reward is within 0.2 of PPO on the true state (−0.17); the hybrid sees
+  only an 8 × 8 window, so a gap is expected.
+- **Meadow hybrid with class-balanced reconstruction (`--recon_balance 10`), seeds {0, 1, 2},
+  against the unbalanced hybrid at seeds {0, 1} plus a new seed 2.** The cap of 10 is a judgement,
+  not tuned. *Worked if* (S5's criteria):
+  1. in `m1_decoder_water.py`, the decoder draws water in clearly more than 31 % of the frames
+     that show it;
+  2. the MLP probe's R² for the direction to water in view rises above 0.5;
+  3. the hybrid's mean water at dawn 3 rises from 0.01–0.14 toward PPO's 1.09, with all three
+     seeds above the unbalanced seeds' mean.

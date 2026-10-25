@@ -7,6 +7,7 @@
     python scripts/grid_eval.py --policy stay
     python scripts/grid_eval.py --policy agent --agent ~/flock2_data/grid/run1 [--greedy]
     python scripts/grid_eval.py --policy true --agent ~/flock2_data/grid/true_s0   # actor on the true state (S1)
+    python scripts/grid_eval.py --policy hybrid --agent ~/flock2_data/grid/hybrid_s0   # PPO on the model state
 
 Reported (and written to ``--out`` as JSON), with standard errors across worlds where marked:
 reward per step (± SE); mean food and water over the last quarter (± SE); ``depleted``, the share
@@ -53,12 +54,12 @@ def run(policy, n_worlds, steps, world=None, agent=None, greedy=False, seed=0, v
 
     def one(w, g, s, mem, mode, k):
         k1, k2 = jax.random.split(k)
-        if policy == "agent":
+        if policy in ("agent", "hybrid"):
             h, z, a_prev = mem
             embed = w.encoder(jax.nn.one_hot(Wd.observe(s, view), GRID.n_classes)) + w.intero_in(Wd.felt(s))
             h = w.transition(h, z, jax.nn.one_hot(a_prev, Wd.N_ACTIONS))
             z = wm._sample(w.posterior(h, embed), k1)
-            logits = ac.policy_logp(g.actor(ac.feat_of(h, z)))
+            logits = ac.policy_logp(g.actor(ac.feat_of(h, z))) if policy == "agent" else g(ac.feat_of(h, z))[0]
             a = jnp.argmax(logits) if greedy else jax.random.categorical(k2, logits)
             mem = (h, z, a)
         elif policy == "ppo_true":
@@ -114,7 +115,7 @@ def summarise(rec):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent", "true", "ppo_true"), required=True)
+    p.add_argument("--policy", choices=("random", "stay", "scripted", "agent", "true", "ppo_true", "hybrid"), required=True)
     p.add_argument("--agent", default=None)
     p.add_argument("--greedy", action="store_true")
     p.add_argument("--worlds", type=int, default=64)
@@ -131,6 +132,19 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         agent = ac.Agent(nnx.Rngs(1), twohot=cfg.get("twohot", False), cfg=brain.config(view))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "agent.pkl"), "rb")))
+    if a.policy == "hybrid":
+        import importlib.util
+
+        d = os.path.expanduser(a.agent)
+        cfg = json.load(open(os.path.join(d, "config.json")))
+        view = cfg.get("view", "local")
+        world = wm.WorldModel(nnx.Rngs(0), n_intero=Wd.N_FELT, reward=True, cfg=brain.config(view))
+        wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
+        spec = importlib.util.spec_from_file_location("grid_hybrid", os.path.join(os.path.dirname(__file__), "grid_hybrid.py"))
+        mh = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mh)
+        agent = mh.make_policy(0, brain.config(view), cfg.get("hidden", 256))
+        wm.load_into(agent, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
     if a.policy == "ppo_true":
         import importlib.util
 
