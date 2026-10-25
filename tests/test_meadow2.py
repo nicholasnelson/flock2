@@ -29,6 +29,7 @@ def test_flock_starts_dry_and_clear_of_water():
     for st in _states():
         r, c = sim.tile(st.flock.pos)
         assert not np.asarray(st.meadow.water[r, c]).any()
+        assert np.asarray(sim._allowed(st.meadow, st.flock.pos)).all()  # not inside a tree or the hut
 
 
 def _one_sheep_facing_water():

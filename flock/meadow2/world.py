@@ -160,7 +160,14 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     obj_present = ~water[obj_pos[:, 0].astype(jnp.int32), obj_pos[:, 1].astype(jnp.int32)]
     obj_variant = jax.random.randint(k_v, (N_OBJECTS,), 0, 4)
 
-    pos = jnp.clip(centre + 2.0 * jax.random.normal(k_s, (n_sheep, 2)), 1.0, n - 1.0)
+    # each sheep at the first of 16 random spots around the centre that is dry and clear of blocking
+    # objects (a sheep placed inside a tree's footprint could never move)
+    spots = jnp.clip(centre + 2.0 * jax.random.normal(k_s, (n_sheep, 16, 2)), 1.0, n - 1.0)
+    si = spots.astype(jnp.int32)
+    d_obj = jnp.linalg.norm(spots[:, :, None, :] - obj_pos[None, None], axis=-1)
+    rad = RADIUS[obj_kind]
+    free = ~water[si[..., 0], si[..., 1]] & ~jnp.any((d_obj < rad + SHEEP_RADIUS) & obj_present & (rad > 0), -1)
+    pos = spots[jnp.arange(n_sheep), jnp.argmax(free, -1)]
     flock = Flock(
         pos=pos,
         heading=jax.random.uniform(jax.random.fold_in(k_s, 1), (n_sheep,), maxval=2 * jnp.pi),

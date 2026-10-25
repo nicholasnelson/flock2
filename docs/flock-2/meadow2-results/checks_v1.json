@@ -1,0 +1,70 @@
+{
+ "meadows": 64,
+ "sheep_per_meadow": 12,
+ "steps": 6000,
+ "1_survival": {
+  "death_share": 0.3763020833333333,
+  "max_deaths_in_a_meadow": 12,
+  "deaths_of_thirst": 232,
+  "deaths_of_hunger": 57,
+  "pass": false
+ },
+ "2_needs_met": {
+  "energy_after_day1_mean": 0.7243698835372925,
+  "energy_after_day1_min_meadow_step": 0.0,
+  "hydration_after_day1_mean": 0.6668676733970642,
+  "hydration_after_day1_min_meadow_step": 0.0,
+  "pass": true
+ },
+ "3_grass_lasts": {
+  "dry_biomass_start": 1.5134909254233533,
+  "dry_biomass_end": 2.8243486139765444,
+  "ratio": 1.8661153275078397,
+  "pass": true
+ },
+ "4_water_near": {
+  "start_to_water_median": 9.689029693603516,
+  "start_to_water_p90": 12.969184875488281,
+  "pass": true
+ },
+ "reported": {
+  "walker_reaches_water_within_500_steps": 0.16796875,
+  "walker_flag_below_30pct": true,
+  "warmth_after_day1_mean": 0.8407280445098877,
+  "fat_start_mean": 0.5027573704719543,
+  "fat_end_mean": 0.6410035490989685,
+  "reward_per_step_mean": 1.9553481340408325,
+  "bad_taste_per_step": 0.006552104838192463,
+  "action_mix": {
+   "stop": 0.02,
+   "walk": 0.393,
+   "trot": 0.058,
+   "left": 0.084,
+   "right": 0.084,
+   "graze": 0.094,
+   "drink": 0.024,
+   "rest": 0.243
+  },
+  "energy_by_day": [
+   0.715,
+   0.747,
+   0.73,
+   0.718,
+   0.702
+  ],
+  "hydration_by_day": [
+   0.62,
+   0.688,
+   0.685,
+   0.648,
+   0.646
+  ],
+  "alive_by_day": [
+   695,
+   633,
+   577,
+   528,
+   479
+  ]
+ }
+}

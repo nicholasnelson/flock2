@@ -31,7 +31,7 @@ learning happens until all three are signed off.
   should be just visible. A tree 1 tile wide shrinks to one pixel at about 49 tiles, at 1.17° per
   column.
 - **Contents, scaled to the area** *(proposal)*:
-  - 2 ponds, 2–3.5 tiles across;
+  - 2 ponds, 2–3.5 tiles in radius;
   - 14 trees: 8 along the north edge, 6 in two copses;
   - 1 hut, 1 salt lick, 6 flowers, 4 mushrooms;
   - grass with richer and barer patches, as now.
@@ -40,8 +40,12 @@ learning happens until all three are signed off.
 - **Flock: 12 sheep** *(proposal; was 40)*. Today's 40 sheep in 1/7 of the area would very likely
   overgraze it. 12 keeps more than one neighbour in view, and social satisfaction still saturates
   at 8 visible. Grass capacity is checked in § 7.
-- **The layout generator checks itself.** Every dry tile must be within 20 tiles of water, and
-  ponds must lie at least 6 tiles from the flock's starting area. A layout that fails is redrawn.
+- **The flock always starts within reach of water.** Its starting centre is 6–14 tiles from the
+  nearest water. Each sheep is placed on a spot that is dry and clear of trees and the hut.
+  *(Changed while building, 2026-10-26.)* This replaces "every dry tile within 20 tiles of water",
+  which two ponds cannot meet in 48 × 48: the best two-point cover leaves corners about 25 tiles
+  away. Measured: none of 200 random two-pond layouts passed, nor 11 % of four-pond ones even at
+  24 tiles.
 - **Interest cells: 4 × 4 tiles** (12 × 12 cells; were 8 × 8 tiles, 16 × 16 cells), so novelty
   still has room to vary.
 
@@ -248,3 +252,52 @@ I will flag it before any learning.
 
 The six 2,000-iteration runs now on the GPU are on the old meadow. They still answer whether more
 training helps the current hybrid, and they don't block steps 1–3, which run on the CPU.
+
+## 10. Results of the § 7 checks (2026-10-26)
+
+`scripts/meadow2_checks.py`: 64 meadows, 12 scripted sheep each, 6,000 steps (5 days), random
+starts. Results are in `meadow2-results/checks_v{1,2,3}.json`. Diagnosis was by
+`scripts/meadow2_deaths.py`, which traces every sheep that dies.
+
+| Version of the scripted flock | Deaths (of 768) | Most in one meadow | Check 1 | Checks 2–4 |
+| --- | --- | --- | --- | --- |
+| v1: steering straight at targets | 289 (38 %): 232 thirst, 57 hunger | 12 | fail | pass |
+| v2: picks the clear heading nearest the target | 3 (0.4 %), all thirst | 2 | fail | pass |
+| v3: + look-ahead includes one step; short look-ahead in tight gaps; sheep placed off trees | **0** | **0** | **pass** | **pass** |
+
+What the deaths were *(from the traces)*:
+
+- **v1.** Sheep steered straight at the nearest water, and a tree or the hut in the way stranded
+  them 2–3 tiles from the pond for hundreds of steps. Sheep with urgent hunger walked into the
+  pond they stood at, and starved with their mouths on water. The old meadow's flock steered
+  the same way; its size made such blocks rarer.
+- **v2.** Sheep pressed against the hut, heading along its edge, saw the look-ahead points
+  (0.4 tiles and beyond) clear while every 0.12-tile step clipped it. One sheep had been placed
+  inside a tree's footprint and could never move. A few spun in tight gaps between treeline
+  trees, where no heading was clear for 1.2 tiles.
+
+v3 (all four checks pass):
+
+| Check | Result | Criterion |
+| --- | --- | --- |
+| 1. Survival | 0 deaths | ≤ 2 %, ≤ 1 per meadow |
+| 2. Needs met after day 1: gut energy / hydration, mean | 0.84 / 0.66 | > 0.4 |
+| 3. Grass, day 5 against day 0 (dry tiles) | 185 % (1.51 → 2.80) | ≥ 70 % |
+| 4. Flock start to water: median / 90th percentile | 9.8 / 13.1 tiles | ≤ 12 / ≤ 20 |
+
+Other measurements:
+- fat rose from 0.50 to 0.84;
+- reward 2.24 per step;
+- bad taste 0.7 % of steps;
+- actions: walk 38 %, rest 30 %, graze 11 %, turns 16 %, drink 3 %, trot 1 %.
+
+**Flagged (pre-registered threshold 30 %):** a blind wanderer, walking straight and turning a
+random 22.5° once every 30 steps on average, gets its mouth onto water within 500 steps in
+**15 %** of sheep. A learning sheep starts out wandering much like this, so finding water at first
+will be rare. *(judgement)* Options:
+- accept it, since curiosity and memory should beat a blind walker;
+- add a third pond;
+- make ponds larger.
+
+Also noted *(not a criterion)*: grass grows rather than lasts, to 185 %, so 12 sheep are far from
+grazing the meadow down. Regrowth could be slowed if scarcity is wanted later.
