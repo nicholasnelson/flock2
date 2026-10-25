@@ -483,6 +483,19 @@ iterations each (`m1-results/agent_fix_s{0,1}_log.jsonl`).
 | birth3, iteration ~500 | −1.15 | 100 % | 0.10 / 0.00 / 0.00 / 0.89 / 0.72 | 1 % | 0 % | head up |
 | fixed, seed 0 | −1.07 | 100 % | 0.89 / 0.03 / 0.00 / 0.89 / 1.06 | 46 % | 0 % | drink 51 %, trot |
 | fixed, seed 1 | −1.11 | 100 % | 1.15 / 0.00 / 0.00 / 0.74 / 0.98 | 34 % | 0 % | drink 35 %, walk, graze |
+| fixed + reward centring, seed 0 | −1.10 | 100 % | 1.10 / 0.00 / 0.00 / 0.68 / 1.07 | 8 % | 0 % | graze 40 %, trot |
+| fixed + reward centring, seed 1 | −1.06 | 100 % | 1.10 / 0.00 / 0.00 / 0.78 / 0.82 | 11 % | 0 % | graze 38 %, turn right, head up |
+| hybrid (PPO on the model state), seed 0 | −0.79 | 96 % | 1.01 / 0.01 / 0.34 / 0.99 / 0.89 | 2 % | 0 % | walk, rest, stop |
+| hybrid (PPO on the model state), seed 1 | −0.75 | 85 % | 1.13 / 0.14 / 0.43 / 0.96 / 1.09 | 4 % | 0 % | trot, rest, graze |
+
+Reward centring (Naik et al. 2024, [arXiv:2405.09999](https://arxiv.org/abs/2405.09999)), 600
+iterations per seed (`m1-results/agent_centre_s{0,1}_log.jsonl`; evaluations
+`m1-results/eval/centre_s{0,1}.json`). Seed 1 was rerun on 2026-10-25 after two earlier attempts died
+of a CUDA error while another program was using the GPU. Centring ended the dry-ground drinking:
+bad-taste steps fell from 34–46 % to 8–11 %. But both seeds are still at random's level, water stays
+at zero, and the centred imagined return drifts to +35 to +50 where a centred return should sit near 0, so imagination still promises
+far more than the world delivers. The hybrid (`scripts/m1_hybrid.py`: the same world model, PPO on
+its state from real experience) is the only learned sheep that beats random.
 
 Reading *(judgement)*:
 

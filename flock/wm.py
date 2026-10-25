@@ -91,6 +91,7 @@ class Config(NamedTuple):
     intero_weight: float = INTERO_WEIGHT
     recon_weight: float = 1.0  # loss rebalancing (third review, S3): <1 lets reward and felt levels count more
     reward_weight: float = REWARD_WEIGHT
+    recon_balance: float = 0.0  # >0: weight each pixel by its class's inverse frequency in the batch, capped at this (third review, S5)
 
     @property
     def feat(self) -> int:
@@ -340,6 +341,14 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     s = model.observe(views, actions, key, intero)
     logits = model.decode(s)
     ce = -jnp.take_along_axis(jax.nn.log_softmax(logits, -1), views[..., None], -1)[..., 0]
+    if model.cfg.recon_balance > 0:
+        # class-balanced reconstruction: rare classes (water) count as much as common ones (sky),
+        # weights capped and normalised so the mean pixel weight is 1 (the loss keeps its scale)
+        counts = jnp.bincount(views.ravel(), length=model.cfg.n_classes).astype(jnp.float32)
+        present = counts > 0
+        w = jnp.where(present, jnp.minimum(model.cfg.recon_balance, counts.sum() / jnp.maximum(counts, 1.0) / present.sum()), 0.0)
+        pix = jax.lax.stop_gradient(w[views])
+        ce = ce * pix / jnp.mean(pix)
     recon = jnp.mean(jnp.sum(ce, axis=(-2, -1)))  # summed over the strip, mean over (B, T)
     sg = jax.lax.stop_gradient
     dyn = jnp.mean(jnp.maximum(kl(sg(s.post), s.prior), FREE_NATS))

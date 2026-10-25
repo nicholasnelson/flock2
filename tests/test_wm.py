@@ -121,3 +121,13 @@ def test_ensemble_loss_is_in_the_world_model_loss():
     feat = jax.random.normal(jax.random.PRNGKey(4), (3, wm.DETER + wm.STOCH * wm.CLASSES))
     assert m.ensemble_predict(feat, jax.nn.one_hot(jnp.zeros(3, jnp.int32), wm.N_ACTIONS)).shape == (2, 3, len(wm.BODY_DIMS))
     assert m.disagreement(feat, jax.nn.one_hot(jnp.zeros(3, jnp.int32), wm.N_ACTIONS)).shape == (3,)
+
+
+def test_class_balanced_reconstruction_keeps_scale_and_upweights_rare_classes():
+    m = wm.WorldModel(nnx.Rngs(3), cfg=wm.MEADOW._replace(recon_balance=10.0))
+    plain = wm.WorldModel(nnx.Rngs(3))
+    views = jnp.zeros((1, 2, wm.H, wm.W), jnp.int32).at[..., :2, :2].set(4)  # a little water in a sea of class 0
+    acts = jnp.zeros((1, 2), jnp.int32)
+    _, a1 = wm.loss_fn(m, views, acts, jax.random.PRNGKey(0))
+    _, a0 = wm.loss_fn(plain, views, acts, jax.random.PRNGKey(0))
+    assert np.isfinite(float(a1["recon"])) and 0.2 < float(a1["recon"]) / float(a0["recon"]) < 5.0
