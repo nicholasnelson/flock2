@@ -225,9 +225,10 @@ I will flag it before any learning.
   - the vector-model hybrid, as the comparison for the map world model.
 - **`m1_eval.py`:** 12 sheep per meadow; reports deaths and days survived alongside reward. Since
   the alive bonus shifts reward, results are also reported as mean D.
-- **The map world model** (`m1-map-world-model.md`): the fixed geometry uses this projection
-  (eye 0.8, the row table above). The map shrinks to 48 × 48 cells at 1 tile each, or stays
-  0.5 tile per cell over the nearer area; to decide when building it.
+- **The world model gets no free information** (owner, 2026-10-26: the sheep earn their
+  knowledge; built-in geometry is an absolute last resort). The view's projection, eye height and
+  row table are facts of the world, not of the sheep: no part of the sheep's model is told them.
+  The plan is the ladder in `m1-map-world-model.md`: today's model on v2 first.
 - **Unchanged:** the grid world and its results.
 
 ## 9. Order of work
@@ -241,7 +242,9 @@ I will flag it before any learning.
 3. **Renderer v2 and the viewer** (about a day): shapes, rows, haze, light, hut light, RGB. **The
    owner walks around and signs off.**
 4. **Baselines** (step 8's list), then the vector hybrid on the new meadow (GPU).
-5. **The map world model**, as in its design note, starting in the grid.
+5. **The ladder of `m1-map-world-model.md`**, least built-in first: today's model on v2, then the
+   same model better trained, then a state with spatial shape that is entirely learned. Built-in
+   geometry only as a last resort, one piece at a time.
 
 The six 2,000-iteration runs now on the GPU are on the old meadow. They still answer whether more
 training helps the current hybrid, and they don't block steps 1–3, which run on the CPU.

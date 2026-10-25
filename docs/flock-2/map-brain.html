@@ -107,7 +107,7 @@ button:focus-visible { outline: 2px solid var(--learned); outline-offset: 2px; }
 </div>
 
 <div id="top" class="chrome">
-  <div id="name">Sheep map brain · proposal</div>
+  <div id="name">Sheep map brain · last resort</div>
   <nav id="sections" aria-label="Jump to a part of the diagram"></nav>
 </div>
 <div id="mini" class="chrome" aria-label="Overview map: click to move there"><svg id="minisvg" xmlns="http://www.w3.org/2000/svg"><rect id="minibg" fill="var(--paper)"/><use href="#content"/><rect id="vp" fill="none" stroke="var(--compare)" stroke-width="12"/></svg></div>
@@ -121,7 +121,7 @@ button:focus-visible { outline: 2px solid var(--learned); outline-offset: 2px; }
 <script>
 (() => {
   const NS = "http://www.w3.org/2000/svg";
-  const W = 2680, H = 1880, OY = 120; // world size; content sits OY below the title
+  const W = 2680, H = 1900, OY = 140; // world size; content sits OY below the title
   const world = document.getElementById("world");
   const el = (tag, attrs, parent, text) => {
     const n = document.createElementNS(NS, tag);
@@ -137,7 +137,8 @@ button:focus-visible { outline: 2px solid var(--learned); outline-offset: 2px; }
 
   // ---- title
   el("text", { x: 40, y: 58, class: "title" }, content, "A sheep's brain with a map");
-  el("text", { x: 40, y: 92, class: "sub" }, content, "Proposal for the next world model (2026-10-26). Vision is placed onto a top-down map centred on the sheep; the map is remembered, moved as the sheep moves, and predicted; it is trained by drawing the view back from the map and comparing with what the sheep really sees.");
+  el("text", { x: 40, y: 92, class: "sub" }, content, "Last-resort design (revised 2026-10-26). The owner's principle: sheep earn their knowledge, so every amber 'fixed geometry' part below is used only if fully learned models fail, one piece at a time.");
+  el("text", { x: 40, y: 114, class: "sub" }, content, "First: today's learned model on meadow v2; then a learned model whose state has spatial shape but no built-in geometry. See m1-map-world-model.md.");
   const C = el("g", { transform: `translate(0,${OY})` }, content);
 
   // ---- builders

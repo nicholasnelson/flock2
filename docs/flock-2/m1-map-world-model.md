@@ -1,138 +1,124 @@
-# Design note: a world model with a map (proposal, 2026-10-26)
+# Design note: a world model with a map (proposal, revised 2026-10-26)
 
-Status: **proposal for the owner's review; nothing built yet.** Diagram: `map-brain.html`
-(pan and zoom), published as https://claude.ai/artifact/KEQwzib48kyri492esSh2b.
+Status: **proposal; nothing built yet.** First version 2026-10-26. Revised the same day after the
+owner's principle (below). Diagram: `map-brain.html`, published as
+https://claude.ai/artifact/KEQwzib48kyri492esSh2b. It shows the last-resort design of § 4.
 
-## Why
+## The owner's principle
 
-The idea came from the owner on 2026-10-26: turn what the sheep sees into a map, then put the
-world model on the map. Four results so far point the same way.
+> "We want the sheep to earn their knowledge for themselves, as much as possible. Giving them
+> shortcuts like map translation on movement should be an absolute last resort." (2026-10-26)
 
-- **The grid's view is already a map, and there the hybrid works.** It sees an 8 × 8 top-down
-  window. PPO on the world model's state scored −0.017 to −0.023 per step on three seeds, beating
-  the scripted sheep (−0.098) (README, "Grid hybrid: results").
-- **In the meadow, the model holds where water is, but in a form a policy cannot easily use.** Its
-  decoder redraws water within 6–11° of the right bearing. Yet with 32 meadows, an MLP probe reads
-  the left/right component of the direction to water at only R² 0.04 (README, "Meadow hybrid with
-  class-balanced reconstruction").
-- **A map-like input makes the meadow learnable.** PPO on privileged egocentric features
-  (direction and distance to the nearest water, grass and cover) reached −0.39, the best meadow
-  result.
-- **The vector-state model does not rank actions.** In the grid it ranked drink first beside water,
-  when thirsty, in 10 % of states; the truth is 95 % (S3). On a map, most of an action's effect is
-  geometric: walking shifts the map and turning rotates it. Only the rest needs learning.
+So the plan uses the best model available that gets **no free information**.
 
-*(judgement)* Together these suggest that the bottleneck is how the state is organised, not what
-it is trained to predict.
+- **Allowed:**
+  - what the sheep senses: its view and its felt numbers;
+  - the action it chose;
+  - generic, learned machinery: convolutions, recurrent memory, attention, latent variables,
+    losses that predict its own senses.
 
-## The design
+  An architecture may have a *shape* (a 2-D grid of latent cells, say), but every operation on
+  it is learned.
+- **Not allowed except as a last resort, one piece at a time, each justified by a failed rung:**
+  hand-coded knowledge of the world's geometry. That covers:
+  - placing what is seen at map positions by projection (splat);
+  - drawing the view by casting rays through a map;
+  - shifting or rotating a memory by the known effect of an action;
+  - a "body sense" that reports how far the sheep actually moved.
+- **Privileged labels** (where water really is, and so on) remain for evaluation only, as before.
 
-All sizes are a first proposal, not tuned. The numbered parts match the diagram. In each part,
-*learned* means the weights are trained, and *fixed* means geometry with no weights: innate
-structure, like a lamb knowing that near things look big.
+## Why a map at all
 
-1. **See: lift the view (learned).** A small conv encoder turns the 64 × 256 strip into 64
-   columns of 128 features. Each column covers about 4.7° of the 300° field. From each column it
-   reads a depth distribution over 24 distance bins (0.25–16 tiles, finer near the sheep) and a
-   32-number content vector. Their outer product spreads each column's content along its line of
-   sight, in proportion to how likely each distance is: 64 bearings × 24 distances × 32.
-2. **Place it on a map (fixed).** Each (bearing θ, distance d) cell lands at x = d·sin θ,
-   y = d·cos θ on a grid of 0.5-tile cells. The sheep sits at the centre, facing up. The result is
-   the observation map Oₜ, 64 × 64 × 32, plus a "seen" channel recording how much evidence each
-   cell received.
-3. **Remember and predict: the world model.**
-   - **Memory.** The map Mₜ₋₁ (64 × 64 × 32; 32 × 32 tiles around the sheep), plus a global GRU
-     state g (256) for things with no place on the map: time of day and feelings.
-   - **Move the map (fixed).** Rotate it by ∓22.5° for a turn, and shift it by 0.24 or 0.7 cells
-     for a walk or trot. Bilinear resampling; cells entering at the edge start as "unknown". The
-     move is driven by a body sense of how the sheep actually moved (turn, and distance, which is
-     0 if blocked). This is proprioception, not information about the meadow.
-   - **Prior (learned).** A 3 × 3 ConvGRU over the moved map, given the action and g, predicts what
-     moving cannot explain: grass eaten, other sheep walking, light fading. A categorical z per
-     8 × 8 block (16 classes) keeps DreamerV3's stochastic state
-     ([Hafner et al. 2023](https://arxiv.org/abs/2301.04104)), and so its ability to imagine.
-   - **Posterior (learned).** A ConvGRU merges Oₜ into the prior map, gated by "seen". z is
-     inferred per block, and g is updated with the felt numbers. KL(posterior ‖ prior) per block is
-     the surprise, and it can be shown on the map.
-4. **Visualise: draw the view back (owner's idea).**
-   - Cast 64 rays and read the map at 24 distances: the splat run in reverse (fixed).
-   - A per-cell MLP gives an opacity and an appearance vector (learned). These are composited front
-     to back, so nearer things hide farther ones.
-   - Apparent height ∝ 1/distance (fixed), then a learned ConvT upsampler gives the 64 × 256 × 16
-     logits.
-5. **Act and feel.** A small CNN over the map, plus g, gives 9 action logits and a value, trained
-   with PPO on real experience as in the hybrid. On an egocentric map, "water ahead-left" is always
-   in the same region, which is what a convolutional policy reads easily *(judgement)*. Felt
-   numbers and reward are predicted from the pooled map and g, as in Milestone 1.
+Four results so far point at how the state is organised. *(Judgement: suggestive, not proof.)*
 
-## Training: no privileged labels
+- **The grid's view is already map-like, and there the hybrid works:** −0.017 to −0.023 per step
+  on three seeds, beating the scripted sheep (−0.098).
+- **The meadow model holds where water is, but not in a usable form.** Its decoder redraws water
+  within 6–11° of the right bearing. Yet with 32 meadows, an MLP probe reads the left/right
+  component of the direction to water at only R² 0.04.
+- **Map-like privileged features make the meadow learnable:** PPO on them scored −0.39.
+- **The vector-state model does not rank actions.** In the grid it ranked drink first beside
+  water, when thirsty, in 10 % of states; the truth is 95 %.
 
-Per step, on sequences from the sheep's own life:
+Meadow v2 (`m1-world-v2-spec.md`) also removes several obstacles that had nothing to do with the
+model: water out of reach, speckled ground texture, and a pond filling about 1.4 rows. Some of
+the failures above may go away on v2 with no change to the model at all. So the first rung is to
+find out.
 
-- class-balanced cross-entropy of the strip drawn from the posterior map (this view);
-- the same, drawn from the prior after the move, before the view is seen (next view);
-- KL(posterior ‖ prior) with free bits, as DreamerV3;
-- felt numbers and reward, as Milestone 1.
+## The ladder: least built-in first
 
-**Why the map has to become a real map** *(judgement)*. Drawing the view back from the map only
-proves that the map keeps the information: an encoder and a decoder could agree on any private
-code. The next-view term closes that loophole. The map is moved by fixed geometry before the next
-view is drawn. A private code garbles when shifted or rotated, while a true layout still draws the
-right view. Motion also separates near from far: things near the sheep move across the view faster.
+Each rung is tried on meadow v2, with three seeds and criteria written before the run. A rung is
+climbed only if the one below fails its criteria.
 
-**Privileged information is for evaluation only.** The map can be compared directly with the true
-meadow (water, grass, cover cells), and drawn as an image for a viewer.
+1. **Today's model on meadow v2.** The DreamerV3-style RSSM (one vector state h, z), learning
+   from birth, with PPO on its state from real experience (the hybrid). Nothing new is built in.
+   *Worked if* every seed beats random by 5 SE, and dawn water rises above 0.5 (toward privileged
+   PPO's level on v2).
+2. **Same model, better trained.** Learning only, no new structure:
+   - longer runs;
+   - a larger model (DreamerV3's model sizes scale the same design;
+     [Hafner et al. 2023](https://arxiv.org/abs/2301.04104));
+   - multi-step prediction of future views and felt numbers, so that the state must carry what
+     stays out of view.
+3. **A state with spatial shape, all of it learned.** The single vector state becomes a 2-D grid of
+   latent cells, say 16 × 16 × 32, plus a global vector:
+   - **encoder:** convolutions plus learned attention from the strip's columns into the cells;
+   - **transition:** a ConvGRU with the action as input;
+   - **decoder:** learned attention from the cells back to the strip's columns.
 
-## Prior work (verified links)
+   Nothing tells the model which cell means "ahead-left", or how a step moves things. If a map
+   emerges, it is the sheep's own. Probes (evaluation only) test whether it has: do cells come to
+   stand for places, and does the grid shift consistently when the sheep walks?
 
-- **Egocentric map warped by the agent's own motion:** Gupta et al. 2017, *Cognitive Mapping and
-  Planning for Visual Navigation* ([arXiv:1702.03920](https://arxiv.org/abs/1702.03920)). It
-  updates a top-down belief "using the ego-motion to transform the belief from the previous time
-  step into the current coordinate frame". Their mapper is trained end to end for navigation
-  together with a planner, not by predicting views.
-- **Lifting image features into a top-down grid with a per-pixel depth distribution:** Philion and
-  Fidler 2020, *Lift, Splat, Shoot* ([arXiv:2008.05711](https://arxiv.org/abs/2008.05711)). Parts
-  1–2 follow this. Theirs is supervised with bird's-eye-view labels; ours is not.
-- **A spatially structured 2-D memory for an RL agent:** Parisotto and Salakhutdinov 2017,
-  *Neural Map* ([arXiv:1702.08360](https://arxiv.org/abs/1702.08360)).
-- **A learned mapper inside a modular exploring agent:** Chaplot et al. 2020, *Learning to Explore
-  using Active Neural SLAM* ([arXiv:2004.05155](https://arxiv.org/abs/2004.05155)).
+   The nearest published idea I know of is the Neural Map
+   ([Parisotto and Salakhutdinov 2017](https://arxiv.org/abs/1702.08360)). It has a learned write
+   operator, but there the agent's position in the memory is given. Here it would not be.
+4. **Last resort: built-in geometry, one piece at a time.** Each piece is separately justified,
+   in this order (least knowledge first):
+   1. a body sense of actual movement (proprioception);
+   2. shifting and rotating the memory by that movement;
+   3. projecting the view onto the map, and casting rays back.
 
-What would be new here *(judgement, not a literature search)*: training the map only by drawing
-the current and next first-person views, inside a stochastic world model with homeostatic
-reward, with no map labels. Whether this has been done before is not checked.
+   This is the design in § 4 and the diagram.
 
-## Risks and open questions
+## 4. The last-resort design (fixed geometry)
 
-- **Forgetting.** The map edge is 16 tiles away, and a pond further off falls off the map. Options:
-  a coarser outer ring, or a second allocentric map later.
-- **Depth from a strip.** One glance cannot separate a small far tree from a big near one. Motion
-  should resolve it, but a learned depth that never sharpens would smear everything along rays.
-  Check: the map's water channel against the true ponds, by distance.
-- **How much geometry to build in.** The fixed parts use the renderer's field of view and
-  perspective, which the sheep "knows" innately. Learning them instead is purer but is one more
-  thing that can fail. Start fixed.
-- **Cost.** 64 × 64 × 32 per sheep for 640 sheep (16 meadows × 40) is 84 M floats per step of
-  state, before activations. If memory is tight, cut the channels or the number of sheep per
-  batch.
-- **Scope.** This drops the imagination actor-critic and curiosity for now. Both can return on top
-  of the map model, once it is shown to work.
+Kept for reference; used only if rungs 1–3 fail, and then only the pieces needed.
 
-## Build order and pre-registered criteria
+1. **See.** A conv encoder gives 64 columns. Each column gets a depth distribution over 24 bins
+   and a 32-number content vector; their outer product lifts each column along its line of sight
+   ([Philion and Fidler 2020, Lift, Splat, Shoot](https://arxiv.org/abs/2008.05711)).
+2. **Place (fixed).** Each (bearing θ, distance d) lands at x = d·sin θ, y = d·cos θ on an
+   egocentric grid around the sheep.
+3. **Remember and predict.** The memory is shifted and rotated by the sheep's movement (fixed),
+   then a learned ConvGRU prior predicts the rest, and a learned posterior merges the new view.
+   An egocentric map warped by the agent's own motion is the approach of the Cognitive Mapper and
+   Planner ([Gupta et al. 2017](https://arxiv.org/abs/1702.03920)), which updates its belief
+   "using the ego-motion to transform the belief from the previous time step into the current
+   coordinate frame".
+4. **Visualise (the owner's idea).** Rays are cast back through the map (fixed), and a learned
+   per-cell appearance is composited front to back. A learned upsampler draws the strip, which is
+   compared with the real view now and with the next view (prior).
+5. **Act and feel.** A CNN policy on the map, plus heads for the felt numbers and the reward.
 
-Three seeds per step, one change per comparison, criteria fixed before the runs.
+A learned mapper inside a modular exploring agent is also in
+[Chaplot et al. 2020, Active Neural SLAM](https://arxiv.org/abs/2004.05155).
 
-1. **Grid, 8 × 8 top-down view.** The lift is the identity here, so this tests the memory, the
-   fixed move and the prior. *Worked if* a probe of the pond's direction from the map, when the pond
-   is out of view, reaches R² > 0.9 (the vector model: 0.59–0.67), and the model ranks drink first
-   beside water when thirsty in > 80 % of states (now 10 %). The hybrid's score should stay at
-   least as good as now (−0.017 to −0.023).
-2. **Grid with a first-person strip** (a new 1-D view of the grid). This tests the lift. *Worked
-   if* the hybrid beats random by more than 5 SE with food and water above 0.3, and the map's water
-   cells match the true pond (IoU > 0.5) for ponds seen in the last 50 steps.
-3. **Meadow.** *Worked if* the hybrid's dawn-3 water rises toward privileged PPO's 1.09 (above 0.5
-   on all seeds), and its reward beats the vector-model hybrid run for the same number of
-   iterations.
+## Training (all rungs)
 
-Rough effort *(judgement)*: step 1 is one to two days, step 2 one day, step 3 two to three days,
-plus runs.
+- On the sheep's own life: reconstruct this view and predict the next (squared error on RGB in
+  meadow v2), the KL terms with free bits as DreamerV3, the felt numbers and the reward.
+- No privileged labels in any loss. Probes and the decoder water check are for evaluation only.
+
+## Grid first?
+
+The grid's 8 × 8 view is top-down. A spatial latent there would get a map-shaped *input* for free,
+which partly undercuts rung 3's test. *(judgement)* Rung 3 is better tested on meadow v2 directly,
+using the grid only to debug code.
+
+## Risks
+
+- Rung 3 may learn a spatial grid that is not a map: cells used as an unordered memory. The
+  probes will show it. If so, rung 3 has failed, which justifies rung 4's first piece and no more.
+- Each rung costs runs. Three seeds of a 2,000-iteration meadow run take about 7 hours on the
+  RTX 4080 at today's speed. Meadow v2 has 12 sheep, not 40, which should make that faster.
