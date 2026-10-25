@@ -53,7 +53,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   <div class="row">
     <div class="panel">
       <canvas id="map" width="400" height="400"></canvas>
-      <p class="sub">Overhead, north up, 40 × 40 tiles around you. Yellow: you. The pale wedge is your field of view; the gap behind you is the blind spot.</p>
+      <p class="sub">Overhead, north up, 80 × 80 tiles around you. Yellow: you. The pale wedge is your field of view; the gap behind you is the blind spot.</p>
     </div>
     <div class="panel">
       <div class="levels" id="levels"></div>
@@ -173,7 +173,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     tctx.putImageData(im, 0, 0);
   }
   function drawMap(s) {
-    const S = map.width, span = 40, k = S / span, [r0, c0] = s.pos;
+    const S = map.width, span = 80, k = S / span, [r0, c0] = s.pos;
     const X = c => (c - c0) * k + S / 2, Y = r => (r - r0) * k + S / 2;
     mctx.imageSmoothingEnabled = false;
     mctx.fillStyle = "#000"; mctx.fillRect(0, 0, S, S);
