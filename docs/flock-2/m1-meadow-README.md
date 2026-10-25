@@ -649,3 +649,40 @@ Reading *(judgement)*:
   are, and how hungry and thirsty the sheep is. What failed before was learning the policy in
   imagination, not the world model. This supports the owner's choice. The meadow runs (class-
   balanced reconstruction) are next.
+
+### Meadow hybrid with class-balanced reconstruction: results (2026-10-26)
+
+600 iterations per seed, about 43 minutes each. Logs: `m1-results/hybrid/hybrid_*_log.jsonl`.
+Evaluations: `m1-results/eval/hybrid_*.json`. Decoder checks and probes: `m1-results/probes/*hybrid*`.
+
+| Run | Reward / step | Depleted | Dawn-3 water | Drink ok / bad taste (share of steps) | Decoder draws water | Water azimuth error (median) |
+| --- | --- | --- | --- | --- | --- | --- |
+| hybrid, seed 0 | −0.79 | 96 % | 0.01 | 0.002 / 0.017 | 33 % | 7.7° |
+| hybrid, seed 1 | −0.75 | 85 % | 0.14 | 0.014 / 0.036 | 30 % | 7.7° |
+| hybrid, seed 2 (new) | −0.71 | 79 % | 0.19 | 0.016 / 0.018 | 29 % | 6.3° |
+| balanced, seed 0 | −0.74 | 84 % | 0.20 | 0.025 / 0.027 | 66 % | 7.7° |
+| balanced, seed 1 | −0.78 | 94 % | 0.13 | 0.023 / 0.044 | 66 % | 10.6° |
+| balanced, seed 2 | −0.85 | 96 % | 0.18 | 0.011 / 0.019 | 56 % | 8.6° |
+
+Against the pre-registered criteria:
+
+1. **Decoder draws water: met.** 56–66 % of frames with water, against 29–33 % without
+   balancing.
+2. **Probe R² for direction to water above 0.5: not met, but the measurement turned out to be
+   unreliable.** With the pre-registered 12 meadows (9 to fit, 3 to test), the MLP probe's R² for
+   water in view is −0.7 to −1.3 for every model, balanced or not, against a decoder that places
+   water within 6–11°. Rerun on balanced seed 0 with 32 meadows (24 to fit), the forward component
+   rises from −1.18 to 0.44, distance from 0.21 to 0.60, and left/right from −0.74 to only 0.04
+   (`latent_mlp_hybrid_bal_s0_m32.json`). So the 12-meadow probe was starved of data, probably
+   fitting each meadow's layout. Even with more data, the left/right component, which a sheep
+   needs to turn toward water, is still not readable. The unbalanced models have not been probed
+   with 32 meadows, so there is no balanced vs unbalanced comparison on this measure yet.
+3. **Dawn water: met only technically.** All three balanced seeds (0.13–0.20) are above the
+   unbalanced mean (0.11), but nowhere near PPO's 1.09. Reward is no better (−0.74 to −0.85
+   against −0.71 to −0.79).
+
+Reading *(judgement)*: balancing fixes the decoder, but it hasn't yet helped the sheep. Every
+run was still improving at iteration 600. For example, unbalanced seed 2 went from −0.84 at
+iteration 200 to −0.70 at 600. In the same runs, drinking on dry ground fell from almost every
+drink attempt to about half, and water rose only in the last 100–200 iterations. The grid hybrid
+had converged by about iteration 200, so the meadow runs are simply too short to compare.
