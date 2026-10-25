@@ -1,0 +1,582 @@
+<title>Sheep Map Brain</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a survey sheet you pan and zoom; floating controls sit over it like a map app. */
+:root {
+  --paper: #eef2f4; --grid: #d9e1e6; --grid-major: #c6d1d8;
+  --ink: #17222b; --muted: #4f5d68; --line: #3b4852; --halo: #eef2f4;
+  --learned: #13707f; --learned-fill: #e1f0f2;
+  --fixed: #a8670f; --fixed-fill: #f8ecd9;
+  --memory: #3a7436; --memory-fill: #e4f0e2;
+  --input: #50606c; --input-fill: #e7ebee;
+  --head: #844a98; --head-fill: #f1e7f5;
+  --note: #6b7780; --note-fill: #f7f9fa;
+  --compare: #c2410c;
+  --chrome: rgba(250,252,253,.92); --chrome-line: #c3ccd3;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", Consolas, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #121a21; --grid: #1a242c; --grid-major: #223039;
+  --ink: #e3eaef; --muted: #9fb0bc; --line: #a9b8c3; --halo: #121a21;
+  --learned: #5cc3d2; --learned-fill: #13303a;
+  --fixed: #e2a54a; --fixed-fill: #33270f;
+  --memory: #7fc579; --memory-fill: #172f1a;
+  --input: #a3b2bd; --input-fill: #1d272f;
+  --head: #c895da; --head-fill: #2c1d35;
+  --note: #8e9ba5; --note-fill: #172028;
+  --compare: #f07a45;
+  --chrome: rgba(22,31,39,.92); --chrome-line: #34434e;
+  color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --paper: #121a21; --grid: #1a242c; --grid-major: #223039;
+  --ink: #e3eaef; --muted: #9fb0bc; --line: #a9b8c3; --halo: #121a21;
+  --learned: #5cc3d2; --learned-fill: #13303a;
+  --fixed: #e2a54a; --fixed-fill: #33270f;
+  --memory: #7fc579; --memory-fill: #172f1a;
+  --input: #a3b2bd; --input-fill: #1d272f;
+  --head: #c895da; --head-fill: #2c1d35;
+  --note: #8e9ba5; --note-fill: #172028;
+  --compare: #f07a45;
+  --chrome: rgba(22,31,39,.92); --chrome-line: #34434e;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--paper); color: var(--ink); font-family: var(--body); overflow: hidden; }
+#stage { position: fixed; inset: 0; cursor: grab; touch-action: none; }
+#stage.dragging { cursor: grabbing; }
+#stage svg { width: 100%; height: 100%; display: block; }
+.chrome { position: fixed; background: var(--chrome); border: 1px solid var(--chrome-line); border-radius: 8px; backdrop-filter: blur(6px); }
+#top { top: calc(10px + env(safe-area-inset-top, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 8px 12px; pointer-events: none; border: 0; background: transparent; backdrop-filter: none; }
+#top > * { pointer-events: auto; }
+#name { font-family: var(--display); font-weight: 800; font-size: 15px; letter-spacing: .02em; text-transform: uppercase; background: var(--chrome); border: 1px solid var(--chrome-line); border-radius: 6px; padding: 6px 10px; }
+#sections { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+#sections button, #zoom button { font: 500 13px var(--body); color: var(--ink); background: var(--chrome); border: 1px solid var(--chrome-line); border-radius: 6px; padding: 6px 10px; cursor: pointer; }
+#sections button:hover, #zoom button:hover { border-color: var(--learned); }
+button:focus-visible { outline: 2px solid var(--learned); outline-offset: 2px; }
+#zoom { right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 4px; padding: 4px; }
+#zoom button { width: 40px; height: 40px; padding: 0; font-size: 18px; }
+#zoom #fit { font-size: 12px; }
+#mini { left: max(16px, env(safe-area-inset-left, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 230px; height: 160px; overflow: hidden; cursor: pointer; touch-action: none; }
+#mini svg { width: 100%; height: 100%; display: block; }
+#hint { position: fixed; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); font: 12.5px var(--body); color: var(--muted); background: var(--chrome); border: 1px solid var(--chrome-line); border-radius: 6px; padding: 5px 10px; white-space: nowrap; }
+@media (max-width: 700px) { #mini { width: 150px; height: 104px; } #hint { display: none; } #sections button { font-size: 12px; padding: 5px 8px; } }
+
+/* diagram text and shapes, coloured from tokens */
+.title { font: 800 34px var(--display); fill: var(--ink); letter-spacing: .01em; }
+.sub { font: 17px var(--body); fill: var(--muted); }
+.gtitle { font: 700 21px var(--display); letter-spacing: .02em; }
+.btitle { font: 600 16.5px var(--body); fill: var(--ink); }
+.bl { font: 14.5px var(--body); fill: var(--ink); }
+.bm { font: 13.5px var(--mono); fill: var(--ink); }
+.bn { font: italic 13.5px var(--body); fill: var(--muted); }
+.tag { font: 600 11.5px var(--body); letter-spacing: .08em; text-transform: uppercase; }
+.k-learned { --c: var(--learned); --f: var(--learned-fill); }
+.k-fixed { --c: var(--fixed); --f: var(--fixed-fill); }
+.k-memory { --c: var(--memory); --f: var(--memory-fill); }
+.k-input { --c: var(--input); --f: var(--input-fill); }
+.k-head { --c: var(--head); --f: var(--head-fill); }
+.k-note { --c: var(--note); --f: var(--note-fill); }
+.grp { fill: none; stroke: var(--c); stroke-width: 1.6; stroke-dasharray: 2 0; opacity: .9; }
+.grp-bg { fill: var(--f); opacity: .35; }
+.box { fill: var(--f); stroke: var(--c); stroke-width: 1.5; }
+.gtitle, .tag { fill: var(--c); }
+.flow { fill: none; stroke: var(--line); stroke-width: 2; }
+.flow-halo { fill: none; stroke: var(--halo); stroke-width: 9; }
+.loop { fill: none; stroke: var(--memory); stroke-width: 2; stroke-dasharray: 8 6; }
+.cmp { fill: none; stroke: var(--compare); stroke-width: 2.2; stroke-dasharray: 2 6; stroke-linecap: round; }
+.cmp-label { font: 600 15px var(--body); fill: var(--compare); }
+.ill-line { stroke: var(--muted); stroke-width: 1; fill: none; }
+.ill-grid { stroke: var(--grid-major); stroke-width: 1; fill: none; }
+</style>
+
+<div id="stage" aria-label="Diagram of the proposed sheep brain. Drag to pan, scroll or pinch to zoom.">
+  <svg id="main" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="minor" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern>
+      <pattern id="major" width="100" height="100" patternUnits="userSpaceOnUse"><rect width="100" height="100" fill="url(#minor)"/><path d="M100 0H0V100" fill="none" stroke="var(--grid-major)" stroke-width="1"/></pattern>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--line)"/></marker>
+      <marker id="arrm" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--memory)"/></marker>
+    </defs>
+    <g id="view"><g id="world"></g></g>
+  </svg>
+</div>
+
+<div id="top" class="chrome">
+  <div id="name">Sheep map brain · proposal</div>
+  <nav id="sections" aria-label="Jump to a part of the diagram"></nav>
+</div>
+<div id="mini" class="chrome" aria-label="Overview map: click to move there"><svg id="minisvg" xmlns="http://www.w3.org/2000/svg"><rect id="minibg" fill="var(--paper)"/><use href="#content"/><rect id="vp" fill="none" stroke="var(--compare)" stroke-width="12"/></svg></div>
+<div id="zoom" class="chrome">
+  <button id="zin" type="button" aria-label="Zoom in">+</button>
+  <button id="zout" type="button" aria-label="Zoom out">−</button>
+  <button id="fit" type="button" aria-label="Fit the whole diagram">Fit</button>
+</div>
+<div id="hint">Drag to pan · scroll or pinch to zoom · double-click to zoom in</div>
+
+<script>
+(() => {
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 2680, H = 1880, OY = 120; // world size; content sits OY below the title
+  const world = document.getElementById("world");
+  const el = (tag, attrs, parent, text) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (text != null) n.textContent = text;
+    (parent || world).appendChild(n);
+    return n;
+  };
+
+  el("rect", { x: -4000, y: -4000, width: W + 8000, height: H + 8000, fill: "url(#major)" });
+  const content = el("g", { id: "content" });
+  el("rect", { x: 0, y: 0, width: W, height: H, fill: "transparent" }, content);
+
+  // ---- title
+  el("text", { x: 40, y: 58, class: "title" }, content, "A sheep's brain with a map");
+  el("text", { x: 40, y: 92, class: "sub" }, content, "Proposal for the next world model (2026-10-26). Vision is placed onto a top-down map centred on the sheep; the map is remembered, moved as the sheep moves, and predicted; it is trained by drawing the view back from the map and comparing with what the sheep really sees.");
+  const C = el("g", { transform: `translate(0,${OY})` }, content);
+
+  // ---- builders
+  const regions = {};
+  function group(id, x, y, w, h, kind, label, title, tagText) {
+    const g = el("g", { class: "k-" + kind }, C);
+    el("rect", { x, y, width: w, height: h, rx: 14, class: "grp-bg" }, g);
+    el("rect", { x, y, width: w, height: h, rx: 14, class: "grp" }, g);
+    el("text", { x: x + 20, y: y + 34, class: "gtitle" }, g, label + "  " + title);
+    if (tagText) el("text", { x: x + w - 20, y: y + 32, class: "tag", "text-anchor": "end" }, g, tagText);
+    if (id) regions[id] = { x, y: y + OY, w, h };
+  }
+  function box(x, y, w, h, kind, title, lines, tagText) {
+    const g = el("g", { class: "k-" + kind }, C);
+    el("rect", { x, y, width: w, height: h, rx: 8, class: "box" }, g);
+    el("text", { x: x + 16, y: y + 28, class: "btitle" }, g, title);
+    if (tagText) el("text", { x: x + w - 14, y: y + 26, class: "tag", "text-anchor": "end" }, g, tagText);
+    let ty = y + 54;
+    for (const raw of lines) {
+      if (raw === "") { ty += 9; continue; }
+      const cls = raw.startsWith("§") ? "bm" : raw.startsWith("~") ? "bn" : "bl";
+      el("text", { x: x + 16, y: ty, class: cls }, g, raw.replace(/^[§~]/, ""));
+      ty += 21;
+    }
+    return g;
+  }
+  const pts = p => p.map(q => q.join(",")).join(" ");
+  function flow(p, halo) {
+    if (halo) el("polyline", { points: pts(p), class: "flow-halo" }, C);
+    el("polyline", { points: pts(p), class: "flow", "marker-end": "url(#arr)" }, C);
+  }
+
+  // ---- inputs
+  box(40, 100, 330, 240, "input", "What it sees", [
+    "First-person strip, 64 × 256 pixels",
+    "~300° field, 16 palette colours",
+    "§one-hot → 64 × 256 × 16",
+    "Range 12 tiles by day, 16 head up",
+  ], "input");
+  // strip sketch
+  (() => {
+    const g = el("g", {}, C), x = 56, y = 250, w = 298, h = 70;
+    el("rect", { x, y, width: w, height: h * .45, fill: "#9cc7e4" }, g);
+    el("rect", { x, y: y + h * .45, width: w, height: h * .55, fill: "#7fb069" }, g);
+    el("rect", { x, y: y + h * .45, width: w, height: 7, fill: "#5e8f4f" }, g);
+    el("ellipse", { cx: x + 205, cy: y + h * .78, rx: 46, ry: 8, fill: "#3f7fbf" }, g);
+    for (const [tx, s] of [[x + 40, 1], [x + 70, .55], [x + 250, .8], [x + 150, .35]]) {
+      el("rect", { x: tx - 3 * s, y: y + h * .45 - 4 - 30 * s + 22 * s, width: 6 * s, height: 26 * s, fill: "#6b4f2f" }, g);
+      el("circle", { cx: tx, cy: y + h * .45 - 30 * s + 14 * s, r: 16 * s, fill: "#2f6b3a" }, g);
+    }
+    el("rect", { x, y, width: w, height: h, fill: "none", stroke: "var(--input)", "stroke-width": 1 }, g);
+    el("text", { x, y: y + h + 18, class: "bn" }, g, "near tree big, far tree small; pond ahead-right");
+  })();
+
+  box(40, 380, 330, 460, "note", "What changes from Milestone 1", [
+    "Changed",
+    "• The state is a map, not one long",
+    "  vector: where things are is kept",
+    "  as where they are on the map.",
+    "• The decoder draws the view from",
+    "  the map along rays (section 4).",
+    "• Moving and turning are applied",
+    "  to the map by fixed geometry.",
+    "",
+    "Kept",
+    "• Felt numbers, reward head, the",
+    "  PPO hybrid policy, learning from",
+    "  birth on the sheep's own life.",
+    "",
+    "Set aside for now",
+    "• The imagination actor-critic and",
+    "  the curiosity ensemble.",
+  ], "summary");
+
+  // ---- 1. see
+  group("see", 410, 100, 480, 740, "learned", "1", "See: lift the view", "learned");
+  box(430, 150, 440, 190, "learned", "Column encoder", [
+    "Conv 4×4 stride 2, three times, LN, SiLU",
+    "§64 × 256 × 16 → 8 × 32 × 96",
+    "Pool over height, widen to",
+    "§64 columns × 128 features",
+    "Each column is ≈ 4.7° of bearing",
+  ]);
+  box(430, 370, 440, 210, "learned", "Two readings per column", [
+    "Depth: softmax over 24 distance bins",
+    "§0.25 … 16 tiles, finer near the sheep",
+    "What: a content vector",
+    "§32 numbers",
+    "~A small far tree and a big near tree look",
+    "~alike in one glance: depth starts as a guess",
+  ]);
+  box(430, 610, 440, 210, "learned", "Lift", [
+    "Depth × content for every column",
+    "§64 bearings × 24 distances × 32",
+    "Each column's content is spread along its",
+    "line of sight in proportion to how likely",
+    "each distance is. Moving sharpens the guess:",
+    "near things slide past faster (parallax).",
+  ]);
+
+  // ---- 2. place
+  group("place", 930, 100, 430, 740, "fixed", "2", "Place it on the map", "fixed geometry");
+  box(950, 150, 390, 220, "fixed", "Splat (no weights)", [
+    "A cell at bearing θ, distance d lands at",
+    "§x = d·sin θ,  y = d·cos θ",
+    "on a grid of 0.5-tile cells, with the",
+    "sheep at the centre facing up.",
+    "Contributions are summed; each adds its",
+    "depth probability to a 'seen' channel.",
+  ], "innate");
+  // fan sketch
+  (() => {
+    const g = el("g", {}, C), cx = 1145, cy = 590, R = 175;
+    for (let i = -8; i <= 8; i++) el("line", { x1: cx + i * 20, y1: cy - R, x2: cx + i * 20, y2: cy, class: "ill-grid" }, g);
+    for (let j = 0; j <= 8; j++) el("line", { x1: cx - 160, y1: cy - j * 20, x2: cx + 160, y2: cy - j * 20, class: "ill-grid" }, g);
+    for (let a = -150; a <= 150; a += 25) {
+      const r = a * Math.PI / 180, ex = cx + R * Math.sin(r), ey = cy - R * Math.cos(r);
+      if (ey > cy) continue;
+      el("line", { x1: cx, y1: cy, x2: ex, y2: Math.min(ey, cy), class: "ill-line" }, g);
+    }
+    for (const r of [50, 100, 150]) el("path", { d: `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`, class: "ill-line" }, g);
+    el("ellipse", { cx: cx + 62, cy: cy - 112, rx: 34, ry: 16, fill: "#3f7fbf", opacity: .85 }, g);
+    el("circle", { cx: cx - 38, cy: cy - 40, r: 9, fill: "#2f6b3a" }, g);
+    el("circle", { cx: cx - 110, cy: cy - 135, r: 9, fill: "#2f6b3a" }, g);
+    el("path", { d: `M ${cx} ${cy - 14} L ${cx - 8} ${cy + 4} L ${cx + 8} ${cy + 4} z`, fill: "var(--ink)" }, g);
+    el("text", { x: 952, y: 410, class: "bn" }, g, "each ray is one column; arcs are distance bins");
+  })();
+  box(950, 630, 390, 190, "fixed", "Observation map Oₜ", [
+    "§64 × 64 cells × 32 channels",
+    "§+ 1 'seen' channel",
+    "Only what is in view right now:",
+    "empty behind the sheep and beyond",
+    "the view range.",
+  ]);
+
+  // ---- body inputs, next to the memory
+  box(930, 880, 430, 170, "input", "How it moved (body sense)", [
+    "Turned: −22.5°, 0 or +22.5°",
+    "Moved: 0, 0.12 or 0.35 tiles forward;",
+    "0 if the step was blocked",
+    "~Innate, like balance and stride. It says",
+    "~nothing about the meadow itself.",
+  ], "input");
+  box(930, 1080, 430, 110, "input", "Its last action", [
+    "One-hot of 9: stop, walk, trot, left,",
+    "right, graze, drink, rest, head up",
+  ], "input");
+  box(930, 1220, 430, 150, "input", "What it feels", [
+    "6 numbers: energy, hydration, warmth,",
+    "social, interest, taste",
+    "~Unchanged from Milestone 1",
+  ], "input");
+
+  // ---- 3. remember and predict
+  group("remember", 1420, 100, 600, 1060, "memory", "3", "Remember and predict", "the world model");
+  box(1440, 150, 560, 200, "memory", "Map memory Mₜ₋₁", [
+    "§64 × 64 cells × 32 channels",
+    "0.5 tile per cell: 32 × 32 tiles",
+    "around the sheep, which faces up",
+    "Global state g (GRU, 256): time",
+    "of day, feelings, things with no",
+    "place on the map",
+  ]);
+  // little map sketch inside M0
+  (() => {
+    const g = el("g", {}, C), x = 1812, y = 162, s = 176;
+    el("rect", { x, y, width: s, height: s, fill: "#7fb069", opacity: .55 }, g);
+    for (let i = 1; i < 8; i++) {
+      el("line", { x1: x + i * s / 8, y1: y, x2: x + i * s / 8, y2: y + s, class: "ill-grid" }, g);
+      el("line", { x1: x, y1: y + i * s / 8, x2: x + s, y2: y + i * s / 8, class: "ill-grid" }, g);
+    }
+    el("ellipse", { cx: x + 130, cy: y + 40, rx: 30, ry: 18, fill: "#3f7fbf" }, g);
+    el("ellipse", { cx: x + 30, cy: y + 150, rx: 18, ry: 12, fill: "#3f7fbf", opacity: .45 }, g);
+    for (const [px, py] of [[50, 50], [60, 70], [150, 140], [95, 30]]) el("circle", { cx: x + px, cy: y + py, r: 7, fill: "#2f6b3a" }, g);
+    el("path", { d: `M ${x + s / 2} ${y + s / 2 - 10} l -7 16 l 14 0 z`, fill: "var(--ink)" }, g);
+    el("rect", { x, y, width: s, height: s, fill: "none", stroke: "var(--memory)", "stroke-width": 1.2 }, g);
+  })();
+  box(1440, 380, 560, 160, "fixed", "Move the map (fixed, innate)", [
+    "Turn left / right: rotate the map by ∓22.5°",
+    "Walk / trot: shift it back 0.24 / 0.7 cells",
+    "Bilinear resampling; cells that enter at the edge",
+    "start as 'unknown'. Driven by the body sense.",
+  ], "innate");
+  box(1440, 570, 560, 200, "memory", "Predict what changes: the prior M̂ₜ", [
+    "§ConvGRU 3×3 over the moved map, given the action and g",
+    "Learns what moving cannot explain: grass eaten,",
+    "other sheep walking, light fading. Ponds stay put.",
+    "Random part: one categorical z per 8 × 8 block",
+    "§8 × 8 blocks × 16 classes (prior guess)",
+  ], "learned");
+  box(1440, 800, 560, 200, "memory", "Look and correct: the posterior Mₜ", [
+    "ConvGRU merges Oₜ into M̂ₜ, gated by 'seen'",
+    "z per block from [M̂ₜ, Oₜ] (posterior); g updated",
+    "with the felt numbers",
+    "KL(posterior ‖ prior) per block is the surprise,",
+    "and it shows where on the map the sheep was surprised",
+  ], "learned");
+  box(1440, 1030, 560, 110, "memory", "Model state", [
+    "§map Mₜ (64 × 64 × 32) + global g (256)",
+    "Read by everything downstream",
+  ]);
+
+  // ---- 4. visualise
+  group("visualise", 2080, 100, 540, 720, "learned", "4", "Visualise: draw the view back", "owner's idea");
+  box(2100, 150, 500, 160, "fixed", "Cast rays (no weights)", [
+    "For each of 64 bearings, read the map at",
+    "24 distances: the splat run in reverse",
+    "§→ 64 × 24 × 32",
+  ], "innate");
+  box(2100, 340, 500, 210, "learned", "What each cell looks like", [
+    "§MLP 32 → 64 → (opacity, appearance 32)",
+    "Composite front to back along each ray,",
+    "so nearer things hide farther ones",
+    "§→ 64 columns × 32, plus the distance",
+    "§  of what each column shows",
+  ]);
+  box(2100, 580, 500, 220, "learned", "Paint the strip", [
+    "Apparent height ∝ 1 / distance (fixed)",
+    "ConvT upsampler (learned)",
+    "§→ 64 × 256 × 16 colour logits",
+    "Drawn twice per step: from the posterior (this view)",
+    "and from the prior (the next view, before seeing it)",
+  ]);
+
+  // ---- 5. act and feel
+  group("act", 2080, 860, 540, 400, "head", "5", "Act and feel", "heads");
+  box(2100, 910, 500, 200, "head", "Policy and value (PPO on real experience)", [
+    "Small CNN over the map (3 conv, stride 2)",
+    "§+ g → 9 action logits, 1 value",
+    "Water ahead-left is always in the same part",
+    "of an egocentric map, so it is easy to learn.",
+    "The chosen action goes to the meadow.",
+  ]);
+  box(2100, 1130, 500, 110, "head", "Felt numbers and reward", [
+    "MLP on [pooled map, g]: predicts the 6 felt",
+    "numbers and the reward, as in Milestone 1",
+  ]);
+
+  // ---- legend
+  (() => {
+    const x = 40, y = 880, w = 850, h = 490;
+    const g = el("g", { class: "k-note" }, C);
+    el("rect", { x, y, width: w, height: h, rx: 14, class: "grp-bg" }, g);
+    el("rect", { x, y, width: w, height: h, rx: 14, class: "grp" }, g);
+    el("text", { x: x + 20, y: y + 34, class: "gtitle" }, g, "Key");
+    const items = [
+      ["learned", "Learned: weights trained from the sheep's own experience"],
+      ["fixed", "Fixed geometry: no weights; innate, like knowing near things look big"],
+      ["memory", "Memory and prediction: the world model's state, kept from step to step"],
+      ["input", "Inputs: the view, the body sense, the last action, the felt numbers"],
+      ["head", "Heads: what the sheep does and what it expects to feel"],
+    ];
+    items.forEach(([k, t], i) => {
+      const gy = y + 70 + i * 46;
+      const kg = el("g", { class: "k-" + k }, g);
+      el("rect", { x: x + 24, y: gy - 18, width: 42, height: 26, rx: 5, class: "box" }, kg);
+      el("text", { x: x + 82, y: gy, class: "bl" }, g, t);
+    });
+    const ly = y + 70 + items.length * 46;
+    el("line", { x1: x + 24, y1: ly - 6, x2: x + 66, y2: ly - 6, class: "flow", "marker-end": "url(#arr)" }, g);
+    el("text", { x: x + 82, y: ly, class: "bl" }, g, "Data flow within one step");
+    el("line", { x1: x + 24, y1: ly + 40, x2: x + 66, y2: ly + 40, class: "loop", "marker-end": "url(#arrm)" }, g);
+    el("text", { x: x + 82, y: ly + 46, class: "bl" }, g, "Carried to the next step");
+    el("line", { x1: x + 24, y1: ly + 86, x2: x + 66, y2: ly + 86, class: "cmp" }, g);
+    el("text", { x: x + 82, y: ly + 92, class: "bl" }, g, "Compared during training (the drawn view against the real one)");
+    el("text", { x: x + 24, y: y + h - 22, class: "bn" }, g, "Sizes are a first proposal, not tuned. All sheep share the weights; each keeps its own map.");
+  })();
+
+  // ---- training and plan
+  group("train", 40, 1420, 1280, 340, "note", "", "Training: no privileged labels", "");
+  box(60, 1470, 600, 270, "note", "Loss per step, on the sheep's own life", [
+    "• This view: class-balanced cross-entropy of",
+    "  the strip drawn from the posterior map",
+    "• Next view: the same, drawn from the prior",
+    "  after the move, before seeing it",
+    "• KL(posterior ‖ prior), with free bits (DreamerV3)",
+    "• Felt numbers and reward, as in Milestone 1",
+    "~The policy trains separately (PPO), as in the hybrid",
+  ]);
+  box(690, 1470, 610, 270, "note", "Why the map has to be a real map", [
+    "Drawing the view back only proves the map keeps",
+    "the information; a private code could pass that test.",
+    "The next view is drawn after the map is moved by",
+    "fixed geometry: a private code garbles when shifted,",
+    "a true layout still draws the right view.",
+    "",
+    "Evaluation only: compare the map with the true",
+    "meadow, and look at it, since it can be drawn.",
+  ]);
+  group("plan", 1360, 1420, 1260, 340, "note", "", "Build order and tests", "");
+  box(1380, 1470, 600, 270, "note", "Steps", [
+    "1. Grid, 8 × 8 top-down view: the lift is trivial,",
+    "   so this tests the memory and the fixed move",
+    "2. Grid with a first-person strip: tests the lift",
+    "3. Meadow: the full design",
+    "~Each step: three seeds, criteria written first",
+  ]);
+  box(2010, 1470, 590, 270, "note", "Worked if", [
+    "Grid: pond direction out of view, probe R² > 0.9",
+    "   (now 0.59–0.67)",
+    "Grid: drink ranked first beside water when",
+    "   thirsty > 80 % (now 10 %)",
+    "Meadow: the hybrid's dawn water rises toward",
+    "   PPO's 1.09; the map's water matches the ponds",
+    "Open: ponds over 16 tiles away fall off the map",
+  ]);
+
+  // ---- arrows
+  flow([[370, 245], [430, 245]]);
+  flow([[650, 340], [650, 370]]);
+  flow([[650, 580], [650, 610]]);
+  flow([[870, 715], [910, 715], [910, 260], [950, 260]]);
+  flow([[1145, 370], [1145, 398]]);
+  flow([[1145, 604], [1145, 630]]);
+  flow([[1720, 350], [1720, 380]]);
+  flow([[1720, 540], [1720, 570]]);
+  flow([[1720, 770], [1720, 800]]);
+  flow([[1720, 1000], [1720, 1030]]);
+  flow([[1360, 965], [1378, 965], [1378, 460], [1440, 460]]);
+  flow([[1360, 1135], [1398, 1135], [1398, 670], [1440, 670]]);
+  flow([[1360, 1295], [1412, 1295], [1412, 960], [1440, 960]]);
+  flow([[1340, 760], [1362, 760], [1362, 850], [1440, 850]], true);
+  flow([[2000, 1060], [2040, 1060], [2040, 230], [2100, 230]]);
+  flow([[2000, 1110], [2060, 1110], [2060, 1010], [2100, 1010]]);
+  flow([[2350, 310], [2350, 340]]);
+  flow([[2350, 550], [2350, 580]]);
+  el("polyline", { points: pts([[1440, 1085], [1428, 1085], [1428, 250], [1440, 250]]), class: "loop", "marker-end": "url(#arrm)" }, C);
+  el("text", { x: 1432, y: 1180, class: "bn", "text-anchor": "start" }, C, "Mₜ becomes Mₜ₋₁ at the next step");
+  // the training comparison: drawn strip vs real strip
+  el("polyline", { points: pts([[2600, 690], [2645, 690], [2645, 70], [205, 70], [205, 100]]), class: "cmp" }, C);
+  el("rect", { x: 1060, y: 54, width: 560, height: 32, rx: 6, fill: "var(--paper)" }, C);
+  el("text", { x: 1340, y: 76, class: "cmp-label", "text-anchor": "middle" }, C, "The drawn strip is compared with the real strip: the training signal");
+
+  // ---- pan and zoom
+  const stage = document.getElementById("stage"), view = document.getElementById("view");
+  const vp = document.getElementById("vp"), mini = document.getElementById("mini"), minisvg = document.getElementById("minisvg");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let s = 1, tx = 0, ty = 0, anim = null;
+  const MIN = 0.05, MAX = 4;
+  const clamp = v => Math.max(MIN, Math.min(MAX, v));
+  function apply() {
+    view.setAttribute("transform", `translate(${tx},${ty}) scale(${s})`);
+    const r = stage.getBoundingClientRect();
+    vp.setAttribute("x", -tx / s); vp.setAttribute("y", -ty / s);
+    vp.setAttribute("width", r.width / s); vp.setAttribute("height", r.height / s);
+  }
+  function fitRect(x, y, w, h, pad) {
+    const r = stage.getBoundingClientRect(), top = 70, avail = r.height - top;
+    const ns = clamp(Math.min(r.width / (w + 2 * pad), avail / (h + 2 * pad)));
+    return { s: ns, tx: (r.width - w * ns) / 2 - x * ns, ty: top + (avail - h * ns) / 2 - y * ns };
+  }
+  function go(t) {
+    if (anim) cancelAnimationFrame(anim);
+    if (reduce) { ({ s, tx, ty } = t); apply(); return; }
+    const a = { s, tx, ty }, t0 = performance.now(), D = 420;
+    const step = now => {
+      const k = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - k, 3);
+      s = a.s + (t.s - a.s) * e; tx = a.tx + (t.tx - a.tx) * e; ty = a.ty + (t.ty - a.ty) * e;
+      apply(); anim = k < 1 ? requestAnimationFrame(step) : null;
+    };
+    anim = requestAnimationFrame(step);
+  }
+  function zoomAt(f, mx, my, smooth) {
+    const ns = clamp(s * f), px = (mx - tx) / s, py = (my - ty) / s;
+    const t = { s: ns, tx: mx - px * ns, ty: my - py * ns };
+    if (smooth) go(t); else { if (anim) cancelAnimationFrame(anim), anim = null; ({ s, tx, ty } = t); apply(); }
+  }
+  const fitAll = smooth => { const t = fitRect(0, 0, W, H, 30); if (smooth) go(t); else { ({ s, tx, ty } = t); apply(); } };
+
+  stage.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    const d = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoomAt(Math.exp(-d * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX - r.left, e.clientY - r.top);
+  }, { passive: false });
+
+  const ptrs = new Map(); let last = null;
+  stage.addEventListener("pointerdown", e => {
+    stage.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    stage.classList.add("dragging"); last = null; if (anim) cancelAnimationFrame(anim), anim = null;
+  });
+  stage.addEventListener("pointermove", e => {
+    if (!ptrs.has(e.pointerId)) return;
+    const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (ptrs.size === 1) { tx += e.clientX - prev[0]; ty += e.clientY - prev[1]; apply(); return; }
+    const [a, b] = [...ptrs.values()], r = stage.getBoundingClientRect();
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]), mx = (a[0] + b[0]) / 2 - r.left, my = (a[1] + b[1]) / 2 - r.top;
+    if (last) { tx += mx - last.mx; ty += my - last.my; zoomAt(d / last.d, mx, my); }
+    last = { d, mx, my };
+  });
+  const up = e => { ptrs.delete(e.pointerId); last = null; if (!ptrs.size) stage.classList.remove("dragging"); };
+  stage.addEventListener("pointerup", up); stage.addEventListener("pointercancel", up);
+  stage.addEventListener("dblclick", e => { const r = stage.getBoundingClientRect(); zoomAt(2, e.clientX - r.left, e.clientY - r.top, true); });
+
+  const centre = () => { const r = stage.getBoundingClientRect(); return [r.width / 2, r.height / 2]; };
+  document.getElementById("zin").onclick = () => zoomAt(1.6, ...centre(), true);
+  document.getElementById("zout").onclick = () => zoomAt(1 / 1.6, ...centre(), true);
+  document.getElementById("fit").onclick = () => fitAll(true);
+  addEventListener("keydown", e => {
+    if (e.target.closest && e.target.closest("button")) return;
+    const k = e.key, m = 80;
+    if (k === "+" || k === "=") zoomAt(1.4, ...centre(), true);
+    else if (k === "-" || k === "_") zoomAt(1 / 1.4, ...centre(), true);
+    else if (k === "0") fitAll(true);
+    else if (k.startsWith("Arrow")) { tx += k === "ArrowLeft" ? m : k === "ArrowRight" ? -m : 0; ty += k === "ArrowUp" ? m : k === "ArrowDown" ? -m : 0; apply(); }
+    else return;
+    e.preventDefault();
+  });
+
+  // section buttons
+  const nav = document.getElementById("sections");
+  const named = [["see", "1 See"], ["place", "2 Place"], ["remember", "3 Remember"], ["visualise", "4 Visualise"], ["act", "5 Act"], ["train", "Training"], ["plan", "Plan"]];
+  for (const [id, label] of named) {
+    const b = document.createElement("button"); b.type = "button"; b.textContent = label;
+    b.onclick = () => { const g = regions[id]; go(fitRect(g.x, g.y, g.w, g.h, 24)); };
+    nav.appendChild(b);
+  }
+
+  // overview map
+  minisvg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  minisvg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  const bg = document.getElementById("minibg"); bg.setAttribute("width", W); bg.setAttribute("height", H);
+  let miniDrag = false;
+  const miniGo = (e, smooth) => {
+    const pt = minisvg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const p = pt.matrixTransform(minisvg.getScreenCTM().inverse()), r = stage.getBoundingClientRect();
+    const t = { s, tx: r.width / 2 - p.x * s, ty: r.height / 2 - p.y * s };
+    if (smooth) go(t); else { ({ s, tx, ty } = t); apply(); }
+  };
+  mini.addEventListener("pointerdown", e => { miniDrag = true; mini.setPointerCapture(e.pointerId); miniGo(e, true); });
+  mini.addEventListener("pointermove", e => { if (miniDrag) miniGo(e, false); });
+  mini.addEventListener("pointerup", () => { miniDrag = false; });
+
+  // fit once the stage has a size (it can be 0 × 0 while the page is still being laid out)
+  let fitted = false;
+  new ResizeObserver(() => {
+    const r = stage.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    if (!fitted) { fitted = true; fitAll(false); } else apply();
+  }).observe(stage);
+})();
+</script>
