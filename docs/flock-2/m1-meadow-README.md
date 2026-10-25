@@ -618,3 +618,34 @@ Pre-registered criteria (written before the runs):
   2. the MLP probe's R² for the direction to water in view rises above 0.5;
   3. the hybrid's mean water at dawn 3 rises from 0.01–0.14 toward PPO's 1.09, with all three
      seeds above the unbalanced seeds' mean.
+
+### Grid hybrid: results (2026-10-25)
+
+Three seeds, 600 iterations each, about 5 minutes per seed on the RTX 4080
+(`grid-results/runs/hybrid_s{0,1,2}_log.jsonl`, `grid-results/eval/hybrid_s{0,1,2}[_greedy].json`).
+
+| Policy | Reward / step | Food | Water | Depleted | Eat / drink success | Bad taste per step |
+| --- | --- | --- | --- | --- | --- | --- |
+| random | −1.12 ± 0.01 | 0.21 | 0.03 | 94 % | — | — |
+| scripted (whole map, privileged) | −0.098 ± 0.000 | 0.79 | 0.78 | 0 % | 100 % / 100 % | 0 |
+| PPO on the true state, seed 0 | −0.17 ± 0.03 | 0.81 | 0.95 | 6 % | 22 % / 62 % | 0.35 |
+| **hybrid, 8 × 8 view** | **−0.017 / −0.020 / −0.023** (SE ≤ 0.005) | 0.98–1.00 | 1.00 | 0 % | 80–84 % / 91–94 % | 0.015–0.019 |
+| hybrid, greedy | −0.023 / −0.020 / −0.042 | 0.91–0.96 | 0.98–0.99 | 0–2 % | | |
+
+Pre-registered criterion: **met**. Every seed beats random by far more than 5 SE, with food and water
+above 0.3. The "strong result" (within 0.2 of PPO on the true state) is also met. The hybrid in fact
+beats both PPO on the true state and the scripted sheep.
+
+Reading *(judgement)*:
+
+- It beats the scripted sheep because the script waits until a level is low before seeking food or
+  water. The hybrid tops up continually and keeps both levels near 1, where the drive (and so the
+  penalty) is near 0.
+- It beats PPO on the true state with less information (an 8 × 8 window, not the whole map). The
+  likely reason is the input: PPO there reads a 1,539-number one-hot map, and wastes a third of its
+  steps on bad taste after 600 updates. The world model's compact state (h, z) is easier to learn a
+  policy on. This is untested, and that PPO also had two spare no-op actions.
+- So, in this world, the world model's state carries what a policy needs: where food and water
+  are, and how hungry and thirsty the sheep is. What failed before was learning the policy in
+  imagination, not the world model. This supports the owner's choice. The meadow runs (class-
+  balanced reconstruction) are next.
