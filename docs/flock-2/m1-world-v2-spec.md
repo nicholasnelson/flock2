@@ -828,3 +828,25 @@ Run name `mem_s0` (no reuse of seed folder names). Evaluated and diagnosed as be
 Deviation before launch: arm M uses **batches of 4 sequences** of 64 steps (8 of 64 ran the GPU out
 of memory in the smoke test). That is the same number of frames per update as N1's 8 of 32. Smoke
 test: 6.3 GB peak RAM.
+
+### Arm M: result (2026-10-27)
+
+`meadow2-results/{eval/hybrid_,diag/}mem_s0.json`. Peak RAM 8.8 GB.
+
+| | Arm M | N1, seed 0 |
+| --- | --- | --- |
+| Reward / step (± SE) | 1.54 ± 0.08 | 1.38 ± 0.08 |
+| Died | 57 % | 62 % |
+| Water redrawn, day within 8 | 0.62 | 0.68 |
+| Bearing in view from h and z (ridge) | 0.26 | 0.35 |
+| **Bearing just after leaving view, from h and z (best of sin, cos)** | **−0.52** | −0.54 |
+
+**By the rule:** D3 stays far below 0.3, so the learned options for memory are exhausted at this
+budget and **the decision returns to the owner.**
+
+**A caveat to weigh first** *(judgement)*: the D3 probe has not been validated on an input that is
+known to carry memory. Every model so far, trained or not, scores below 0 on it. Its target is the
+true current bearing to the nearest water tile, after the scripted sheep has kept moving and
+turning for up to 30 steps. A check that a probe of this design can read memory when memory exists
+would take minutes: for example, an input of the bearing at the moment water was last seen,
+together with the turns made since.
