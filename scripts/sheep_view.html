@@ -105,7 +105,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 
   // levels
   const v2 = info.actions.indexOf("head_up") < 0;
-  const names = ["energy", "hydration", "warmth", "social", "interest"].concat(v2 ? ["fat"] : []);
+  const names = info.levels.concat(v2 ? ["fat"] : []);
   if (v2) {
     document.getElementById("worldnote").textContent = "Meadow v2 (48 × 48, 12 sheep), drawn with the old renderer until the new one is built. The ring marks the mouth point.";
     document.getElementById("eatkeys").textContent = "graze · drink: both act at the mouth point (the ring), 0.6 tiles ahead";
@@ -227,7 +227,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     document.getElementById("taste").textContent = s.taste < 0 ? "Bad taste!" : "";
     document.getElementById("lightv").innerHTML = s.light != null ? "Light <b>" + Math.round(s.light * 100) + "%</b>" : "";
     document.getElementById("mouth").innerHTML = s.mouth ? "Mouth on <b>" + s.mouth + "</b>" : "";
-    document.getElementById("flock").innerHTML = s.flock_alive != null ? "Flock alive <b>" + s.flock_alive + "</b>" : "";
+    document.getElementById("flock").innerHTML = s.flock_alive != null ? "Flock alive <b>" + s.flock_alive + "</b> · in view <b>" + s.seen + "</b>" : "";
     document.getElementById("dead").hidden = s.alive !== false;
   }
 

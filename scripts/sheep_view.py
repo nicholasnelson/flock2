@@ -48,7 +48,9 @@ def world_v1():
         f = st.flock
         return {"head_up": bool(f.head_up[0]), "alive": True, "fat": None}
 
-    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=None, light=None)
+    from flock.meadow import drives
+
+    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=None, light=None, levels=list(drives.NAMES))
 
 
 def world_v2():
@@ -75,13 +77,16 @@ def world_v2():
     def extra(st):
         f, m = st.flock, st.meadow
         on_water, grass, inside = sim.mouth_tile(m, jnp.asarray(f.pos[:1]), jnp.asarray(f.heading[:1]))
-        mouth = "water" if bool(on_water[0]) else ("outside" if not bool(inside[0]) else ("grass" if float(grass[0]) >= 1.0 else "too short to bite"))
-        return {"alive": bool(f.alive[0]), "fat": float(f.fat[0]), "light": float(sim.light(st.t)), "mouth": mouth, "flock_alive": int(f.alive.sum())}
+        g = float(grass[0])
+        mouth = "water" if bool(on_water[0]) else ("outside" if not bool(inside[0]) else (f"grass {g:.1f}" if g >= sim.MIN_BITE else f"grass {g:.1f}, too short to bite"))
+        return {"alive": bool(f.alive[0]), "fat": float(f.fat[0]), "light": float(sim.light(st.t)), "mouth": mouth, "flock_alive": int(f.alive.sum()), "seen": float(f.seen[0])}
 
     # where the mouth point appears in the strip (fpv's even-angle rows; eye height fpv.EYE_H)
     elev = -float(np.arctan2(fpv.EYE_H, sim.MOUTH))
     row = fpv.HORIZON - elev / float(fpv.RAD_PER_PX)
-    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=[row / fpv.H, 0.5], light=sim.light)
+    from flock.meadow2 import drives
+
+    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=[row / fpv.H, 0.5], light=sim.light, levels=list(drives.NAMES))
 
 
 class World:
@@ -157,7 +162,7 @@ def handler(world, page):
         def do_GET(self):
             if self.path == "/palette":
                 info = {"rgb": RGB.tolist(), "names": NAMES, "objects": S.OBJECT_NAMES, "ground": S.GROUND_NAMES, "water": int(S.WATER),
-                        "tiles": int(w["n_tiles"]), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"]}
+                        "tiles": int(w["n_tiles"]), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"], "levels": w["levels"]}
                 self._send(json.dumps(info).encode(), "application/json")
             else:
                 self._send(page, "text/html; charset=utf-8")

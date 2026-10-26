@@ -301,3 +301,92 @@ will be rare. *(judgement)* Options:
 
 Also noted *(not a criterion)*: grass grows rather than lasts, to 185 %, so 12 sheep are far from
 grazing the meadow down. Regrowth could be slowed if scarcity is wanted later.
+
+## 11. v2.1: changes after the owner's play-test (2026-10-26)
+
+Agreed with the owner on 2026-10-26, after playing meadow v2 in the viewer.
+
+**Time: two clocks.**
+- A day is now 2,400 steps (`world.DAY_SCALE` = 2; was 1,200).
+- Environment rates scale with the day, so a day or a night costs the same as before: light ramps,
+  warmth by day and night, boredom.
+- Body rates (gut energy, hydration, fat storage and release) are divided by `drives.NEED_SCALE`.
+  It is set by a pre-registered balance rule: **a naive explorer must find water before it would
+  die in at least half of starts.** The naive explorer is the wanderer of § 7: it walks straight
+  and turns a random 22.5° about every 30 steps. Its first time to water is compared with each
+  sheep's hydration budget (starting hydration ÷ loss per step).
+- The owner's idea of making needs harsher as training goes on (a curriculum) is noted for later.
+  If done, changes should be slow and logged, because a moving reward makes the critic's job
+  harder.
+
+**Grass.**
+- **A smooth field.** `world.grass_at` blends the four nearest tile centres bilinearly. The mouth
+  reads that field, and a bite takes 0.05 of biomass from the same four tiles by their weights.
+  What the sheep sees, eats and depletes agree, and there are no tile edges.
+- **Nutrition follows density.** A bite gives 0.008 × density of gut energy (0.012 at density 1.5,
+  as before; 0.024 at full). Below a density of 0.5 a bite fails, with a bad taste.
+- **Regrowth takes days.** It is 0.00013 of the gap to full per step, a time constant of about
+  7,700 steps (3.2 days). Bare ground reaches the bite threshold (0.5) in about 1,400 steps
+  (0.6 days) and a density of 1.0 in about 3,100 (1.3 days).
+  Before, it was 0.0004 per step. Separately, the four-step display had made regrowth look
+  instant: one bite at 2.0 showed as the step below and crossed back within about 60 steps.
+- **No grass under water.**
+- **Rendering (renderer v2, owner, 2026-10-26).** One continuous raised surface whose height and
+  colour follow the smooth field: no blades, and no grid of tiles. Two constraints:
+  - *Height at most 0.25 tiles.* From the eye at 0.8 tiles, the sight line to the mouth point (0.6
+    tiles ahead) never dips below 0.4 tiles over the ground in between, so nearer grass can never
+    hide the mouth spot.
+  - *The reticle marks the grass surface at the mouth point.* What is drawn there is what a bite
+    eats.
+
+**Sheep are solid.** A move that would bring a sheep closer to another living sheep it would
+overlap is refused, as walking into a tree is. Nobody is pushed. Before, overlapping sheep were
+pushed apart by half the overlap each, which moved sheep that had not acted. Sheep are placed so
+that none overlaps another at the start. The scripted flock treats other sheep as obstacles.
+
+**Social is no longer a drive** *(owner: flocking should be learned because it helps, not
+rewarded for itself)*.
+- The driven levels are energy, hydration, warmth and interest. A sheep feels 6 numbers: those
+  four, fat and taste.
+- **Huddling:** while resting, each other resting sheep within 1 tile divides the loss of warmth by
+  (1 + 0.5 n) and multiplies the gain from rest by (1 + 0.25 n), counting up to 4 neighbours.
+- The number of other sheep in view is still recorded (`Flock.seen`), for analysis only.
+- The worst drive is now √4 = 2, so the alive bonus of 2.5 still makes every living step worth
+  at least +0.5.
+- In nature the main reason for flocking is usually given as predation. A predator could be
+  added later, if flocking fails to emerge from huddling and from following others to water.
+
+### v2.1 check results (2026-10-26)
+
+`meadow2-results/checks_v21.json`: 64 meadows, 12 sheep, 12,000 steps (5 days of 2,400), with
+`NEED_SCALE` = 2.
+
+| Check | Result | Criterion |
+| --- | --- | --- |
+| 1. Survival | 2 deaths of 768 (0.26 %, both of thirst, in different meadows) | ≤ 2 %, ≤ 1 per meadow: **pass** |
+| 2. Needs after day 1: gut energy / hydration, mean | 0.85 / 0.71 | > 0.4: **pass** |
+| 3. Grass, day 5 against day 0 | 172 % | ≥ 70 %: **pass** |
+| 4. Flock start to water: median / 90th percentile | 10.2 / 13.2 tiles | ≤ 12 / ≤ 20: **pass** |
+
+Other measurements:
+- 50 % of resting sheep at night huddle with at least one neighbour;
+- a sheep sees 8.5 others on average;
+- grazing is 5 % of actions (was 11 % before density-based nutrition);
+- fat rose from 0.50 to 0.84.
+
+**The balance rule fails as written.** Each cell is the share of walkers that find water before
+their hydration would run out (`walkers_v21.json`):
+
+| Naive explorer | Never within 4,000 steps | NEED_SCALE 1 | 2 | 3 | 4 | 6 |
+| --- | --- | --- | --- | --- | --- | --- |
+| § 7's wanderer: turns only at random | 61 % | 15 % | 20 % | 25 % | 30 % | 35 % |
+| Turns away when its next step is blocked | 25 % | 25 % | 40 % | **53 %** | 63 % | 70 % |
+
+The § 7 wanderer spends much of its time pressed against the fence, trees and other sheep, since
+it turns only by chance. A sheep that turns when blocked is still blind to water and has no
+memory, but doesn't walk into walls. *(judgement)* That is the fairer stand-in for a newborn
+learner, which should learn not to push against walls quickly.
+
+**Open, for the owner:** either redefine the naive explorer as the one that turns when blocked and
+set `NEED_SCALE` = 3 (hydration from full then lasts about 3,750 steps, 1.6 days), or keep the § 7
+wanderer and change the meadow (more or larger ponds).

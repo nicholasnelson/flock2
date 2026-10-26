@@ -6,6 +6,11 @@ objects and sheep have float positions in tile units (row, col) and sheep a floa
 sheep, body fat, an ``alive`` flag, and a flock that always starts within reach of water: its
 centre is 6-14 tiles from the nearest water (``START_WATER``).
 
+v2.1 (spec § 11): grass is a smooth field. ``grass_at`` blends the four nearest tile centres
+bilinearly, and ``bite_weights`` spreads a bite over the same four tiles, so what the sheep sees,
+what it eats and what it depletes agree. Days are ``DAY_SCALE`` times longer (``DAY``). Sheep are
+placed so that none overlaps another, a tree or the hut.
+
 All functions are pure and jittable; generate several meadows with vmap.
 """
 
@@ -22,7 +27,8 @@ N_TILES = 48
 N_SHEEP = 12
 WATER = S.WATER  # ground state index of water
 N_GRASS_STATES = 4
-DAY = 1200  # steps per day (sim.DAY); here so random_start need not import sim
+DAY_SCALE = 2.0  # v2.1: days are this many times the first meadow's 1,200 steps
+DAY = int(1200 * DAY_SCALE)  # steps per day (sim.DAY); here so random_start need not import sim
 
 SALT, TREE, FLOWER, HUT, MUSHROOM = (S.OBJECT_NAMES.index(n) for n in ("salt", "tree", "flower", "hut", "mushroom"))
 # kind, count: about 128 x 128's contents scaled by the area (48 / 128)^2 ~ 0.14 (spec § 2)
@@ -58,11 +64,12 @@ class Flock(NamedTuple):
     heading: jax.Array  # (S,) float radians
     resting: jax.Array  # (S,) bool
     alive: jax.Array  # (S,) bool
-    levels: jax.Array  # (S, N_DRIVES) energy (the gut), hydration, warmth, social, interest
+    levels: jax.Array  # (S, N_DRIVES) energy (the gut), hydration, warmth, interest
     fat: jax.Array  # (S,) body fat in [0, 1] (drives.FAT_CAPACITY units of gut energy when full)
     visits: jax.Array  # (S, N / CELL, N / CELL) int
     reward: jax.Array  # (S,) the reward of the last step
     taste: jax.Array  # (S,) -1 after a bad mouthful, else 0
+    seen: jax.Array  # (S,) other sheep in view (for analysis; no longer a drive)
 
 
 class State(NamedTuple):
@@ -74,6 +81,29 @@ class State(NamedTuple):
 def ground_state(m: Meadow) -> jax.Array:
     g = jnp.clip(jnp.floor(m.grass), 0, N_GRASS_STATES - 1).astype(jnp.int32)
     return jnp.where(m.water, WATER, g)
+
+
+def grass_at(grass: jax.Array, p: jax.Array) -> jax.Array:
+    """(...,) grass density at points p (..., 2): bilinear between tile centres."""
+    i, w = _bilinear(p)
+    return jnp.sum(grass[i[..., 0], i[..., 1]] * w, -1)
+
+
+def bite_weights(p: jax.Array) -> tuple[jax.Array, jax.Array]:
+    """(indices (..., 4, 2), weights (..., 4)): the four tiles a bite at p takes grass from."""
+    return _bilinear(p)
+
+
+def _bilinear(p):
+    q = p - 0.5
+    f = jnp.floor(q)
+    u = q - f
+    i0 = f.astype(jnp.int32)
+    corners = jnp.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    idx = jnp.clip(i0[..., None, :] + corners, 0, N_TILES - 1)
+    wr = jnp.stack([1 - u[..., 0], 1 - u[..., 0], u[..., 0], u[..., 0]], -1)
+    wc = jnp.stack([1 - u[..., 1], u[..., 1], 1 - u[..., 1], u[..., 1]], -1)
+    return idx, wr * wc
 
 
 def _grid():
@@ -128,7 +158,7 @@ def _choose(key, water):
 
 def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = None) -> State:
     """A meadow, with the flock grouped around ``centre`` or (default) a centre 6-14 tiles from the
-    nearest water; levels 0.6-0.9 (energy, hydration, warmth) and 0.8 (social, interest), fat 0.5,
+    nearest water; levels 0.6-0.9 (energy, hydration, warmth) and 0.8 (interest), fat 0.5,
     at dawn. Of N_CANDIDATES pond layouts, the first that admits such a start is used."""
     k_g, k_b, k_w, k_o, k_s, k_v = jax.random.split(key, 6)
     n = N_TILES
@@ -140,6 +170,7 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     pick = jnp.where(ok.any(), jnp.argmax(ok), 0)
     water = cands[pick]
     centre = starts[pick] if centre is None else centre
+    grass = jnp.where(water, 0.0, grass)  # no grass under water (the smooth field fades at the shore)
 
     kinds, poss = [], []
     for (kind, count), kk in zip(LAYOUT, jax.random.split(k_o, len(LAYOUT))):
@@ -160,24 +191,33 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     obj_present = ~water[obj_pos[:, 0].astype(jnp.int32), obj_pos[:, 1].astype(jnp.int32)]
     obj_variant = jax.random.randint(k_v, (N_OBJECTS,), 0, 4)
 
-    # each sheep at the first of 16 random spots around the centre that is dry and clear of blocking
-    # objects (a sheep placed inside a tree's footprint could never move)
-    spots = jnp.clip(centre + 2.0 * jax.random.normal(k_s, (n_sheep, 16, 2)), 1.0, n - 1.0)
+    # each sheep at the first of 32 random spots around the centre that is dry, clear of blocking
+    # objects (a sheep placed inside a tree's footprint could never move) and, since sheep are solid
+    # (v2.1), clear of the sheep placed before it
+    spots = jnp.clip(centre + 2.0 * jax.random.normal(k_s, (n_sheep, 32, 2)), 1.0, n - 1.0)
     si = spots.astype(jnp.int32)
     d_obj = jnp.linalg.norm(spots[:, :, None, :] - obj_pos[None, None], axis=-1)
     rad = RADIUS[obj_kind]
     free = ~water[si[..., 0], si[..., 1]] & ~jnp.any((d_obj < rad + SHEEP_RADIUS) & obj_present & (rad > 0), -1)
-    pos = spots[jnp.arange(n_sheep), jnp.argmax(free, -1)]
+
+    def place(placed, k):
+        d = jnp.linalg.norm(spots[k][:, None, :] - placed[None, :, :], axis=-1)  # (32, S)
+        ok = free[k] & jnp.all(d >= 2 * SHEEP_RADIUS, -1)
+        p = spots[k, jnp.argmax(ok)]
+        return placed.at[k].set(p), None
+
+    pos, _ = jax.lax.scan(place, jnp.full((n_sheep, 2), -100.0), jnp.arange(n_sheep))
     flock = Flock(
         pos=pos,
         heading=jax.random.uniform(jax.random.fold_in(k_s, 1), (n_sheep,), maxval=2 * jnp.pi),
         resting=jnp.zeros((n_sheep,), bool),
         alive=jnp.ones((n_sheep,), bool),
-        levels=jnp.concatenate([jax.random.uniform(jax.random.fold_in(k_s, 2), (n_sheep, 3), minval=0.6, maxval=0.9), jnp.full((n_sheep, 2), 0.8)], -1),
+        levels=jnp.concatenate([jax.random.uniform(jax.random.fold_in(k_s, 2), (n_sheep, 3), minval=0.6, maxval=0.9), jnp.full((n_sheep, 1), 0.8)], -1),
         fat=jnp.full((n_sheep,), 0.5),
         visits=jnp.zeros((n_sheep, n // CELL, n // CELL), jnp.int32),
         reward=jnp.zeros((n_sheep,)),
         taste=jnp.zeros((n_sheep,)),
+        seen=jnp.zeros((n_sheep,)),
     )
     meadow = Meadow(water=water, grass=grass, obj_kind=obj_kind, obj_variant=obj_variant, obj_pos=obj_pos, obj_present=obj_present)
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))
