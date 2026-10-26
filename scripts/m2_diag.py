@@ -103,7 +103,7 @@ def collect(world, hy, n_meadows, warm, steps, decode_every, seed):
         st2 = jax.vmap(sim.step)(st, a)
         out = dict(embed=embed.astype(jnp.float16), h=h.astype(jnp.float16), z=z.astype(jnp.float16), n_px=n_px, bearing=bearing, near_px=near_px,
                    wbear=jnp.arctan2(priv[..., D.N_FELT + 5], priv[..., D.N_FELT + 4]), wdist=priv[..., D.N_FELT + 6] * 32.0, alive=f.alive,
-                   light=jnp.broadcast_to(light[:, None], n_px.shape), d1=rec_d1)
+                   light=jnp.broadcast_to(light[:, None], n_px.shape), d1=rec_d1, heading=f.heading)
         return (st2, (h, z, a)), out
 
     T = warm + steps
@@ -172,6 +172,7 @@ def main():
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_mlp", action="store_true")
+    p.add_argument("--validate_d3", action="store_true", help="only D3, on the model state and on inputs of known content (spec § 17)")
     p.add_argument("--out", default=None)
     a = p.parse_args()
     hy = _load("m2_hybrid")
@@ -179,7 +180,7 @@ def main():
     cfg = json.load(open(os.path.join(d, "config.json")))
     world = hy.make_world(0, cfg.get("model", "vector"))
     wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
-    rec = collect(world, hy, a.meadows, a.warm, a.steps, a.decode_every, a.seed)
+    rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed)
     res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps}
 
     # D1: recall of water pixels by distance and day/night (light of the decoded step)
@@ -226,6 +227,32 @@ def main():
         print(label, json.dumps(out), flush=True)
         return out
 
+    if a.validate_d3:
+        # inputs of known content on the D3 frames: the oracle (the target itself), an ideal memory
+        # (the true bearing when water was last seen, turned by the heading change since; left-positive,
+        # as the target), its raw parts, and noise of the same width
+        last_b = np.zeros((B, S))
+        last_h = np.zeros((B, S))
+        last_t = np.full((B, S), -10_000)
+        ideal = np.zeros((T, B, S, 2))
+        parts = np.zeros((T, B, S, 5))
+        for t in range(T):
+            dpsi = (rec["heading"][t] - last_h + np.pi) % (2 * np.pi) - np.pi
+            est = last_b + dpsi
+            ideal[t] = np.stack([np.sin(est), np.cos(est)], -1)
+            parts[t] = np.stack([np.sin(last_b), np.cos(last_b), np.sin(dpsi), np.cos(dpsi), np.clip((t - last_t) / RECENT, 0, 10)], -1)
+            last_b = np.where(seen[t], rec["wbear"][t], last_b)
+            last_h = np.where(seen[t], rec["heading"][t], last_h)
+            last_t = np.where(seen[t], t, last_t)
+        oracle = np.stack([np.sin(rec["wbear"]), np.cos(rec["wbear"])], -1)
+        noise = np.random.default_rng(0).normal(size=(T, B, S, 5))
+        inputs = {"oracle": oracle, "ideal_memory": ideal, "memory_parts": parts, "noise": noise, "hz": inputs["hz"]}
+        res["D3_validation"] = {"frames": int(recent.sum()),
+                                "sin_bearing": probe(recent, np.sin(rec["wbear"]), "validate sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "validate cos")}
+        if a.out:
+            os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
+            json.dump(res, open(a.out, "w"), indent=1)
+        return
     res["D2_visible"] = {}
     for lo, hi in BINS:
         m = vis & (rec["near_px"] >= lo) & (rec["near_px"] < hi)

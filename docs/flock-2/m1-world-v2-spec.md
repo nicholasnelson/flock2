@@ -868,3 +868,33 @@ more than 1.5 tiles away), the D3 probe is applied to inputs whose content is kn
   probe can detect memory. "No memory" stands, and the owner decides between rung 4 and moving on.
 - If ideal memory scores **below 0.3**, the probe's design cannot detect memory even when it is
   present. The probe is redesigned before that decision.
+
+### D3 probe validation: result (2026-10-27)
+
+`meadow2-results/diag/d3_validation.json`: the 8,021 D3 frames of arm M's collection, with 6,849
+used for fitting and 1,172 for testing.
+
+| Input | Ridge R² (sin / cos) | Early-stopped MLP R² (sin / cos) |
+| --- | --- | --- |
+| oracle (the target) | 1.00 / 1.00 | 1.00 / 1.00 |
+| **ideal memory** (bearing when last seen, turned by the heading change since) | **1.00 / 1.00** | 1.00 / 1.00 |
+| raw memory parts | 0.85 / 0.97 | 0.99 / 1.00 |
+| noise (5 numbers) | −0.02 / −0.01 | −0.09 / −0.03 |
+| arm M's h and z | −0.74 / −0.46 | −0.86 / −0.38 |
+
+**By the rule:** ideal memory scores 1.00, at least 0.5, and the oracle 1.00, at least 0.95. The
+probe can detect memory, so **"no memory" stands.**
+
+*(judgement)*
+- **Correcting for turns alone is enough:** within 30 steps of losing sight of water, the bearing
+  when last seen, turned by the sheep's own heading change, gives the current bearing almost
+  exactly. The steps walked barely matter. So the memory a sheep needs is a remembered direction
+  rotated by its own turns.
+- **The world model has the information it needs.** It is given the actions, including every turn,
+  but it has not learned to rotate a remembered direction by them. This is a learning failure, not
+  missing information.
+- That is why, of rung 4's pieces, a body sense of movement alone would add little: the actions
+  already carry the turns. The useful piece would be a memory that is rotated by the turns.
+- **A limit of this validation:** the noise control was 5 numbers wide, not as wide as h and z
+  (1,408). Ridge on 1,408 inputs fitted on 6,849 samples can overfit. That may explain why h and z
+  score below the noise rather than at it, though it cannot turn a real signal into a negative R².

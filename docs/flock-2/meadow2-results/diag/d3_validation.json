@@ -1,0 +1,129 @@
+{
+ "agent": "/home/nnels/flock2_data/m2_hybrid/mem_s0",
+ "meadows": 32,
+ "steps": 300,
+ "D1": {
+  "day": {
+   "0-4": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "4-8": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "8-16": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "16-inf": {
+    "recall": 0.0,
+    "water_px": 0
+   }
+  },
+  "night": {
+   "0-4": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "4-8": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "8-16": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "16-inf": {
+    "recall": 0.0,
+    "water_px": 0
+   }
+  },
+  "all": {
+   "0-4": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "4-8": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "8-16": {
+    "recall": 0.0,
+    "water_px": 0
+   },
+   "16-inf": {
+    "recall": 0.0,
+    "water_px": 0
+   }
+  },
+  "day_within_8_recall": 0.0
+ },
+ "D3_validation": {
+  "frames": 8021,
+  "sin_bearing": {
+   "oracle": {
+    "ridge": 1.0,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 1.0
+   },
+   "ideal_memory": {
+    "ridge": 0.999,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 0.998
+   },
+   "memory_parts": {
+    "ridge": 0.848,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 0.994
+   },
+   "noise": {
+    "ridge": -0.016,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": -0.089
+   },
+   "hz": {
+    "ridge": -0.74,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": -0.857
+   }
+  },
+  "cos_bearing": {
+   "oracle": {
+    "ridge": 1.0,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 1.0
+   },
+   "ideal_memory": {
+    "ridge": 1.0,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 1.0
+   },
+   "memory_parts": {
+    "ridge": 0.966,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": 0.998
+   },
+   "noise": {
+    "ridge": -0.007,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": -0.033
+   },
+   "hz": {
+    "ridge": -0.461,
+    "n_train": 6849,
+    "n_test": 1172,
+    "mlp_es": -0.378
+   }
+  }
+ }
+}
