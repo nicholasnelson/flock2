@@ -752,3 +752,36 @@ Each is evaluated (`m2_eval.py`) and diagnosed (`m2_diag.py`).
   for N1. For S1 it reached 15 GB of host RAM while compiling, which killed the process and then
   crashed WSL. The arithmetic is unchanged.
 - **Training runs go through `runs/watchdog.sh`,** which kills a job above 12 GB of RAM.
+
+### Screening results (2026-10-26)
+
+`meadow2-results/{eval,diag}/{n0,n1,s1}.json`, plus `hybrid/n0_log.jsonl`, `n1_log.jsonl` and
+`spatial_s1arm_log.jsonl`. Peak RAM was 6.8, 7.5 and 8.2 GB, all under the 12 GB watchdog.
+
+| Arm | Reward / step | Died | Water redrawn by day, within 8 tiles | Night, < 4 / 4–8 | Bearing from h and z, day within 8 (ridge) | Bearing just after leaving view (D3) |
+| --- | --- | --- | --- | --- | --- | --- |
+| N0 (KL 1, longer replay) | 1.41 ± 0.10 | 53 % | 0.70 | 0.73 / 0.55 | 0.20 | below 0 |
+| **N1** (N0 + multi-step) | 1.38 ± 0.08 | 62 % | 0.68 | 0.74 / 0.50 | **0.35** | below 0 |
+| S1 (spatial + multi-step) | 0.78 ± 0.04 | 97 % | 0.04 | 0.01 / 0.00 | −0.97 | below 0 |
+
+**By the rule:**
+- **N1 is kept.** Multi-step prediction raises the bearing from h and z by 0.15 over N0 (needed:
+  0.1). Most of the gain is within 4 tiles (0.46 against 0.39). N1 goes to three seeds (seeds 1
+  and 2 to add).
+- **S1 is not kept.** The spatial model's decoder redraws almost no water, its state reads no
+  bearing, and it evaluates at random's level (0.78; random scores 0.83). Its training reward per
+  living step (about 2.0) and the share alive in training (0.57 against N1's 0.65) look normal,
+  and its checkpoint loads completely (all 91 parameter arrays), so this is a real failure, not a
+  loading fault.
+- Its column encoder does read bearing: the embedding's MLP probe gives 0.56, the best MLP score
+  so far. The failure is in the grid state and the attention decoder, at this budget. *(judgement)*
+- **The week's criterion is not met:** bearing from the state is 0.35 (needed 0.5), and nothing is
+  remembered after water leaves view.
+
+**The night-water change worked.** Water at night within 4 tiles is now redrawn 73–74 % of the
+time, against 3–18 % before.
+
+**A naming collision:** the S1 arm wrote into `~/flock2_data/m2_hybrid/s1`, the folder of the
+earlier vector hybrid's seed 1. It appended its log there and overwrote that checkpoint. Seed 1's
+evaluation and log were already saved under `meadow2-results/`, so no recorded result is lost.
+Future arm names will not reuse seed folder names.
