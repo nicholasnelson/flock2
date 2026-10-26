@@ -600,3 +600,28 @@ evaluated (`m2_eval.py`) and re-probed (`m2_probe.py`, same 32 meadows).
 in view. If both the forward and the left components stay below R² 0.3, move to rung 3 (a state
 with spatial shape, all learned). If either reaches 0.3, rung 2 (more training, a larger model)
 gets a full three-seed test first. The evaluation score is reported but does not decide.
+
+### Rung-2 test: result (2026-10-26)
+
+Seed 0, 2,000 iterations: `meadow2-results/eval/hybrid_long_s0.json`, `hybrid/long_s0_log.jsonl`,
+`probes/long_s0.json`.
+
+| Seed 0 | 600 iterations | 2,000 iterations |
+| --- | --- | --- |
+| Reward / step (± SE) | 1.24 ± 0.07 | 1.45 ± 0.10 |
+| Died | 76 % | 60 % |
+| Drink success | 37 % | 18 % |
+| Water direction in view, forward / left: better of ridge and MLP (R²) | 0.00 / −0.15 | **0.06 / −0.11** |
+| Water distance in view (R²) | 0.14 | 0.18 |
+| Cover direction in view, forward / left (R²) | 0.29 / 0.34 | 0.48 / 0.58 |
+| Water at the mouth (balanced accuracy) | 0.92 | 0.94 |
+
+**Rule outcome:** both components of the direction to water stay below 0.3, so the pre-registered
+rule says move to rung 3.
+
+*(judgement)*
+- Training longer improved survival and made big objects (cover) clearly more readable, but not
+  water.
+- The Fable 5.1 review (`review-2026-10-26-water.md`) cautions that this probe cannot reach 1 by
+  design: its "in view" is not true visibility, and its nearest-tile targets are noisy at the
+  shore. It recommends a decode-from-posterior water check (its D1) before acting on the rule.
