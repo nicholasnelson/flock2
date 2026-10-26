@@ -666,3 +666,52 @@ of what the loss already pays for, not what rung 3 changes.
 **and** the ridge R² for water bearing is at least 0.5 on frames where the pond is visible by day
 within 8 tiles, **and** at least 0.3 for frames within 30 steps after it leaves view. Reported for
 embedding, h and z separately, with time to first drink and deaths per day.
+
+### Gate results (2026-10-26)
+
+`meadow2-results/diag/{s0,long_s0,embed_s0}.json` (`scripts/m2_diag.py`: 32 meadows, seeds 70,000 + i,
+scripted flock; D1 on every 10th step) and `meadow2-results/eval/hybrid_embed_s0.json`.
+
+**D1, share of true water pixels redrawn from the model's state:**
+
+| Model | Day, < 4 tiles | Day, 4–8 | Day, 8–16 | Night, < 4 | Night, 4–8 | **Day, within 8** |
+| --- | --- | --- | --- | --- | --- | --- |
+| 600 iterations | 0.73 | 0.33 | 0.00 | 0.18 | 0.04 | **0.63** |
+| 2,000 iterations | 0.86 | 0.66 | 0.06 | 0.58 | 0.19 | **0.81** |
+| arm (policy reads the encoding) | 0.75 | 0.43 | 0.00 | 0.03 | 0.01 | **0.67** |
+
+**D2, water bearing with water visible by day within 8 tiles** (ridge R², early-stopped MLP in
+brackets):
+
+| Model | Encoder's embedding | h | z | h and z |
+| --- | --- | --- | --- | --- |
+| 600 iterations | **0.69** (0.44) | 0.27 (0.31) | 0.10 (0.00) | 0.27 (0.23) |
+| 2,000 iterations | **0.64** (0.40) | 0.30 (0.35) | 0.06 (−0.04) | 0.31 (0.31) |
+| arm | **0.68** (0.40) | 0.30 (0.28) | 0.08 (−0.01) | 0.30 (0.26) |
+
+By distance, the embedding's ridge R² for bearing is 0.63–0.71 under 4 tiles, 0.29–0.35 at 4–8, and
+negative at 8–16. **D3:** within 30 steps after water leaves view, every input reads its bearing
+below 0, so nothing is remembered. (The R² for distance beyond 16 tiles, about −10¹¹, comes from
+2,258 frames with almost constant targets and should be ignored.)
+
+**The arm** (seed 0, 600 iterations) scores 1.75 ± 0.11 against 1.24 ± 0.07, with 43 % dying
+against 76 %. That is 3.9 SE: suggestive, short of the 5 SE the gate asked for. First dispersion
+and gap numbers for learned sheep:
+- nearest neighbour 6.1 tiles away;
+- 3.5 other sheep in view;
+- thirsty sheep see water 39 % of the time;
+- **information gap 24 %**.
+
+**Branch, by the written rules:** D1 within 8 tiles by day is at least 0.5 for all three models, so
+**not A**. The embedding reads bearing at 0.64–0.69 (at least 0.5), and h and z read at most about
+0.30 (exactly at the boundary for the 2,000-iteration model: h 0.302, h and z 0.305). So this is
+**branch B, "the state is the limit"**, cleanly for the 600-iteration model and the arm, and at the
+boundary for the 2,000-iteration one. The arm's gain points the same way.
+
+*(judgement)* The picture is mixed by distance and light:
+- **Near water by day:** the eyes see it and the decoder draws it, but the model's memory keeps only
+  part of its bearing. Branch B, so a column-preserving state and rung 3 are justified.
+- **Far water (8+ tiles), and water at night:** neither drawn nor encoded. That is branch A's
+  problem (the loss, and the night-water world fact), even though the rule's threshold, set within
+  8 tiles, did not trigger it.
+- **No memory once out of view.**
