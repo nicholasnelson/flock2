@@ -554,3 +554,39 @@ restarts, so deaths were common in training too.
 
 **Open:** whether the limit is what the world model's state holds about water (where it is), or
 the policy and the amount of training.
+
+### Probe of the world model's state (2026-10-26)
+
+`scripts/m2_probe.py`; results in `meadow2-results/probes/{s0,s1,s2,untrained}.json`. 32 fresh
+meadows (seeds 70,000 + i) are run with the scripted flock. Each sheep's state is filtered from its
+own view and felt numbers. Probes are fitted on 24 meadows (86,400 samples) and scored on 8 (28,800).
+"In view" means inside the 300° field and within 16 tiles; water is in view in 84 % of samples. The
+probe floors the spread it standardises inputs by: without that, a latent unit constant in the
+training meadows exploded the MLP probe's predictions (R² around −10⁵ in a smoke test). The old
+meadow's `m1_probe_latent.py` lacks the floor, so its strongly negative R² values may be distorted.
+
+MLP probe, held-out meadows:
+
+| Target | Trained (seeds 0–2) | Untrained model |
+| --- | --- | --- |
+| felt numbers (R²) | 0.98–0.99 | −0.29 to 0.36 |
+| mouth on water (balanced accuracy) | 0.86–0.92 | 0.54 |
+| mouth on biteable grass (balanced accuracy) | 0.90–0.92 | 0.54 |
+| cover distance, in view (R²) | 0.63–0.68 | 0.14 |
+| cover direction in view, forward / left (R²) | 0.15–0.30 / 0.25–0.34 | −0.67 / −0.60 |
+| **water direction in view, forward / left (R²)** | **−0.20 to −0.29 / −0.41 to −0.51** | −0.55 / −0.47 |
+| **water distance in view (R²)** | **−0.06 to −0.35** | −0.45 |
+| grass direction in view, forward / left (R²) | −0.41 to −0.48 / −0.49 to −0.58 | −0.61 / −0.67 |
+| anything out of view (R²) | all below 0 | all below 0 |
+
+Ridge probes agree: at best 0.17 for water distance in view, and about 0 for water direction.
+
+Reading *(judgement)*:
+- The probe works. It reads the body almost perfectly and large objects reasonably.
+- The state holds what is at the mouth, and the body's levels, so grazing and drinking where the
+  sheep stands are learnable. That matches what the hybrid learned.
+- **Where water is, is not in the state**, even when it is in view, and nothing is remembered once
+  it is out of view. A policy on this state can only find water by wandering, which matches the
+  deaths from thirst. The old meadow's model had the same gap.
+- This is the evidence the ladder (`m1-map-world-model.md`) asked for: the vector state does not
+  organise "where". Rung 2 (more training, a larger model) is untested.

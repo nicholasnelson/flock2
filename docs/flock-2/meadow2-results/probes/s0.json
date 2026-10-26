@@ -1,0 +1,139 @@
+{
+ "agent": "/home/nnels/flock2_data/m2_hybrid/s0",
+ "train_samples": 86400,
+ "test_samples": 28800,
+ "ridge": {
+  "mouth_on_water": {
+   "balanced_acc": 0.895,
+   "positive_rate": 0.029
+  },
+  "mouth_biteable": {
+   "balanced_acc": 0.88,
+   "positive_rate": 0.968
+  },
+  "near_cover": {
+   "balanced_acc": 0.963,
+   "positive_rate": 0.639
+  },
+  "felt_energy": 0.992,
+  "felt_hydration": 0.992,
+  "felt_warmth": 0.996,
+  "felt_interest": 0.994,
+  "felt_fat": 0.991,
+  "water_in_view_share": 0.838,
+  "water_fwd": {
+   "all": -0.098,
+   "in_view": 0.004,
+   "out_of_view": -3.684
+  },
+  "water_left": {
+   "all": -0.136,
+   "in_view": -0.146,
+   "out_of_view": -0.37
+  },
+  "water_dist": {
+   "all": 0.03,
+   "in_view": 0.141,
+   "out_of_view": -0.166
+  },
+  "grass_in_view_share": 0.817,
+  "grass_fwd": {
+   "all": -0.128,
+   "in_view": -0.117,
+   "out_of_view": -0.178
+  },
+  "grass_left": {
+   "all": -0.132,
+   "in_view": -0.166,
+   "out_of_view": -0.347
+  },
+  "grass_dist": {
+   "all": 0.276,
+   "in_view": 0.262,
+   "out_of_view": 0.194
+  },
+  "cover_in_view_share": 0.763,
+  "cover_fwd": {
+   "all": 0.242,
+   "in_view": 0.291,
+   "out_of_view": -1.093
+  },
+  "cover_left": {
+   "all": 0.201,
+   "in_view": 0.341,
+   "out_of_view": -0.054
+  },
+  "cover_dist": {
+   "all": 0.518,
+   "in_view": 0.573,
+   "out_of_view": -1.179
+  }
+ },
+ "mlp": {
+  "mouth_on_water": {
+   "balanced_acc": 0.919,
+   "positive_rate": 0.029
+  },
+  "mouth_biteable": {
+   "balanced_acc": 0.92,
+   "positive_rate": 0.968
+  },
+  "near_cover": {
+   "balanced_acc": 0.968,
+   "positive_rate": 0.639
+  },
+  "felt_energy": 0.989,
+  "felt_hydration": 0.983,
+  "felt_warmth": 0.994,
+  "felt_interest": 0.99,
+  "felt_fat": 0.987,
+  "water_in_view_share": 0.838,
+  "water_fwd": {
+   "all": -0.223,
+   "in_view": -0.201,
+   "out_of_view": -4.056
+  },
+  "water_left": {
+   "all": -0.621,
+   "in_view": -0.454,
+   "out_of_view": -0.86
+  },
+  "water_dist": {
+   "all": -0.236,
+   "in_view": -0.304,
+   "out_of_view": -0.656
+  },
+  "grass_in_view_share": 0.817,
+  "grass_fwd": {
+   "all": -0.503,
+   "in_view": -0.409,
+   "out_of_view": -0.445
+  },
+  "grass_left": {
+   "all": -0.527,
+   "in_view": -0.488,
+   "out_of_view": -0.621
+  },
+  "grass_dist": {
+   "all": 0.296,
+   "in_view": 0.307,
+   "out_of_view": 0.184
+  },
+  "cover_in_view_share": 0.763,
+  "cover_fwd": {
+   "all": 0.17,
+   "in_view": 0.189,
+   "out_of_view": -1.158
+  },
+  "cover_left": {
+   "all": 0.134,
+   "in_view": 0.28,
+   "out_of_view": -0.098
+  },
+  "cover_dist": {
+   "all": 0.542,
+   "in_view": 0.629,
+   "out_of_view": -1.456
+  }
+ }
+}
