@@ -743,3 +743,12 @@ Each is evaluated (`m2_eval.py`) and diagnosed (`m2_diag.py`).
 - The arm that does best on those, if any is kept, goes to three seeds.
 - The week's criterion (§ 15) stays the target. Evaluation scores are reported but do not decide
   the screening, which is about what the state holds.
+
+**Deviations before launch (2026-10-26):**
+- **S1 uses batches of 4 sequences per world-model update, not 8,** with the same number of
+  updates. With 8, the spatial model ran out of GPU memory.
+- **One compiled world-model update is called 16 times per iteration,** instead of one compiled
+  call unrolling all 16. With multi-step prediction, the unrolled version took 8 minutes to compile
+  for N1. For S1 it reached 15 GB of host RAM while compiling, which killed the process and then
+  crashed WSL. The arithmetic is unchanged.
+- **Training runs go through `runs/watchdog.sh`,** which kills a job above 12 GB of RAM.

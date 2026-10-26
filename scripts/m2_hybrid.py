@@ -153,12 +153,17 @@ def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embe
 
 
 @nnx.jit
+def wm_update(world, opt, v, a, f, r, key):
+    (_, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, v, a, key, f, r)
+    opt.update(world, g)
+    return aux
+
+
 def wm_burst(world, opt, V, A, F, Rw, keys):
-    auxes = []
-    for i in range(V.shape[0]):
-        (_, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, V[i], A[i], keys[i], F[i], Rw[i])
-        opt.update(world, g)
-        auxes.append(aux)
+    """K world-model updates, one compiled step called K times. (Unrolling all K into one compiled
+    call took 8 minutes to compile with multi-step prediction, and ran the spatial model out of
+    memory: 15 GB of host RAM while compiling, 2026-10-26.)"""
+    auxes = [wm_update(world, opt, V[i], A[i], F[i], Rw[i], keys[i]) for i in range(V.shape[0])]
     return jax.tree.map(lambda *v: jnp.stack(v), *auxes)
 
 
