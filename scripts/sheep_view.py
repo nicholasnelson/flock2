@@ -9,9 +9,10 @@ A local web server runs the real meadow on the CPU. You are sheep 0; the others 
 scripted flock. Every tick, your keys become one of the sheep's actions (sent by name), the meadow
 steps once, and the page shows sheep 0's first-person strip, as a learning sheep sees it.
 
-Meadow v2 (``flock.meadow2``) is drawn here with the first meadow's renderer (``flock.fpv``: its
-sprites, its projection and a view range of 4 + 20 x light tiles) until renderer v2 is built (spec
-§§ 4-5). The page marks the mouth point with a reticle and shows fat and death.
+Meadow v2 (``flock.meadow2``) is drawn by renderer v2 (``flock.meadow2.render``): RGB, flat shapes,
+a smooth grass surface, smooth light and haze. Its rows are packed near the horizon; the page
+shows them at their true angular heights by default, or exactly as stored. The page marks the
+mouth point with a reticle on the grass surface and shows fat and death.
 
 Controls (the page lists them too): W walk, Shift+W trot, A / D turn 22.5 degrees, E graze,
 Q drink, R rest, Space head up (first meadow only), mouse to look, P pause, N new meadow.
@@ -50,43 +51,36 @@ def world_v1():
 
     from flock.meadow import drives
 
-    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=None, light=None, levels=list(drives.NAMES))
+    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=None, light=None, levels=list(drives.NAMES),
+                format="palette", row_deg=[float(np.rad2deg(fpv.RAD_PER_PX))] * fpv.H, size=[fpv.H, fpv.W])
 
 
 def world_v2():
-    from flock.meadow2 import scripted, sim
-    from flock.meadow2.world import N_TILES, ground_state, random_start
+    from flock.meadow2 import drives, render as R, scripted, sim
+    from flock.meadow2.world import N_TILES, random_start
 
-    def view(state, i=0):
-        """The first meadow's renderer on a meadow v2 state (dead sheep are not drawn)."""
-        m, f = state.meadow, state.flock
-        eye, n = f.pos[i], f.pos.shape[0]
-        obj_idx = m.obj_kind * (V._N_VAR * V._N_FACE) + m.obj_variant * V._N_FACE
-        sh_idx = V._ANIMAL_OFFSET + S.SHEEP * V._N_FACE + V.sheep_facing(eye, f.pos, f.heading)
-        pos = jnp.concatenate([m.obj_pos, f.pos])
-        idx = jnp.concatenate([obj_idx, sh_idx])
-        present = jnp.concatenate([m.obj_present, (jnp.arange(n) != i) & f.alive])
-        d = jnp.where(present, jnp.linalg.norm(pos - eye[None, :], axis=-1), jnp.inf)
-        _, near = jax.lax.top_k(-d, min(V.K_NEAREST, pos.shape[0]))
-        night = sim.is_night(state.t)
-        return fpv.render_fpv(
-            ground_state(m), V.BILLBOARDS[idx[near]], pos[near], present[near], eye, f.heading[i],
-            max_dist=4.0 + 20.0 * sim.light(state.t), sky=jnp.where(night, V.SKY_NIGHT, V.SKY_DAY), far=jnp.where(night, V.FAR_NIGHT, V.FAR_DAY),
-        )
+    def view(state):
+        return (R.render(state, 0) * 255).astype(jnp.uint8)
+
+    def tiles(m):
+        """Minimap codes: 255 water (the smooth shoreline, sampled at tile centres), else grass density x 84."""
+        yy, xx = jnp.mgrid[0:N_TILES, 0:N_TILES] + 0.5
+        wet = sim.water_at(m.water, jnp.stack([yy, xx], -1))
+        return jnp.where(wet, 255, jnp.round(m.grass * 84)).astype(jnp.uint8)
+
+    ret = jax.jit(R.reticle_row, static_argnums=1)
 
     def extra(st):
         f, m = st.flock, st.meadow
         on_water, grass, inside = sim.mouth_tile(m, jnp.asarray(f.pos[:1]), jnp.asarray(f.heading[:1]))
         g = float(grass[0])
         mouth = "water" if bool(on_water[0]) else ("outside" if not bool(inside[0]) else (f"grass {g:.1f}" if g >= sim.MIN_BITE else f"grass {g:.1f}, too short to bite"))
-        return {"alive": bool(f.alive[0]), "fat": float(f.fat[0]), "light": float(sim.light(st.t)), "mouth": mouth, "flock_alive": int(f.alive.sum()), "seen": float(f.seen[0])}
+        return {"alive": bool(f.alive[0]), "fat": float(f.fat[0]), "light": float(sim.light(st.t)), "mouth": mouth, "flock_alive": int(f.alive.sum()), "seen": float(f.seen[0]),
+                "reticle_row": float(ret(jax.tree.map(jnp.asarray, st), 0))}
 
-    # where the mouth point appears in the strip (fpv's even-angle rows; eye height fpv.EYE_H)
-    elev = -float(np.arctan2(fpv.EYE_H, sim.MOUTH))
-    row = fpv.HORIZON - elev / float(fpv.RAD_PER_PX)
-    from flock.meadow2 import drives
-
-    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=[row / fpv.H, 0.5], light=sim.light, levels=list(drives.NAMES))
+    row_deg = np.diff(-np.rad2deg(np.concatenate([[np.deg2rad(34.0)], (np.asarray(R.ROW_ELEV)[:-1] + np.asarray(R.ROW_ELEV)[1:]) / 2, [np.deg2rad(-74.0)]]))).tolist()
+    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=tiles, random_start=random_start, view=view, extra=extra,
+                reticle=[0.0, 0.5], light=sim.light, levels=list(drives.NAMES), format="rgb", row_deg=row_deg, size=[R.H, R.W])
 
 
 class World:
@@ -162,7 +156,7 @@ def handler(world, page):
         def do_GET(self):
             if self.path == "/palette":
                 info = {"rgb": RGB.tolist(), "names": NAMES, "objects": S.OBJECT_NAMES, "ground": S.GROUND_NAMES, "water": int(S.WATER),
-                        "tiles": int(w["n_tiles"]), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"], "levels": w["levels"]}
+                        "tiles": int(w["n_tiles"]), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"], "levels": w["levels"], "format": w["format"], "row_deg": w["row_deg"], "size": w["size"]}
                 self._send(json.dumps(info).encode(), "application/json")
             else:
                 self._send(page, "text/html; charset=utf-8")

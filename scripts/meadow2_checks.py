@@ -19,7 +19,8 @@ with probability 1/30 a step, get their mouth onto water within 500 steps (flagg
 v2.1 (spec § 11): the naive-explorer balance rule. The same walker's first time to water is
 compared with each sheep's hydration budget (its starting hydration / the hydration loss per step)
 at several ``NEED_SCALE`` settings. The rule: it finds water before it would die in at least half
-of starts, at the ``NEED_SCALE`` in force.
+of starts, at the ``NEED_SCALE`` in force. The naive explorer turns away when its next step is
+blocked (owner, 2026-10-26); the § 7 wanderer, which turns only at random, is still reported.
 """
 
 from __future__ import annotations
@@ -128,7 +129,10 @@ def main():
     dry = ~water
     g0, g1 = (grass0 * dry).sum() / dry.sum(), (grass_end * dry).sum() / dry.sum()
 
-    first = np.asarray(jax.jit(run_walker, static_argnums=2)(states, jax.random.PRNGKey(a.seed + 1), a.walk_steps))
+    # the naive explorer of the balance rule turns when blocked (owner, 2026-10-26); the random-turn
+    # wanderer of § 7 is still reported (its within-500-steps share)
+    first = np.asarray(jax.jit(run_walker, static_argnums=(2, 3))(states, jax.random.PRNGKey(a.seed + 1), a.walk_steps, True))
+    first_rand = np.asarray(jax.jit(run_walker, static_argnums=(2, 3))(states, jax.random.PRNGKey(a.seed + 1), a.walk_steps, False))
     h0 = np.asarray(states.flock.levels[..., D.HYDRATION])
     loss = D.HYDRATION_DECAY * D.NEED_SCALE  # the loss per step at NEED_SCALE 1
     found = first < a.walk_steps  # a walker that never found water within walk_steps did not find it in time
@@ -159,8 +163,8 @@ def main():
             "pass": bool(np.median(d_start) <= 12 and np.percentile(d_start, 90) <= 20),
         },
         "reported": {
-            "walker_reaches_water_within_500_steps": float((first < 500).mean()),
-            "walker_flag_below_30pct": bool((first < 500).mean() < 0.3),
+            "random_turn_wanderer_reaches_water_within_500_steps": float((first_rand < 500).mean()),
+            "random_turn_wanderer_flag_below_30pct": bool((first_rand < 500).mean() < 0.3),
             "walker_first_water_median_steps": float(np.median(first)),
             "walker_never_within_%d" % a.walk_steps: float((first >= a.walk_steps).mean()),
             "naive_explorer_finds_water_before_death": budget,

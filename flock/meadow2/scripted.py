@@ -31,7 +31,7 @@ import jax
 import jax.numpy as jnp
 
 from flock.meadow2 import drives as D, sim
-from flock.meadow2.world import HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, State, grass_at
+from flock.meadow2.world import HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, State, grass_at, water_at
 
 THIRSTY, HUNGRY = 0.6, 0.3
 URGENT = 0.25
@@ -62,8 +62,7 @@ def _clear(m, pos, dirs, water_ok, alive):
     d_sh = jnp.linalg.norm(p[..., None, :] - pos[None, None, None, :, :], axis=-1)  # (S, D, L, S)
     others = alive[None, :] & ~jnp.eye(pos.shape[0], dtype=bool)
     hit = hit | jnp.any((d_sh < 2 * SHEEP_RADIUS) & others[:, None, None, :], -1)
-    r, c = sim.tile(p)
-    wet = m.water[r, c] & ~water_ok[:, None, None]
+    wet = water_at(m.water, p) & ~water_ok[:, None, None]
     ok = inside & ~hit & ~wet
     far, near = jnp.all(ok, -1), jnp.all(ok[..., :2], -1)
     return jnp.where(far.any(-1, keepdims=True), far, near)
@@ -112,8 +111,7 @@ def policy(state: State, key: jax.Array) -> jax.Array:
     # grass: at the mouth, or the richest of eight points three tiles away
     ang = jnp.arange(8) * (jnp.pi / 4)
     ring = f.pos[:, None, :] + 3.0 * jnp.stack([-jnp.cos(ang), jnp.sin(ang)], -1)[None]
-    ri = jnp.clip(ring.astype(jnp.int32), 0, N_TILES - 1)
-    g_ring = jnp.where(m.water[ri[..., 0], ri[..., 1]], -1.0, grass_at(m.grass, ring))
+    g_ring = jnp.where(water_at(m.water, ring), -1.0, grass_at(m.grass, ring))
     best = ring[jnp.arange(n), jnp.argmax(g_ring, -1)] - f.pos
     here = jnp.where(m_water, -1.0, m_grass)
     richer = jnp.max(g_ring, -1) > here + 1.0

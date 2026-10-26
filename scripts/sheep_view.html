@@ -17,7 +17,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 16px; display: grid; gap: 14p
 h1 { font-size: 16px; margin: 0; letter-spacing: .04em; text-transform: uppercase; }
 .sub { color: var(--muted); margin: 2px 0 0; }
 #stripwrap { position: relative; background: #000; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: crosshair; }
-#strip { width: 100%; display: block; image-rendering: pixelated; aspect-ratio: 4 / 1; }
+#strip { width: 100%; display: block; image-rendering: pixelated; }
 #lockhint { position: absolute; inset: auto 0 8px 0; text-align: center; font-size: 12.5px; color: #fff; text-shadow: 0 1px 2px #000; pointer-events: none; }
 .ticks { display: flex; justify-content: space-between; color: var(--muted); font: 12px var(--mono); margin-top: 4px; }
 .row { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 14px; }
@@ -45,11 +45,11 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 <main>
   <div>
     <h1>Sheep view</h1>
-    <p class="sub">You are sheep 0 in a real meadow. The strip below is exactly what a learning sheep sees: 64 × 256 pixels in 16 colours, about 300° wide, enlarged. <span id="worldnote"></span></p>
+    <p class="sub">You are sheep 0 in a real meadow. The strip below is what a learning sheep sees, about 300° wide, enlarged. <span id="worldnote"></span></p>
   </div>
   <div>
     <div id="stripwrap" title="Click to look with the mouse">
-      <canvas id="strip" width="256" height="64"></canvas>
+      <canvas id="strip" width="1024" height="256"></canvas>
       <div id="lockhint">Click to look with the mouse · Esc to release</div>
       <div id="reticle" hidden title="Mouth point: grazing and drinking act here"></div>
       <div id="dead" hidden>Sheep 0 has died. Press N for a new meadow.</div>
@@ -59,7 +59,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   <div class="row">
     <div class="panel">
       <canvas id="map" width="400" height="400"></canvas>
-      <p class="sub">Overhead, north up, 80 × 80 tiles around you. Yellow: you. The pale wedge is your field of view (its radius is the current view range); the gap behind you is the blind spot.</p>
+      <p class="sub">Overhead, north up, 80 × 80 tiles around you. Yellow: you. The pale wedge is your field of view; the gap behind you is the blind spot.</p>
     </div>
     <div class="panel">
       <div class="levels" id="levels"></div>
@@ -78,6 +78,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
       </div>
       <div class="controls">
         <label><input type="checkbox" id="free" checked> Free look (smooth mouse turning)</label>
+        <label id="rawlabel"><input type="checkbox" id="raw"> Rows exactly as stored</label>
         <label>Speed <select id="speed"><option value="5">5 steps/s</option><option value="10" selected>10 steps/s</option><option value="20">20 steps/s</option></select></label>
         <button id="pause" type="button">Pause</button>
         <button id="newm" type="button">New meadow</button>
@@ -92,8 +93,36 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   const RGB = info.rgb, N = info.tiles;
   const GROUND = { bare: "#9b8b62", short: "#a9c96d", medium: "#7daf50", long: "#4c8935", water: "#3f7fbf" };
   const OBJ = { tree: "#2f6b3a", hut: "#8a5a32", salt: "#f2f2f2", flower: "#e58fb6", mushroom: "#d6b98c", fox: "#d9772b" };
+  const [SH, SW] = info.size;
   const strip = document.getElementById("strip"), sctx = strip.getContext("2d");
-  const img = sctx.createImageData(256, 64);
+  const src = document.createElement("canvas"); src.width = SW; src.height = SH;
+  const srcx = src.getContext("2d"), img = srcx.createImageData(SW, SH);
+  const raw = document.getElementById("raw");
+  // row edges in display units: true angular heights, or every row the same (as stored)
+  const uneven = info.row_deg.some(d => Math.abs(d - info.row_deg[0]) > 1e-6);
+  if (!uneven) document.getElementById("rawlabel").hidden = true;
+  function rowEdges() {
+    const h = raw.checked ? info.row_deg.map(() => 1) : info.row_deg;
+    const e = [0]; for (const x of h) e.push(e[e.length - 1] + x);
+    return e;
+  }
+  function layout() {
+    const e = rowEdges(), total = e[e.length - 1];
+    const aspect = raw.checked || !uneven ? SW / SH : 300 / total;
+    strip.width = 1024; strip.height = Math.round(1024 / aspect);
+  }
+  raw.addEventListener("change", () => { layout(); if (last) { drawStrip(last.view); placeReticle(last); } });
+  layout();
+  function rowY(r) { // fractional row -> canvas y
+    const e = rowEdges(), total = e[e.length - 1], i = Math.max(0, Math.min(SH - 1, Math.floor(r)));
+    return (e[i] + (e[i + 1] - e[i]) * (r - i)) / total * strip.height;
+  }
+  function placeReticle(s) {
+    const r = document.getElementById("reticle");
+    const row = s.reticle_row != null ? s.reticle_row : info.reticle ? info.reticle[0] * SH : null;
+    if (row == null) return;
+    r.hidden = false; r.style.top = (rowY(row) / strip.height * 100) + "%"; r.style.left = "50%";
+  }
   const map = document.getElementById("map"), mctx = map.getContext("2d");
   const tilesCanvas = document.createElement("canvas"); tilesCanvas.width = N; tilesCanvas.height = N;
   const tctx = tilesCanvas.getContext("2d");
@@ -107,17 +136,14 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   const v2 = info.actions.indexOf("head_up") < 0;
   const names = info.levels.concat(v2 ? ["fat"] : []);
   if (v2) {
-    document.getElementById("worldnote").textContent = "Meadow v2 (48 × 48, 12 sheep), drawn with the old renderer until the new one is built. The ring marks the mouth point.";
+    document.getElementById("worldnote").textContent = info.format === "rgb" ? "Meadow v2 (48 × 48, 12 sheep), renderer v2. Its rows are packed near the horizon (0.5° each) and coarse elsewhere (3–4°); they are shown here at their true angular heights unless you tick “Rows exactly as stored”. The ring marks the mouth point." : "Meadow v2 (48 × 48, 12 sheep), drawn with the old renderer. The ring marks the mouth point.";
     document.getElementById("eatkeys").textContent = "graze · drink: both act at the mouth point (the ring), 0.6 tiles ahead";
   } else {
     document.getElementById("eatkeys").textContent = "graze · drink (works within a tile of water)";
     document.getElementById("restkeys1").innerHTML = "<kbd>R</kbd> <kbd>Space</kbd>";
     document.getElementById("restkeys2").textContent = "rest · head up (see farther)";
   }
-  if (info.reticle) {
-    const r = document.getElementById("reticle"); r.hidden = false;
-    r.style.top = (info.reticle[0] * 100) + "%"; r.style.left = (info.reticle[1] * 100) + "%";
-  }
+
   const lv = document.getElementById("levels");
   const bars = names.map(n => {
     const l = document.createElement("span"); l.textContent = n;
@@ -179,17 +205,36 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   }
 
   function drawStrip(b64) {
-    const raw = atob(b64), d = img.data;
-    for (let i = 0; i < raw.length; i++) {
-      const c = RGB[raw.charCodeAt(i)] || [255, 0, 255];
-      d[4 * i] = c[0]; d[4 * i + 1] = c[1]; d[4 * i + 2] = c[2]; d[4 * i + 3] = 255;
+    const bytes = atob(b64), d = img.data;
+    if (info.format === "rgb") {
+      for (let i = 0, n = SW * SH; i < n; i++) { d[4 * i] = bytes.charCodeAt(3 * i); d[4 * i + 1] = bytes.charCodeAt(3 * i + 1); d[4 * i + 2] = bytes.charCodeAt(3 * i + 2); d[4 * i + 3] = 255; }
+    } else {
+      for (let i = 0; i < bytes.length; i++) {
+        const c = RGB[bytes.charCodeAt(i)] || [255, 0, 255];
+        d[4 * i] = c[0]; d[4 * i + 1] = c[1]; d[4 * i + 2] = c[2]; d[4 * i + 3] = 255;
+      }
     }
-    sctx.putImageData(img, 0, 0);
+    srcx.putImageData(img, 0, 0);
+    sctx.imageSmoothingEnabled = false;
+    const e = rowEdges(), total = e[e.length - 1];
+    for (let r = 0; r < SH; r++) {
+      const y0 = Math.round(e[r] / total * strip.height), y1 = Math.round(e[r + 1] / total * strip.height);
+      if (y1 > y0) sctx.drawImage(src, 0, r, SW, 1, 0, y0, strip.width, y1 - y0);
+    }
   }
+  // renderer v2's grass colours: tan (bare) -> light green (density 1) -> deep green (3)
+  const BARE = [158, 140, 97], SHORT = [140, 176, 84], LUSH = [46, 112, 36], WATERC = [66, 128, 194];
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
   function drawTiles(b64) {
-    const raw = atob(b64), im = tctx.createImageData(N, N);
+    const bytes = atob(b64), im = tctx.createImageData(N, N);
     const cols = info.ground.map(n => GROUND[n] || "#555").map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
-    for (let i = 0; i < raw.length; i++) { const c = cols[raw.charCodeAt(i)]; im.data.set([c[0], c[1], c[2], 255], 4 * i); }
+    for (let i = 0; i < bytes.length; i++) {
+      const v = bytes.charCodeAt(i);
+      let c;
+      if (info.format === "rgb") { const g = v / 84; c = v === 255 ? WATERC : g < 1 ? mix(BARE, SHORT, g) : mix(SHORT, LUSH, (g - 1) / 2); }
+      else c = cols[v];
+      im.data.set([c[0], c[1], c[2], 255], 4 * i);
+    }
     tctx.putImageData(im, 0, 0);
   }
   function drawMap(s) {
@@ -200,7 +245,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     mctx.drawImage(tilesCanvas, c0 - span / 2, r0 - span / 2, span, span, 0, 0, S, S);
     if (s.night) { mctx.fillStyle = "rgba(0,0,20,.45)"; mctx.fillRect(0, 0, S, S); }
     // field of view: within range, outside the 60 degree blind wedge behind
-    const range = s.light != null ? 4 + 20 * s.light : s.night ? (s.head_up ? 8 : 5) : (s.head_up ? 16 : 12);
+    // renderer v2 has no view range (things fade into haze); the old renderer cut the view off
+    const range = info.format === "rgb" ? 60 : s.light != null ? 4 + 20 * s.light : s.night ? (s.head_up ? 8 : 5) : (s.head_up ? 16 : 12);
     const h = s.heading, toCanvas = a => a - Math.PI / 2; // heading 0 = north (canvas up), clockwise
     mctx.fillStyle = "rgba(255,255,230,.16)"; mctx.beginPath(); mctx.moveTo(S / 2, S / 2);
     mctx.arc(S / 2, S / 2, range * k, toCanvas(h - 150 * Math.PI / 180), toCanvas(h + 150 * Math.PI / 180)); mctx.closePath(); mctx.fill();
@@ -242,7 +288,7 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
         if (s.tiles) drawTiles(s.tiles);
         if (s.objects) objects = s.objects;
         if (heading == null || body.reset || !free.checked) heading = s.heading;
-        drawStrip(s.view); drawMap(s); hud(s); last = s;
+        last = s; drawStrip(s.view); placeReticle(s); drawMap(s); hud(s);
         document.getElementById("err").textContent = "";
       } catch (e) {
         document.getElementById("err").textContent = "Lost the meadow server: is scripts/sheep_view.py still running?";

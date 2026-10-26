@@ -36,7 +36,7 @@ TASTE_COST = 0.05
 ALIVE_BONUS = 2.5
 N_FELT = N_DRIVES + 2  # the four levels, fat, the last mouthful's taste
 
-NEED_SCALE = 2.0  # body rates are divided by this (spec § 11)
+NEED_SCALE = 3.0  # body rates are divided by this; set by the naive-explorer rule (spec § 11: 53 % at 3)
 ENERGY_PER_BIOMASS = 0.008  # gut energy per bite per unit of grass density (0.012 at density 1.5)
 # gut energy used per step, in sim's action order: stop, walk, trot, left, right, graze, drink, rest
 ENERGY_USE = jnp.array([0.0008, 0.0013, 0.0026, 0.0009, 0.0009, 0.0008, 0.0008, 0.0005]) / NEED_SCALE

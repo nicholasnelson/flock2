@@ -6,7 +6,7 @@ objects and sheep have float positions in tile units (row, col) and sheep a floa
 sheep, body fat, an ``alive`` flag, and a flock that always starts within reach of water: its
 centre is 6-14 tiles from the nearest water (``START_WATER``).
 
-v2.1 (spec § 11): grass is a smooth field. ``grass_at`` blends the four nearest tile centres
+v2.1 (spec § 11): grass is a smooth field, and so is water (``water_at``). ``grass_at`` blends the four nearest tile centres
 bilinearly, and ``bite_weights`` spreads a bite over the same four tiles, so what the sheep sees,
 what it eats and what it depletes agree. Days are ``DAY_SCALE`` times longer (``DAY``). Sheep are
 placed so that none overlaps another, a tree or the hut.
@@ -87,6 +87,15 @@ def grass_at(grass: jax.Array, p: jax.Array) -> jax.Array:
     """(...,) grass density at points p (..., 2): bilinear between tile centres."""
     i, w = _bilinear(p)
     return jnp.sum(grass[i[..., 0], i[..., 1]] * w, -1)
+
+
+def water_at(water: jax.Array, p: jax.Array) -> jax.Array:
+    """(...,) bool: whether points p (..., 2) are in water. The water mask is blended bilinearly
+    between tile centres and cut at one half, so shorelines are smooth curves rather than tile
+    edges (v2.1); a straight shore still runs along the tile boundary."""
+    i, w = _bilinear(p)
+    inside = jnp.all((p >= 0.0) & (p < N_TILES), -1)
+    return inside & (jnp.sum(water[i[..., 0], i[..., 1]].astype(jnp.float32) * w, -1) >= 0.5)
 
 
 def bite_weights(p: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -195,10 +204,9 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     # objects (a sheep placed inside a tree's footprint could never move) and, since sheep are solid
     # (v2.1), clear of the sheep placed before it
     spots = jnp.clip(centre + 2.0 * jax.random.normal(k_s, (n_sheep, 32, 2)), 1.0, n - 1.0)
-    si = spots.astype(jnp.int32)
     d_obj = jnp.linalg.norm(spots[:, :, None, :] - obj_pos[None, None], axis=-1)
     rad = RADIUS[obj_kind]
-    free = ~water[si[..., 0], si[..., 1]] & ~jnp.any((d_obj < rad + SHEEP_RADIUS) & obj_present & (rad > 0), -1)
+    free = ~water_at(water, spots) & ~jnp.any((d_obj < rad + SHEEP_RADIUS) & obj_present & (rad > 0), -1)
 
     def place(placed, k):
         d = jnp.linalg.norm(spots[k][:, None, :] - placed[None, :, :], axis=-1)  # (32, S)

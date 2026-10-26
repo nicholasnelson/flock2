@@ -16,6 +16,8 @@ blocking objects, grazing, regrowth, day and night), with these changes:
   sheep were pushed apart, half the overlap each, which moved sheep that had not acted.
 - **Huddling** (v2.1): resting sheep within ``drives.HUDDLE_DIST`` of each other keep warmer. The
   number of other sheep in view is still counted (``Flock.seen``) but is no longer a drive.
+- **Water is a smooth field** (v2.1, ``world.water_at``): drinking, blocking and drawing all use the
+  same curved shoreline.
 - **Death** (``drives.update``): a dead sheep is frozen, takes no part in anything, and earns 0.
 """
 
@@ -25,7 +27,7 @@ import jax
 import jax.numpy as jnp
 
 from flock.meadow2 import drives as D
-from flock.meadow2.world import CELL, DAY, DAY_SCALE, HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State, bite_weights, grass_at
+from flock.meadow2.world import CELL, DAY, DAY_SCALE, HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State, bite_weights, grass_at, water_at
 
 STOP, WALK, TROT, LEFT, RIGHT, GRAZE, DRINK, REST = range(8)
 N_ACTIONS = 8
@@ -74,18 +76,16 @@ def mouth_tile(m: Meadow, pos: jax.Array, heading: jax.Array) -> tuple[jax.Array
     """(on water, grass density, inside the meadow) at each sheep's mouth point."""
     p = mouth(pos, heading)
     inside = jnp.all((p >= 0.0) & (p < N_TILES), -1)
-    r, c = tile(p)
-    water = m.water[r, c] & inside
+    water = water_at(m.water, p) & inside
     return water, jnp.where(inside & ~water, grass_at(m.grass, p), 0.0), inside
 
 
 def _allowed(m: Meadow, p: jax.Array) -> jax.Array:
     inside = jnp.all((p >= 0.5) & (p <= N_TILES - 0.5), -1)
-    r, c = tile(p)
     d_obj = jnp.linalg.norm(p[:, None, :] - m.obj_pos[None, :, :], axis=-1)
     rad = RADIUS[m.obj_kind][None, :]
     hits = jnp.any((d_obj < rad + SHEEP_RADIUS) & m.obj_present[None, :] & (rad > 0), -1)
-    return inside & ~m.water[r, c] & ~hits
+    return inside & ~water_at(m.water, p) & ~hits
 
 
 def solid(old: jax.Array, new: jax.Array, alive: jax.Array, rounds: int = 3) -> jax.Array:

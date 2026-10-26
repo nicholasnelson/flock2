@@ -390,3 +390,46 @@ learner, which should learn not to push against walls quickly.
 **Open, for the owner:** either redefine the naive explorer as the one that turns when blocked and
 set `NEED_SCALE` = 3 (hydration from full then lasts about 3,750 steps, 1.6 days), or keep the § 7
 wanderer and change the meadow (more or larger ponds).
+
+### Decision and recheck (2026-10-26)
+
+The owner chose the naive explorer that turns when blocked, and `NEED_SCALE` = 3. Recheck
+(`meadow2-results/checks_v21_n3.json`):
+
+- all four checks pass;
+- **no deaths** among 768 sheep over 5 days;
+- the naive explorer finds water before it would die in 53 % of starts (rule: ≥ 50 %);
+- 57 % of resting sheep huddle at night;
+- fat rose from 0.50 to 0.85.
+
+With `NEED_SCALE` = 3, hydration lasts about 3,750 steps from full (1.6 days), and gut energy
+about the same standing still.
+
+## 12. Renderer v2 as built (2026-10-26)
+
+`flock/meadow2/render.py`. Samples: `meadow2-results/render_samples.png` (midday toward and near a
+pond, facing away, dusk, night, dawn).
+
+- **As specified:**
+  - an RGB strip of 64 × 256, 300° wide, eye at 0.8 tiles;
+  - the row table of § 5;
+  - flat shapes at the sizes of § 4 (sheep from the side, front or back);
+  - distance haze (30 tiles);
+  - smooth light, and the hut's window and light pool;
+  - the fence on the meadow's edge.
+- **The ground is one continuous raised surface.** Each column marches outward over 192 distances
+  from 0.15 to 90 tiles. A row shows the first sample whose top rises above its line of sight, so
+  nearer grass hides what is behind it. Grass height is at most 0.25 tiles. The colour runs from
+  tan (bare) through light green (density 1) to deep green (3).
+- **Water is now a smooth field too** (`world.water_at`): the tile mask is blended between tile
+  centres and cut at one half, so ponds have curved shores rather than tile staircases.
+  Drinking, blocking and drawing all use it.
+- **The reticle** marks the grass surface (or water) at the mouth point, using the grass height
+  there (`render.reticle_row`). It sits about 8 % above the strip's bottom edge.
+- **Stretched rows (for human eyes).** The horizon band's rows are 0.5° and the ground rows near
+  the feet 4°, so things near eye level are magnified about 8× vertically in the stored strip.
+  That is what the sheep receives. The viewer shows rows at their true angular heights by
+  default, and as stored when you tick a box.
+- **Storage (decided when training needs it):** the renderer returns RGB floats. § 5 planned a
+  one-byte-a-pixel table, but continuous light and haze make that approximate. Plain RGB bytes are
+  3 bytes a pixel (49 KB a frame).
