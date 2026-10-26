@@ -785,3 +785,21 @@ time, against 3–18 % before.
 earlier vector hybrid's seed 1. It appended its log there and overwrote that checkpoint. Seed 1's
 evaluation and log were already saved under `meadow2-results/`, so no recorded result is lost.
 Future arm names will not reuse seed folder names.
+
+### N1 on three seeds (2026-10-26)
+
+`meadow2-results/{eval/hybrid_,diag/}n1{,_seed1,_seed2}.json`.
+
+| N1 seed | Reward / step | Died | Water redrawn, day within 8 | Bearing from h and z (ridge) | Bearing from the embedding | D3 (best of sin, cos) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | 1.38 ± 0.08 | 62 % | 0.68 | 0.35 | 0.68 | −0.54 |
+| 1 | 1.11 ± 0.07 | 79 % | 0.69 | 0.26 | 0.64 | −0.14 |
+| 2 | 1.65 ± 0.09 | 45 % | 0.71 | 0.34 | 0.68 | −0.64 |
+| N0 (seed 0, reference) | 1.41 ± 0.10 | 53 % | 0.70 | 0.20 | 0.66 | −0.65 |
+
+*(judgement)*
+- Multi-step prediction raises the bearing held in the state consistently: 0.26–0.35 on three
+  seeds, against 0.20 for N0. But it stays well short of the week's 0.5.
+- Nothing is remembered once water leaves view.
+- Survival varies widely between seeds (45–79 % die), and on average is not better than N0.
+- **The week's criterion is not met by any arm so far.**
