@@ -686,3 +686,27 @@ run was still improving at iteration 600. For example, unbalanced seed 2 went fr
 iteration 200 to −0.70 at 600. In the same runs, drinking on dry ground fell from almost every
 drink attempt to about half, and water rose only in the last 100–200 iterations. The grid hybrid
 had converged by about iteration 200, so the meadow runs are simply too short to compare.
+
+### Longer meadow hybrid: one run, then stopped (2026-10-26)
+
+Six 2,000-iteration runs were planned: balanced and unbalanced, three seeds each. Two attempts
+were lost before finishing, one to an out-of-memory kill in WSL (during the owner's Android build)
+and one to a freeze of the whole PC. After that only the first, balanced seed 0, was finished. The
+owner then moved the GPU to meadow v2 (`m1-world-v2-spec.md`).
+
+| Run | Reward / step | Depleted | Dawn-3 water | Decoder draws water | Probe R² for water in view: forward / left / distance (32 meadows) |
+| --- | --- | --- | --- | --- | --- |
+| balanced, 600 iterations (seeds 0–2) | −0.74 / −0.78 / −0.85 | 84–96 % | 0.13–0.20 | 56–66 % | 0.44 / 0.04 / 0.60 (seed 0) |
+| **balanced, 2,000 iterations, seed 0** | **−0.66** | 76 % | 0.24 | 75 % | 0.43 / 0.05 / 0.61 |
+
+Files: `m1-results/hybrid/hybrid_long_bal_s0_log.jsonl`, `m1-results/eval/hybrid_long_bal_s0.json`,
+`m1-results/probes/*long_bal_s0*`.
+
+Reading *(judgement, one seed)*:
+- It is the best hybrid score in the old meadow, but still far from privileged PPO (−0.39), and
+  water barely moves.
+- The training curves of all three attempts at this seed levelled off around −0.85 to −0.9 from
+  about iteration 800, with almost every drink attempt on dry ground.
+- The model's state still does not hold left from right for water.
+
+Together these suggest that more training alone will not close the gap in the old meadow.
