@@ -850,3 +850,21 @@ true current bearing to the nearest water tile, after the scripted sheep has kep
 turning for up to 30 steps. A check that a probe of this design can read memory when memory exists
 would take minutes: for example, an input of the bearing at the moment water was last seen,
 together with the turns made since.
+
+### Validating the D3 (memory) probe: pre-registered (2026-10-27, owner's decision)
+
+On the same frames as D3 (water not visible now, visible within the last 30 steps, nearest water
+more than 1.5 tiles away), the D3 probe is applied to inputs whose content is known:
+- **oracle:** the sine and cosine of the true current bearing (its own target). Should be about 1.
+- **ideal memory:** the bearing when water was last seen (from the image), corrected for the
+  heading change since: the direction a perfect memory would hold if the sheep had turned but not
+  walked. Given as its sine and cosine.
+- **raw memory parts:** the last-seen bearing's sine and cosine, the heading change's sine and
+  cosine, and the steps since. The MLP can combine these; ridge cannot.
+- **noise:** random numbers of the same width (the floor).
+
+**Rule:**
+- If ideal memory reaches a ridge R² of **at least 0.5**, with the oracle at **0.95 or more**, the
+  probe can detect memory. "No memory" stands, and the owner decides between rung 4 and moving on.
+- If ideal memory scores **below 0.3**, the probe's design cannot detect memory even when it is
+  present. The probe is redesigned before that decision.
