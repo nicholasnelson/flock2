@@ -824,3 +824,7 @@ Run name `mem_s0` (no reuse of seed folder names). Evaluated and diagnosed as be
   decision returns to the owner: rung 4 (a body sense of movement, and the memory shifted by it), or
   move on with a view-reading policy and "calling", not describing.
 - The bearing from h and z in view, and the evaluation, are reported beside it.
+
+Deviation before launch: arm M uses **batches of 4 sequences** of 64 steps (8 of 64 ran the GPU out
+of memory in the smoke test). That is the same number of frames per update as N1's 8 of 32. Smoke
+test: 6.3 GB peak RAM.

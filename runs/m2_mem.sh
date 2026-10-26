@@ -1,5 +1,5 @@
 cd /mnt/c/Users/nnels/Documents/projects/flock2 && . ~/.venvs/flock2/bin/activate && export XLA_PYTHON_CLIENT_PREALLOCATE=false
-ARGS="--kl_dyn 1.0 --replay 1024 --add_frac 0.5 --ms_weight 1.0 --ms_horizons 2,4,8,16,32 --ms_stride 16 --length 64 --policy_input state_embed --seed 0"
+ARGS="--kl_dyn 1.0 --replay 1024 --add_frac 0.5 --ms_weight 1.0 --ms_horizons 2,4,8,16,32 --ms_stride 16 --length 64 --batch 4 --policy_input state_embed --seed 0"
 if [ "$1" = smoke ]; then
   rm -rf ~/flock2_data/m2_hybrid/smoke_mem
   MAXGB=12 bash runs/watchdog.sh python scripts/m2_hybrid.py --out ~/flock2_data/m2_hybrid/smoke_mem $ARGS --replay 64 --iters 3 --ppo_start 1 > /tmp/mem_smoke.log 2>&1
