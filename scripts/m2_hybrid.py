@@ -21,6 +21,10 @@ scaled by 1 - gamma), and steps taken while dead are left out. Meadows restart e
 ``--reset_every`` steps (staggered), or when every sheep in one has died, with model states zeroed.
 Checkpoints ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m2_eval.py --policy hybrid``.
 
+``--policy_input state_embed`` (the plan review's arm, 2026-10-26): PPO sees the current view's
+embedding as well as (h, z), with the gradient stopped, so PPO does not train the encoder. The
+embedding is the sheep's own eyes, not privileged information.
+
 ``--model spatial`` uses rung 3's world model (``flock.wm_spatial``: a grid-shaped state, all of it
 learned) instead of the RSSM's single vector (``--model vector``, the default).
 """
@@ -77,7 +81,16 @@ def to_bytes(rgb):
     return jnp.round(rgb * 255.0).astype(jnp.uint8)
 
 
-def sheep_step(world, policy, states, mems, key):
+def policy_feat(h, z, embed, use_embed):
+    f = ac.feat_of(h, z)
+    return jax.lax.stop_gradient(jnp.concatenate([f, embed], -1) if use_embed else f)
+
+
+def n_policy_in(world, use_embed):
+    return world.cfg.feat + (world.cfg.embed if use_embed else 0)
+
+
+def sheep_step(world, policy, states, mems, key, use_embed=False):
     """Every sheep in a batch of meadows sees, updates its model state, and acts."""
     h, z, a_prev = mems  # (B, S, ...)
     k1, k2 = jax.random.split(key)
@@ -87,7 +100,7 @@ def sheep_step(world, policy, states, mems, key):
     embed = world.embed_obs(views, feel)
     h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z = wm._sample(world.posterior(h, embed), k1)
-    feat = jax.lax.stop_gradient(ac.feat_of(h, z))
+    feat = policy_feat(h, z, embed, use_embed)
     logits, value = policy(feat)
     a = jax.random.categorical(k2, logits, -1)
     a = jnp.where(f.alive, a, sim.STOP)
@@ -97,13 +110,13 @@ def sheep_step(world, policy, states, mems, key):
                                 alive_before=f.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
 
 
-@nnx.jit(static_argnums=(5, 6, 7))
-def collect(world, policy, states, mems, key, steps, record, gamma_lam):
+@nnx.jit(static_argnums=(5, 6, 7, 8))
+def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embed=False):
     gamma, lam = gamma_lam
 
     def one(carry, k):
         st, mm = carry
-        st, mm, rec = sheep_step(world, policy, st, mm, k)
+        st, mm, rec = sheep_step(world, policy, st, mm, k, use_embed)
         rec["views"] = rec["views"][:, :record]  # only the recorded sheep's views are kept
         return (st, mm), rec
 
@@ -116,7 +129,7 @@ def collect(world, policy, states, mems, key, steps, record, gamma_lam):
     embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
     h2 = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z2 = wm._sample(world.posterior(h2, embed), k)
-    _, last_v = policy(ac.feat_of(h2, z2))
+    _, last_v = policy(policy_feat(h2, z2, embed, use_embed))
     r = tr["reward"] * (1 - gamma)
     cont = tr["alive_after"].astype(jnp.float32)
 
@@ -184,6 +197,7 @@ def main():
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--reset_every", type=int, default=2 * DAY)
     p.add_argument("--model", choices=("vector", "spatial"), default="vector")
+    p.add_argument("--policy_input", choices=("state", "state_embed"), default="state")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
@@ -192,7 +206,8 @@ def main():
 
     world = make_world(a.seed, a.model)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
-    policy = make_policy(a.seed + 1, a.hidden, world.cfg.feat)
+    use_embed = a.policy_input == "state_embed"
+    policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed))
     opt = nnx.Optimizer(policy, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
@@ -209,7 +224,7 @@ def main():
     for it in range(1, a.iters + 1):
         t_a = time.time()
         key, k = jax.random.split(key)
-        states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam))
+        states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed)
         tr = jax.tree.map(np.asarray, tr)
         t_collect = time.time() - t_a
         # world-model replay: recorded sheep, cut into sequences, kept if alive throughout

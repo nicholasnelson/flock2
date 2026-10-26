@@ -46,14 +46,14 @@ def policy_fn(name, agent):
     if name == "ppo":
         return stateless(lambda st, k: jax.random.categorical(k, agent(P.observe(st))[0], -1))
     if name == "hybrid":
-        world, policy, hy = agent
+        world, policy, hy, use_embed = agent
 
         def init(st):
             B, S = st.flock.alive.shape
             return hy.zero_mems(world, B, S)
 
         def act(st, mem, k):
-            new, mem, rec = hy.sheep_step(world, policy, st, mem, k)
+            new, mem, rec = hy.sheep_step(world, policy, st, mem, k, use_embed)
             return rec["act"], mem
 
         return init, act
@@ -144,10 +144,11 @@ def main():
         d = os.path.expanduser(a.agent)
         cfg = json.load(open(os.path.join(d, "config.json")))
         world = hy.make_world(0, cfg.get("model", "vector"))
-        policy = hy.make_policy(0, cfg.get("hidden", 256), world.cfg.feat)
+        use_embed = cfg.get("policy_input", "state") == "state_embed"
+        policy = hy.make_policy(0, cfg.get("hidden", 256), hy.n_policy_in(world, use_embed))
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
-        agent = (world, policy, hy)
+        agent = (world, policy, hy, use_embed)
     rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY))
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, **summarise(rec)}
     print(json.dumps(res, indent=1))
