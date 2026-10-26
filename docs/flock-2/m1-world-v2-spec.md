@@ -474,8 +474,21 @@ costs, and includes the alive bonus of 2.5. D is the mean drive among the living
 | rest always | 0.55 ± 0.01 | 0.80 | 100 % | 0.97 | — | 0 |
 | random | 0.83 ± 0.04 | 0.71 | 86 % | 1.40 | 2 % | 13 % |
 | scripted (privileged rules) | **2.36 ± 0.01** | 0.14 | 0 % | 3.0 | 57 % | 0.6 % |
-| PPO on privileged features | *(running)* | | | | | |
+| **PPO on privileged features, seeds 0 / 1 / 2** | **2.470 / 2.475 / 2.461** (SE ≤ 0.012) | 0.03 | 0 / 0 / 0.5 % | 3.0 | 98–100 % | ≤ 0.1 % |
 
 *(judgement)* With the alive bonus, survival dominates the score: a sheep that lives scores about
 2.2–2.4 a step, and one that dies early much less. The scale runs from about 0.5 (dead within a
 day) to about 2.4 (alive, needs met).
+
+PPO (`scripts/m2_ppo.py`, 1,500 updates, about 12 minutes per seed on the RTX 4080;
+`meadow2-results/ppo/`, `meadow2-results/eval/ppo_s*.json`):
+- It learns within about 100 updates and nearly solves the meadow. On the last day, gut energy is
+  1.01–1.06, hydration 0.98–1.02, warmth 1.02–1.06, and fat 0.94–0.97.
+- One sheep died in 576 sheep-runs.
+- It beats the scripted flock (2.36), which waits until a need is pressing before acting.
+- It rests 20–25 % of the time, but huddles less than the scripted flock (31–37 % of night rest,
+  against 65 %).
+
+*(judgement)* Meadow v2 is learnable from the right information, with clear headroom between
+random (0.83) and PPO (2.47). The question for the next rung is how much of this a sheep can get
+from its own eyes.
