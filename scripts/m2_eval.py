@@ -15,7 +15,13 @@ Reported (and written to ``--out``), with standard errors across meadows where m
 - the share of sheep that die, and mean days survived;
 - each level and fat over the last day, among the living;
 - drinking and grazing success, bad taste per step, the share of resting sheep huddled at night;
-- the action mix.
+- the action mix;
+- dispersion (spec § 15): mean nearest-neighbour distance and other sheep in view, among the living;
+- the **information gap** (spec § 15): the share of thirsty sheep-steps (hydration < 0.5) in which the
+  sheep cannot see water but a living flockmate within ``EARSHOT`` tiles saw water in the last
+  ``KNOWS_FOR`` steps. "Sees water" is a geometric proxy: a water tile within ``SEE_RANGE`` tiles
+  inside the 300-degree field of view, ignoring occlusion. Also reported: the share of thirsty steps
+  in which the sheep itself sees water.
 """
 
 from __future__ import annotations
@@ -60,12 +66,27 @@ def policy_fn(name, agent):
     raise ValueError(name)
 
 
+EARSHOT, KNOWS_FOR, SEE_RANGE, THIRSTY = 10.0, 300, 16.0, 0.5
+_TILES = jnp.stack(jnp.meshgrid(jnp.arange(48) + 0.5, jnp.arange(48) + 0.5, indexing="ij"), -1).reshape(-1, 2)
+
+
+def sees_water(st):
+    """(S,) whether a water tile lies within SEE_RANGE inside each sheep's field of view (occlusion ignored)."""
+    from flock.meadow2.world import water_at
+
+    wet = water_at(st.meadow.water, _TILES)
+    rel = _TILES[None] - st.flock.pos[:, None]
+    d = jnp.linalg.norm(rel, axis=-1)
+    alpha = (jnp.arctan2(rel[..., 1], -rel[..., 0]) - st.flock.heading[:, None] + jnp.pi) % (2 * jnp.pi) - jnp.pi
+    return jnp.any(wet[None] & (d <= SEE_RANGE) & (jnp.abs(alpha) < sim.FOV / 2), -1)
+
+
 def run(policy, n_meadows, steps, seed=0):
     init, act = policy
     states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
 
     def body(carry, k):
-        st, mem = carry
+        (st, mem), (last_seen, t) = carry[:2], carry[2:]
         a, mem = act(st, mem, k)
         a = a.astype(jnp.int32)
         on_water, density, _ = jax.vmap(sim.mouth_tile)(st.meadow, st.flock.pos, st.flock.heading)
@@ -78,9 +99,25 @@ def run(policy, n_meadows, steps, seed=0):
             drank=(a == sim.DRINK) & on_water, grazed=(a == sim.GRAZE) & (density >= sim.MIN_BITE), drink=a == sim.DRINK, graze=a == sim.GRAZE,
             bad=f.taste < 0, act=a, huddled=huddled, resting=f.resting, night=jax.vmap(sim.is_night)(st.t),
         )
-        return (new, mem), rec
+        # dispersion and the information gap, among the living, before the step
+        al = st.flock.alive
+        sees = jax.vmap(sees_water)(st) & al
+        last_seen = jnp.where(sees, t, last_seen)
+        p = st.flock.pos
+        d = jnp.linalg.norm(p[:, :, None] - p[:, None], axis=-1)
+        others = al[:, None, :] & al[:, :, None] & ~jnp.eye(p.shape[1], dtype=bool)
+        nn = jnp.min(jnp.where(others, d, jnp.inf), -1)
+        knows = (t - last_seen <= KNOWS_FOR) & al
+        told = jnp.any(others & (d <= EARSHOT) & knows[:, None, :], -1)
+        thirsty = al & (st.flock.levels[..., D.HYDRATION] < THIRSTY)
+        rec.update(nn=nn, seen=st.flock.seen, thirsty=thirsty, thirsty_sees=thirsty & sees, gap=thirsty & ~sees & told, alive_now=al)
+        return (new, mem, last_seen, t + 1), rec
 
-    _, rec = jax.jit(lambda s, k: jax.lax.scan(body, (s, init(s)), jax.random.split(k, steps)))(states, jax.random.PRNGKey(seed))
+    def scan(s, k):
+        B, S = s.flock.alive.shape
+        return jax.lax.scan(body, (s, init(s), jnp.full((B, S), -100_000), jnp.int32(0)), jax.random.split(k, steps))
+
+    _, rec = jax.jit(scan)(states, jax.random.PRNGKey(seed))
     return jax.tree.map(np.asarray, rec)
 
 
@@ -113,6 +150,11 @@ def summarise(rec):
         "bad_taste_per_step": float(rec["bad"][alive_b].mean()),
         "huddled_share_of_night_rest": float(rec["huddled"][night_rest].mean()) if night_rest.any() else None,
         "actions": {sim.ACTION_NAMES[i]: round(float((a == i).mean()), 3) for i in range(sim.N_ACTIONS)},
+        "nearest_neighbour_tiles": float(np.nanmean(np.where(np.isfinite(rec["nn"]) & rec["alive_now"], rec["nn"], np.nan)[rec["alive_now"]])) if rec["alive_now"].any() else None,
+        "others_in_view": float(rec["seen"][rec["alive_now"]].mean()),
+        "thirsty_share_of_living_steps": float(rec["thirsty"].sum() / max(1, rec["alive_now"].sum())),
+        "thirsty_sees_water": float(rec["thirsty_sees"].sum() / max(1, rec["thirsty"].sum())),
+        "information_gap": float(rec["gap"].sum() / max(1, rec["thirsty"].sum())),
     }
 
 

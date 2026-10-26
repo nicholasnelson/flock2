@@ -173,6 +173,12 @@ N_NEAREST = 48
 
 def render(state: State, i: jax.Array) -> jax.Array:
     """(H, W, 3) float RGB in [0, 1]: sheep ``i``'s view."""
+    return render_aux(state, i)[0]
+
+
+def render_aux(state: State, i: jax.Array):
+    """(rgb (H, W, 3), water (H, W) bool: the pixel shows water, depth (H, W) tiles, inf for sky).
+    The mask and depth are for evaluation only (diagnostics of what a world model redraws)."""
     m, f = state.meadow, state.flock
     eye, head = f.pos[i], f.heading[i]
     L = sim.light(state.t)
@@ -264,7 +270,8 @@ def render(state: State, i: jax.Array) -> jax.Array:
     colour = colour + (horizon - colour) * fade[..., None]
     above = ~jnp.isfinite(depth)
     colour = jnp.where(above[..., None], sky(ROW_ELEV, L)[:, None, :], colour)
-    return jnp.clip(colour, 0.0, 1.0)
+    water_px = hit & wet_px & ~fence & ~front
+    return jnp.clip(colour, 0.0, 1.0), water_px, depth
 
 
 def reticle_row(state: State, i: jax.Array) -> jax.Array:
