@@ -117,7 +117,7 @@ def main():
     p.add_argument("--out", default=os.path.expanduser("~/flock2_data/m2_ppo/s0"))
     p.add_argument("--updates", type=int, default=1500)
     p.add_argument("--meadows", type=int, default=32)
-    p.add_argument("--steps", type=int, default=128)
+    p.add_argument("--steps", type=int, default=160)  # divides --reset_every (2 days = 4,800)
     p.add_argument("--epochs", type=int, default=4)
     p.add_argument("--minibatches", type=int, default=8)
     p.add_argument("--lr", type=float, default=3e-4)

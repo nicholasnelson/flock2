@@ -433,3 +433,49 @@ pond, facing away, dusk, night, dawn).
 - **Storage (decided when training needs it):** the renderer returns RGB floats. § 5 planned a
   one-byte-a-pixel table, but continuous light and haze make that approximate. Plain RGB bytes are
   3 bytes a pixel (49 KB a frame).
+
+## 13. Changes after the second play-test, and the first baselines (2026-10-26)
+
+**Changes (owner, 2026-10-26):**
+- **Jostling is back, but uneven.** A sheep that walks into another takes 70 % of the overlap and
+  slides around it; the sheep it bumps takes 30 %. A push into water, a tree or out of the meadow
+  is not taken. The brief "solid sheep" rule made sheep stop dead and could jam a crowd.
+- **A bite crops a patch.** Grass is stored on half-tile cells (96 × 96), still drawn as one
+  smooth surface. A bite takes 0.05 from every cell whose centre is within 0.4 tiles of the mouth
+  point, and its energy follows the patch's mean density. A grazed patch now shows as a bare spot
+  about a tile across. Before, a bite was spread over four whole tiles by their bilinear weights,
+  so the spot under the mouth dropped by only a quarter to the whole of a bite and was blurred
+  over.
+- **Rows follow one smooth curve.** Row heights follow a sinh, finest (0.6° a row) at 8° below
+  the horizon and growing smoothly to 5.4° at the bottom. This replaces the three hard-edged bands
+  of 3, 0.5 and 4°. Rows per feature, before → after:
+  - a pond 5–7 tiles away: 5.1 → 4.3;
+  - a pond 10–12 tiles away: 1.5 → 1.1;
+  - ground 2–3 tiles away: 1.7 → 6.6;
+  - the sky: 28 → 18.
+
+  The viewer has a pixel-grid overlay and a heatmap of rows per degree to judge it by eye.
+- The PC froze completely once while the GPU, a CPU-heavy check and the viewer all ran together,
+  with nothing in the Windows logs. Heavy jobs now run one at a time.
+
+**Checks with these changes** (`meadow2-results/checks_v21_patch.json`):
+- all four pass, with 0 deaths;
+- grass ends at 176 % of its start;
+- the naive explorer finds water before it would die in **65 %** of starts at `NEED_SCALE` 3
+  (53 % before jostling; it no longer gets stuck against other sheep);
+- 55 % of resting sheep huddle at night.
+
+**Baselines on the fixed evaluation** (`scripts/m2_eval.py`: 16 meadows, seeds 50,000 + i, 12
+sheep, 3 days of 2,400 steps; `meadow2-results/eval/`). Reward counts 0 after death, so dying
+costs, and includes the alive bonus of 2.5. D is the mean drive among the living.
+
+| Policy | Reward / step (± SE) | Mean drive D | Died | Days survived | Drink success | Bad taste per step |
+| --- | --- | --- | --- | --- | --- | --- |
+| rest always | 0.55 ± 0.01 | 0.80 | 100 % | 0.97 | — | 0 |
+| random | 0.83 ± 0.04 | 0.71 | 86 % | 1.40 | 2 % | 13 % |
+| scripted (privileged rules) | **2.36 ± 0.01** | 0.14 | 0 % | 3.0 | 57 % | 0.6 % |
+| PPO on privileged features | *(running)* | | | | | |
+
+*(judgement)* With the alive bonus, survival dominates the score: a sheep that lives scores about
+2.2–2.4 a step, and one that dies early much less. The scale runs from about 0.5 (dead within a
+day) to about 2.4 (alive, needs met).
