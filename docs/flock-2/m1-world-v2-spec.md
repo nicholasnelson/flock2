@@ -803,3 +803,24 @@ Future arm names will not reuse seed folder names.
 - Nothing is remembered once water leaves view.
 - Survival varies widely between seeds (45–79 % die), and on average is not better than N0.
 - **The week's criterion is not met by any arm so far.**
+
+## 17. One more learned fix, aimed at memory (pre-registered 2026-10-27, owner's decision)
+
+**Arm M** (seed 0, 600 iterations): N1, plus three changes.
+- **Multi-step prediction reaches further:** horizons 2, 4, 8, 16 and 32 steps (was up to 8), starts
+  every 16 steps.
+- **Training sequences of 64 steps** (was 32). The replay holds 1,024 sequences, the same memory as
+  2,048 of 32, with half of each iteration's added.
+- **The policy also reads the view's embedding** (stop-gradient), the arm that gave the best
+  survival so far.
+
+Run name `mem_s0` (no reuse of seed folder names). Evaluated and diagnosed as before.
+
+**Rule:**
+- If the bearing just after water leaves view (D3: the better of sine and cosine, ridge, from h and
+  z) reaches **at least 0.3**, learned memory is working. M goes to three seeds and the week's
+  criterion is re-checked.
+- If it stays **below 0.3**, the learned options for memory are exhausted at this budget, and the
+  decision returns to the owner: rung 4 (a body sense of movement, and the memory shifted by it), or
+  move on with a view-reading policy and "calling", not describing.
+- The bearing from h and z in view, and the evaluation, are reported beside it.

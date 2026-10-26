@@ -66,12 +66,12 @@ _ppo2 = _load("m2_ppo")
 CFG = wm.Config(n_classes=3, rgb=True, n_actions=sim.N_ACTIONS, body_dims=())
 
 
-def make_world(seed, kind="vector", kl_dyn=wm.KL_DYN, ms_weight=0.0):
+def make_world(seed, kind="vector", kl_dyn=wm.KL_DYN, ms_weight=0.0, ms_horizons=(2, 4, 8), ms_stride=8):
     """The world model. ``kl_dyn`` and ``ms_weight`` change only the loss, not the parameters, so a
     checkpoint loads into a model made with the defaults."""
     if kind == "spatial":
-        return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS, kl_dyn=kl_dyn, ms_weight=ms_weight))
-    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG._replace(kl_dyn=kl_dyn, ms_weight=ms_weight))
+        return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS, kl_dyn=kl_dyn, ms_weight=ms_weight, ms_horizons=ms_horizons, ms_stride=ms_stride))
+    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG._replace(kl_dyn=kl_dyn, ms_weight=ms_weight, ms_horizons=ms_horizons, ms_stride=ms_stride))
 
 
 def make_policy(seed, hidden=256, n_in=CFG.feat):
@@ -211,6 +211,8 @@ def main():
     p.add_argument("--policy_input", choices=("state", "state_embed"), default="state")
     p.add_argument("--kl_dyn", type=float, default=wm.KL_DYN, help="dynamics KL weight (DreamerV3: 1)")
     p.add_argument("--ms_weight", type=float, default=0.0, help="multi-step view prediction weight (0: off)")
+    p.add_argument("--ms_horizons", default="2,4,8", help="steps ahead at which the view is predicted")
+    p.add_argument("--ms_stride", type=int, default=8, help="steps between prediction starts")
     p.add_argument("--add_frac", type=float, default=1.0, help="share of each iteration's sequences added to the replay")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
@@ -218,7 +220,9 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     json.dump({**vars(a), "kind": "m2_hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
-    world = make_world(a.seed, a.model, a.kl_dyn, a.ms_weight)
+    horizons = tuple(int(x) for x in a.ms_horizons.split(","))
+    assert a.ms_weight == 0 or max(horizons) < a.length
+    world = make_world(a.seed, a.model, a.kl_dyn, a.ms_weight, horizons, a.ms_stride)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     use_embed = a.policy_input == "state_embed"
     policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed))
