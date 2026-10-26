@@ -6,7 +6,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import drives as D, scripted, sim
-from flock.meadow2.world import DAY, N_SHEEP, N_TILES, SHEEP_RADIUS, START_WATER, generate, grass_at, random_start, start_distance
+from flock.meadow2.world import DAY, N_CELLS, N_SHEEP, N_TILES, SHEEP_RADIUS, START_WATER, dry_cells, generate, grass_at, random_start, start_distance
 
 
 def _states(n=16):
@@ -22,7 +22,8 @@ def test_layout_checks():
         p = np.asarray(st.meadow.obj_pos).astype(int)
         assert not w[p[:, 0], p[:, 1]][np.asarray(st.meadow.obj_present)].any()
         assert st.flock.pos.shape == (N_SHEEP, 2)
-        assert (np.asarray(st.meadow.grass)[w] == 0).all()
+        assert st.meadow.grass.shape == (N_CELLS, N_CELLS)
+        assert (np.asarray(st.meadow.grass)[~np.asarray(dry_cells(st.meadow.water))] == 0).all()
 
 
 def test_flock_starts_dry_clear_and_apart():
@@ -36,9 +37,9 @@ def test_flock_starts_dry_clear_and_apart():
 
 
 def test_grass_field_is_smooth():
-    g = jnp.zeros((N_TILES, N_TILES)).at[10, 10].set(2.0)
-    assert abs(float(grass_at(g, jnp.array([10.5, 10.5]))) - 2.0) < 1e-6  # a tile centre
-    assert abs(float(grass_at(g, jnp.array([10.5, 11.0]))) - 1.0) < 1e-6  # halfway to the next centre
+    g = jnp.zeros((N_CELLS, N_CELLS)).at[20, 20].set(2.0)  # the half-tile cell centred at (10.25, 10.25)
+    assert abs(float(grass_at(g, jnp.array([10.25, 10.25]))) - 2.0) < 1e-6
+    assert abs(float(grass_at(g, jnp.array([10.25, 10.5]))) - 1.0) < 1e-6  # halfway to the next centre
     assert float(grass_at(g, jnp.array([12.5, 12.5]))) == 0.0
 
 
@@ -48,7 +49,7 @@ def _one_sheep_facing_water(n=1):
     water = jnp.zeros((N_TILES, N_TILES), bool).at[:, 20:].set(True)
     pos = jnp.array([[24.0 + 2 * i, 19.6] for i in range(n)])
     f = st.flock._replace(pos=pos, heading=jnp.full((n,), jnp.pi / 2), levels=jnp.full((n, D.N_DRIVES), 0.5))
-    return st._replace(meadow=st.meadow._replace(water=water, grass=jnp.where(water, 0.0, 2.0)), flock=f)
+    return st._replace(meadow=st.meadow._replace(water=water, grass=jnp.where(dry_cells(water), 2.0, 0.0)), flock=f)
 
 
 def test_drink_only_with_mouth_on_water():
@@ -64,24 +65,38 @@ def test_graze_eats_near_the_mouth_and_pays_by_density():
     st = _one_sheep_facing_water()
     st = st._replace(flock=st.flock._replace(heading=jnp.array([3 * jnp.pi / 2])))  # facing west: mouth at (24.0, 19.0)
     s2 = sim.step(st, jnp.array([sim.GRAZE]))
-    before, after = np.asarray(st.meadow.grass[23:25, 18:20]).sum(), np.asarray(s2.meadow.grass[23:25, 18:20]).sum()
-    assert before - after > 0.04  # a bite of 0.05, less a little regrowth
+    # the patch within 0.4 tiles of (24.0, 19.0) is the four half-tile cells around it, 0.05 each
+    cells = (slice(47, 49), slice(37, 39))  # half-tile cells centred at rows 23.75, 24.25 and cols 18.75, 19.25
+    assert float(st.meadow.grass[cells].sum() - s2.meadow.grass[cells].sum()) > 0.19
+    assert float(st.meadow.grass[45:47, 37:39].sum() - s2.meadow.grass[45:47, 37:39].sum()) < 0.0  # outside the patch: only regrowth
     gain_rich = float(s2.flock.levels[0, D.ENERGY]) - 0.5
-    poor = st._replace(meadow=st.meadow._replace(grass=jnp.where(st.meadow.water, 0.0, 1.0)))
+    poor = st._replace(meadow=st.meadow._replace(grass=jnp.where(dry_cells(st.meadow.water), 1.0, 0.0)))
     gain_poor = float(sim.step(poor, jnp.array([sim.GRAZE])).flock.levels[0, D.ENERGY]) - 0.5
     assert gain_rich > gain_poor > 0
-    bare = st._replace(meadow=st.meadow._replace(grass=jnp.zeros((N_TILES, N_TILES))))
+    bare = st._replace(meadow=st.meadow._replace(grass=jnp.zeros((N_CELLS, N_CELLS))))
     assert float(sim.step(bare, jnp.array([sim.GRAZE])).flock.taste[0]) == -1.0
 
 
-def test_sheep_are_solid():
+def test_a_grazed_patch_shows():
+    st = _one_sheep_facing_water()
+    st = st._replace(flock=st.flock._replace(heading=jnp.array([3 * jnp.pi / 2])))
+    p = sim.mouth(st.flock.pos, st.flock.heading)[0]
+    before = float(grass_at(st.meadow.grass, p))
+    for _ in range(10):
+        st = sim.step(st, jnp.array([sim.GRAZE]))
+    assert before - float(grass_at(st.meadow.grass, p)) > 0.4  # 10 bites of 0.05 crop the spot under the mouth
+
+
+def test_jostling_is_uneven():
     st = generate(jax.random.PRNGKey(0), n_sheep=2)
     f = st.flock._replace(pos=jnp.array([[24.0, 24.0], [24.0, 24.65]]), heading=jnp.array([jnp.pi / 2, jnp.pi / 2]))
     st = st._replace(meadow=st.meadow._replace(water=jnp.zeros_like(st.meadow.water), obj_present=jnp.zeros_like(st.meadow.obj_present)), flock=f)
-    s2 = sim.step(st, jnp.array([sim.WALK, sim.STOP]))  # sheep 0 walks east into sheep 1
-    np.testing.assert_allclose(s2.flock.pos, st.flock.pos)  # refused, and nobody pushed
-    s3 = sim.step(st, jnp.array([sim.WALK, sim.WALK]))  # both walk east: no overlap, both move
-    assert float(s3.flock.pos[1, 1]) > 24.65 and float(s3.flock.pos[0, 1]) > 24.0
+    s2 = sim.step(st, jnp.array([sim.WALK, sim.STOP]))  # sheep 0 walks east into still sheep 1
+    moved0 = float(s2.flock.pos[0, 1] - 24.0)
+    nudged1 = float(s2.flock.pos[1, 1] - 24.65)
+    assert 0.0 < moved0 < sim.WALK_SPEED  # it advances, but less than a full step
+    assert 0.0 < nudged1 < moved0  # the still sheep is nudged, by less
+    assert float(s2.flock.pos[1, 1] - s2.flock.pos[0, 1]) > 2 * SHEEP_RADIUS - 1e-4  # apart again
 
 
 def test_huddling_keeps_warm():

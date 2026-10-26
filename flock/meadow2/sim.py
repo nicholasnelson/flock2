@@ -4,16 +4,17 @@ As ``flock.meadow.sim`` (continuous movement, refused moves into water, out of t
 blocking objects, grazing, regrowth, day and night), with these changes:
 
 - 8 actions: head up is gone.
-- Grazing and drinking act at the **mouth point**, ``MOUTH`` tiles straight ahead. Drinking needs a
-  water tile there. Grazing reads the smooth grass field there (``world.grass_at``): it needs a
-  density of at least ``MIN_BITE``, gives energy in proportion to the density, and takes ``BITE``
-  of biomass from the four nearest tiles in proportion to their weights (v2.1).
+- Grazing and drinking act at the **mouth point**, ``MOUTH`` tiles straight ahead. Drinking needs
+  water there. A bite crops a **patch** (v2.1): every half-tile grass cell within
+  ``world.PATCH_RADIUS`` of the mouth point loses ``BITE``. It needs a mean density over the patch
+  of at least ``MIN_BITE``, and gives energy in proportion to that mean.
 - **Grass regrows on a scale of days** (v2.1): ``REGROW`` of the gap to full per step, a time
   constant of about 3 days.
 - **Light** follows a smooth curve (``light``), with dawn and dusk ramps of ``RAMP`` steps.
-- **Sheep are solid** (v2.1): a move that would bring a sheep closer to another living sheep while
-  overlapping it is refused, as walking into a tree is. Nobody is pushed. Previously overlapping
-  sheep were pushed apart, half the overlap each, which moved sheep that had not acted.
+- **Jostling** (v2.1, ``jostle``): overlapping sheep are pushed apart, but unevenly. A sheep that
+  walked into a still one takes 70 % of the overlap (so it slides around it) and the still one 30 %.
+  The first meadow pushed both by half, which shoved still sheep about; a brief v2.1 rule that
+  refused such moves outright made sheep stop dead and could jam a crowd.
 - **Huddling** (v2.1): resting sheep within ``drives.HUDDLE_DIST`` of each other keep warmer. The
   number of other sheep in view is still counted (``Flock.seen``) but is no longer a drive.
 - **Water is a smooth field** (v2.1, ``world.water_at``): drinking, blocking and drawing all use the
@@ -27,7 +28,7 @@ import jax
 import jax.numpy as jnp
 
 from flock.meadow2 import drives as D
-from flock.meadow2.world import CELL, DAY, DAY_SCALE, HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State, bite_weights, grass_at, water_at
+from flock.meadow2.world import CELL, DAY, DAY_SCALE, HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State, dry_cells, patch, patch_density, water_at
 
 STOP, WALK, TROT, LEFT, RIGHT, GRAZE, DRINK, REST = range(8)
 N_ACTIONS = 8
@@ -36,7 +37,8 @@ TURN = jnp.pi / 8
 WALK_SPEED, TROT_SPEED = 0.12, 0.35
 MOUTH = 0.6
 BITE = 0.05
-MIN_BITE = 0.5  # grass density needed for a mouthful
+MIN_BITE = 0.5  # mean grass density over the patch needed for a mouthful
+JOSTLE_MOVER = 0.7  # share of an overlap taken by the sheep that walked into another
 REGROW = 0.00013  # fraction of the gap to full (3) regrown per step: a time constant of ~7,700 steps
 DAY_FRACTION = 0.6
 NIGHT_LIGHT = 0.12
@@ -73,11 +75,12 @@ def mouth(pos: jax.Array, heading: jax.Array) -> jax.Array:
 
 
 def mouth_tile(m: Meadow, pos: jax.Array, heading: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
-    """(on water, grass density, inside the meadow) at each sheep's mouth point."""
+    """(on water, mean grass density of the patch a bite would crop, inside the meadow) at each
+    sheep's mouth point."""
     p = mouth(pos, heading)
     inside = jnp.all((p >= 0.0) & (p < N_TILES), -1)
     water = water_at(m.water, p) & inside
-    return water, jnp.where(inside & ~water, grass_at(m.grass, p), 0.0), inside
+    return water, jnp.where(inside & ~water, patch_density(m.grass, p), 0.0), inside
 
 
 def _allowed(m: Meadow, p: jax.Array) -> jax.Array:
@@ -88,19 +91,21 @@ def _allowed(m: Meadow, p: jax.Array) -> jax.Array:
     return inside & ~water_at(m.water, p) & ~hits
 
 
-def solid(old: jax.Array, new: jax.Array, alive: jax.Array, rounds: int = 3) -> jax.Array:
-    """Refuse moves that bring a sheep closer to another living sheep it would overlap; a refused
-    sheep stays put, which can refuse another's move in the next round."""
-    both = alive[:, None] & alive[None, :] & ~jnp.eye(old.shape[0], dtype=bool)
-    d_old = jnp.linalg.norm(old[:, None, :] - old[None, :, :], axis=-1)
-    moved = jnp.any(new != old, -1)
-    for _ in range(rounds):
-        d_new = jnp.linalg.norm(new[:, None, :] - new[None, :, :], axis=-1)
-        bad = both & (d_new < 2 * SHEEP_RADIUS) & (d_new < d_old - 1e-6)
-        revert = moved & jnp.any(bad, -1)
-        new = jnp.where(revert[:, None], old, new)
-        moved = moved & ~revert
-    return new
+def jostle(old: jax.Array, new: jax.Array, moved: jax.Array, alive: jax.Array, allowed) -> jax.Array:
+    """One relaxation step pushing overlapping living sheep apart (v2.1, after the owner's
+    play-test: stopping dead at another sheep felt wrong, and could jam a crowd). A sheep that
+    moved into a still one takes ``JOSTLE_MOVER`` of the overlap and the still one the rest; two
+    that both moved, or neither, share it evenly. A push into water, a tree or out of the meadow is
+    not taken."""
+    diff = new[:, None, :] - new[None, :, :]
+    d = jnp.linalg.norm(diff, axis=-1)
+    both = alive[:, None] & alive[None, :] & ~jnp.eye(new.shape[0], dtype=bool)
+    overlap = jnp.where(both, jax.nn.relu(2 * SHEEP_RADIUS - d), 0.0)
+    mi, mj = moved[:, None], moved[None, :]
+    share = jnp.where(mi & ~mj, JOSTLE_MOVER, jnp.where(~mi & mj, 1.0 - JOSTLE_MOVER, 0.5))
+    push = jnp.sum((share * overlap)[..., None] * diff / jnp.maximum(d, 1e-3)[..., None], axis=1)
+    pushed = new + push
+    return jnp.where((allowed(pushed) & alive)[:, None], pushed, new)
 
 
 def n_visible(pos: jax.Array, heading: jax.Array, alive: jax.Array, rng: jax.Array) -> jax.Array:
@@ -120,16 +125,18 @@ def step(state: State, actions: jax.Array) -> State:
     heading = jnp.where(alive, heading % (2 * jnp.pi), f.heading)
     speed = jnp.where(a == WALK, WALK_SPEED, 0.0) + jnp.where(a == TROT, TROT_SPEED, 0.0)
     new = f.pos + speed[:, None] * direction(heading)
-    pos = solid(f.pos, jnp.where(_allowed(m, new)[:, None], new, f.pos), alive)
+    ok = _allowed(m, new)
+    pos = jnp.where(ok[:, None], new, f.pos)
+    pos = jostle(f.pos, pos, (speed > 0) & ok & alive, alive, lambda p: _allowed(m, p))
     # the mouth: drinking, and grazing on the smooth field
     m_water, density, _ = mouth_tile(m, pos, heading)
     grazing = (a == GRAZE) & (density >= MIN_BITE) & alive
     drinking = (a == DRINK) & m_water & alive
     bad_taste = (((a == DRINK) & ~drinking) | ((a == GRAZE) & ~grazing)) & alive
-    idx, w = bite_weights(mouth(pos, heading))
-    take = jnp.where(grazing[:, None], BITE * w, 0.0)
+    idx, in_patch = patch(mouth(pos, heading))
+    take = jnp.where(grazing[:, None] & in_patch, BITE, 0.0)
     grass = jnp.clip(m.grass - jnp.zeros_like(m.grass).at[idx[..., 0], idx[..., 1]].add(take), 0.0, 3.0)
-    grass = jnp.where(m.water, 0.0, grass + REGROW * (3.0 - grass))
+    grass = jnp.where(dry_cells(m.water), grass + REGROW * (3.0 - grass), 0.0)
     # the rest of the body
     night = is_night(state.t + 1)
     cover = m.obj_present & ((m.obj_kind == TREE) | (m.obj_kind == HUT))

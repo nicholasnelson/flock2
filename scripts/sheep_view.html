@@ -36,6 +36,9 @@ button, select { font: 13px var(--sans); color: var(--ink); background: #2a3237;
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #err { color: var(--low); }
 [hidden] { display: none !important; }
+#overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; image-rendering: auto; }
+#legend { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; color: var(--muted); font: 12px var(--mono); margin-top: 4px; }
+#legend .ramp { width: 160px; height: 10px; border-radius: 3px; background: linear-gradient(90deg, rgba(40,90,255,.9), rgba(250,220,60,.9), rgba(255,40,40,.9)); }
 #reticle { position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 2px solid rgba(255,235,120,.9); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.6); pointer-events: none; }
 #reticle::after { content: ""; position: absolute; left: 50%; top: 50%; width: 2px; height: 2px; margin: -1px; background: rgba(255,235,120,.95); }
 #dead { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(40,0,0,.55); color: #fff; font: 600 20px var(--sans); text-align: center; }
@@ -50,11 +53,13 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
   <div>
     <div id="stripwrap" title="Click to look with the mouse">
       <canvas id="strip" width="1024" height="256"></canvas>
+      <canvas id="overlay" width="1024" height="256"></canvas>
       <div id="lockhint">Click to look with the mouse · Esc to release</div>
       <div id="reticle" hidden title="Mouth point: grazing and drinking act here"></div>
       <div id="dead" hidden>Sheep 0 has died. Press N for a new meadow.</div>
     </div>
     <div class="ticks"><span>150° left</span><span>90°</span><span>ahead</span><span>90°</span><span>150° right</span></div>
+    <div id="legend" hidden><span>pixel rows per degree:</span><span id="lgmin"></span><span class="ramp"></span><span id="lgmax"></span><span id="lgnote"></span></div>
   </div>
   <div class="row">
     <div class="panel">
@@ -79,6 +84,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
       <div class="controls">
         <label><input type="checkbox" id="free" checked> Free look (smooth mouse turning)</label>
         <label id="rawlabel"><input type="checkbox" id="raw"> Rows exactly as stored</label>
+        <label><input type="checkbox" id="grid"> Pixel grid</label>
+        <label><input type="checkbox" id="heat"> Density heatmap</label>
         <label>Speed <select id="speed"><option value="5">5 steps/s</option><option value="10" selected>10 steps/s</option><option value="20">20 steps/s</option></select></label>
         <button id="pause" type="button">Pause</button>
         <button id="newm" type="button">New meadow</button>
@@ -111,8 +118,51 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     const aspect = raw.checked || !uneven ? SW / SH : 300 / total;
     strip.width = 1024; strip.height = Math.round(1024 / aspect);
   }
-  raw.addEventListener("change", () => { layout(); if (last) { drawStrip(last.view); placeReticle(last); } });
-  layout();
+  const overlay = document.getElementById("overlay"), octx = overlay.getContext("2d");
+  const gridBox = document.getElementById("grid"), heatBox = document.getElementById("heat");
+  // row edge elevations (degrees), top to bottom
+  const edgeDeg = [info.row_top]; for (const d of info.row_deg) edgeDeg.push(edgeDeg[edgeDeg.length - 1] - d);
+  function rowAtDeg(e) { // fractional row of an elevation
+    for (let r = 0; r < SH; r++) if (e <= edgeDeg[r] && e >= edgeDeg[r + 1]) return r + (edgeDeg[r] - e) / (edgeDeg[r] - edgeDeg[r + 1]);
+    return null;
+  }
+  function drawOverlay() {
+    overlay.width = strip.width; overlay.height = strip.height;
+    octx.clearRect(0, 0, overlay.width, overlay.height);
+    const e = rowEdges(), total = e[e.length - 1], Hh = overlay.height, Ww = overlay.width;
+    const dens = info.row_deg.map(d => 1 / d), lo = Math.min(...dens), hi = Math.max(...dens);
+    if (heatBox.checked) {
+      for (let r = 0; r < SH; r++) {
+        const t = hi > lo ? (dens[r] - lo) / (hi - lo) : 0.5;
+        const col = t < 0.5 ? [40 + (250 - 40) * t * 2, 90 + (220 - 90) * t * 2, 255 + (60 - 255) * t * 2] : [250 + 5 * (t - 0.5) * 2, 220 - 180 * (t - 0.5) * 2, 60 - 20 * (t - 0.5) * 2];
+        octx.fillStyle = `rgba(${col.map(Math.round).join(",")},0.45)`;
+        const y0 = e[r] / total * Hh, y1 = e[r + 1] / total * Hh;
+        octx.fillRect(0, y0, Ww, Math.max(1, y1 - y0));
+      }
+      // elevation ticks
+      octx.font = "12px Consolas, monospace"; octx.textBaseline = "middle";
+      for (const deg of [30, 20, 10, 0, -10, -20, -30, -45, -60]) {
+        const r = rowAtDeg(deg); if (r == null) continue;
+        const y = rowY(r);
+        octx.fillStyle = "rgba(0,0,0,.75)"; octx.fillRect(0, y - 0.5, 18, 1); octx.fillRect(Ww - 18, y - 0.5, 18, 1);
+        const label = (deg > 0 ? "+" : "") + deg + "°" + (deg === 0 ? " horizon" : "");
+        octx.fillStyle = "rgba(0,0,0,.6)"; octx.fillRect(20, y - 8, octx.measureText(label).width + 8, 16);
+        octx.fillStyle = "#fff"; octx.fillText(label, 24, y);
+      }
+    }
+    if (gridBox.checked) {
+      octx.fillStyle = "rgba(0,0,0,.35)";
+      for (let r = 0; r <= SH; r++) octx.fillRect(0, Math.round(e[r] / total * Hh) - 0.5, Ww, 1);
+      for (let c = 0; c <= SW; c++) octx.fillRect(Math.round(c / SW * Ww) - 0.5, 0, 1, Hh);
+    }
+    const lg = document.getElementById("legend"); lg.hidden = !heatBox.checked;
+    document.getElementById("lgmin").textContent = lo.toFixed(2) + " (" + (1 / lo).toFixed(1) + "° a row)";
+    document.getElementById("lgmax").textContent = hi.toFixed(2) + " (" + (1 / hi).toFixed(2) + "° a row)";
+    document.getElementById("lgnote").textContent = "· columns: " + (300 / SW).toFixed(2) + "° each, everywhere";
+  }
+  raw.addEventListener("change", () => { layout(); drawOverlay(); if (last) { drawStrip(last.view); placeReticle(last); } });
+  gridBox.addEventListener("change", drawOverlay); heatBox.addEventListener("change", drawOverlay);
+  layout(); drawOverlay();
   function rowY(r) { // fractional row -> canvas y
     const e = rowEdges(), total = e[e.length - 1], i = Math.max(0, Math.min(SH - 1, Math.floor(r)));
     return (e[i] + (e[i + 1] - e[i]) * (r - i)) / total * strip.height;
@@ -242,7 +292,8 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
     const X = c => (c - c0) * k + S / 2, Y = r => (r - r0) * k + S / 2;
     mctx.imageSmoothingEnabled = false;
     mctx.fillStyle = "#000"; mctx.fillRect(0, 0, S, S);
-    mctx.drawImage(tilesCanvas, c0 - span / 2, r0 - span / 2, span, span, 0, 0, S, S);
+    const R = info.cells_per_tile || 1;  // minimap cells per tile
+    mctx.drawImage(tilesCanvas, (c0 - span / 2) * R, (r0 - span / 2) * R, span * R, span * R, 0, 0, S, S);
     if (s.night) { mctx.fillStyle = "rgba(0,0,20,.45)"; mctx.fillRect(0, 0, S, S); }
     // field of view: within range, outside the 60 degree blind wedge behind
     // renderer v2 has no view range (things fade into haze); the old renderer cut the view off

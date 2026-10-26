@@ -52,21 +52,19 @@ def world_v1():
     from flock.meadow import drives
 
     return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=ground_state, random_start=random_start, view=view, extra=extra, reticle=None, light=None, levels=list(drives.NAMES),
-                format="palette", row_deg=[float(np.rad2deg(fpv.RAD_PER_PX))] * fpv.H, size=[fpv.H, fpv.W])
+                format="palette", row_deg=[float(np.rad2deg(fpv.RAD_PER_PX))] * fpv.H, row_top=float(np.rad2deg(fpv.HORIZON * fpv.RAD_PER_PX)), size=[fpv.H, fpv.W])
 
 
 def world_v2():
     from flock.meadow2 import drives, render as R, scripted, sim
-    from flock.meadow2.world import N_TILES, random_start
+    from flock.meadow2.world import GRASS_RES, N_CELLS, N_TILES, dry_cells, random_start
 
     def view(state):
         return (R.render(state, 0) * 255).astype(jnp.uint8)
 
     def tiles(m):
-        """Minimap codes: 255 water (the smooth shoreline, sampled at tile centres), else grass density x 84."""
-        yy, xx = jnp.mgrid[0:N_TILES, 0:N_TILES] + 0.5
-        wet = sim.water_at(m.water, jnp.stack([yy, xx], -1))
-        return jnp.where(wet, 255, jnp.round(m.grass * 84)).astype(jnp.uint8)
+        """Minimap codes per half-tile grass cell: 255 water, else grass density x 84."""
+        return jnp.where(dry_cells(m.water), jnp.round(m.grass * 84), 255).astype(jnp.uint8)
 
     ret = jax.jit(R.reticle_row, static_argnums=1)
 
@@ -78,9 +76,10 @@ def world_v2():
         return {"alive": bool(f.alive[0]), "fat": float(f.fat[0]), "light": float(sim.light(st.t)), "mouth": mouth, "flock_alive": int(f.alive.sum()), "seen": float(f.seen[0]),
                 "reticle_row": float(ret(jax.tree.map(jnp.asarray, st), 0))}
 
-    row_deg = np.diff(-np.rad2deg(np.concatenate([[np.deg2rad(34.0)], (np.asarray(R.ROW_ELEV)[:-1] + np.asarray(R.ROW_ELEV)[1:]) / 2, [np.deg2rad(-74.0)]]))).tolist()
-    return dict(scripted=scripted, sim=sim, n_tiles=N_TILES, ground_state=tiles, random_start=random_start, view=view, extra=extra,
-                reticle=[0.0, 0.5], light=sim.light, levels=list(drives.NAMES), format="rgb", row_deg=row_deg, size=[R.H, R.W])
+    row_deg = R.ROW_DEG.tolist()
+    row_top = float(R.ROW_TOP)
+    return dict(scripted=scripted, sim=sim, n_tiles=N_CELLS, cells_per_tile=GRASS_RES, ground_state=tiles, random_start=random_start, view=view, extra=extra,
+                reticle=[0.0, 0.5], light=sim.light, levels=list(drives.NAMES), format="rgb", row_deg=row_deg, row_top=row_top, size=[R.H, R.W])
 
 
 class World:
@@ -156,7 +155,7 @@ def handler(world, page):
         def do_GET(self):
             if self.path == "/palette":
                 info = {"rgb": RGB.tolist(), "names": NAMES, "objects": S.OBJECT_NAMES, "ground": S.GROUND_NAMES, "water": int(S.WATER),
-                        "tiles": int(w["n_tiles"]), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"], "levels": w["levels"], "format": w["format"], "row_deg": w["row_deg"], "size": w["size"]}
+                        "tiles": int(w["n_tiles"]), "cells_per_tile": int(w.get("cells_per_tile", 1)), "actions": list(w["sim"].ACTION_NAMES), "reticle": w["reticle"], "levels": w["levels"], "format": w["format"], "row_deg": w["row_deg"], "row_top": w["row_top"], "size": w["size"]}
                 self._send(json.dumps(info).encode(), "application/json")
             else:
                 self._send(page, "text/html; charset=utf-8")

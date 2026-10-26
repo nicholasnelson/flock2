@@ -34,7 +34,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import drives as D, scripted, sim
-from flock.meadow2.world import DAY, random_start, start_distance
+from flock.meadow2.world import DAY, dry_cells, random_start, start_distance
 
 
 def run_scripted(states, key, steps):
@@ -126,7 +126,7 @@ def main():
     thirst_deaths = int((dead_end & (lv_end[..., D.HYDRATION] <= 0)).sum())
     after = slice(DAY, None)
     grass_end = np.asarray(end.meadow.grass)
-    dry = ~water
+    dry = np.asarray(jax.vmap(dry_cells)(states.meadow.water))
     g0, g1 = (grass0 * dry).sum() / dry.sum(), (grass_end * dry).sum() / dry.sum()
 
     # the naive explorer of the balance rule turns when blocked (owner, 2026-10-26); the random-turn

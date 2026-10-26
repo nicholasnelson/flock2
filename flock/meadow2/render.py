@@ -1,9 +1,12 @@
 """Renderer v2: the sheep's first-person view of meadow v2 (spec §§ 4-5, 11).
 
 A 64 x 256 RGB strip, 300 degrees wide (1.17 degrees per column), from an eye ``EYE`` tiles above
-the ground. Rows are not even in angle: 8 rows of 3 degrees for the sky (+34 to +10), 40 rows of
-0.5 degrees around the horizon (+10 to -10), 16 rows of 4 degrees for the ground near the feet (-10
-to -74) (``ROW_ELEV``).
+the ground, +34 to -74 degrees high. Rows are not even in angle: their heights follow one smooth
+curve (a sinh), finest (``ROW_PEAK`` degrees) at ``ROW_CENTRE`` degrees, a little below the
+horizon, and growing gradually toward the top and bottom (``ROW_EDGES``). It replaced three
+hard-edged bands (3 / 0.5 / 4 degrees) on 2026-10-26, at the owner's request, to spread the fine
+rows toward the middle of the view: a pond 5-7 tiles away now gets 4.3 rows (was 5.1), ground 2-3
+tiles away 6.6 (was 1.7), and the sky 18 rows (was 28).
 
 - **Ground.** One continuous raised surface. Its height and colour follow the smooth grass field
   (``world.grass_at``): bare ground is tan and flat, and dense grass is deep green and up to
@@ -45,19 +48,39 @@ HUT_LIGHT, HUT_LIGHT_R = 0.6, 3.0
 FENCE_H, POST_H, POST_EVERY = 0.4, 0.5, 2.0
 
 
-def _row_elev() -> np.ndarray:
-    e = [34 - 3 * (r + 0.5) for r in range(8)] + [10 - 0.5 * (r + 0.5) for r in range(40)] + [-10 - 4 * (r + 0.5) for r in range(16)]
-    return np.deg2rad(np.array(e, np.float32))
+ROW_TOP, ROW_BOTTOM = 34.0, -74.0  # degrees
+ROW_PEAK, ROW_CENTRE = 0.6, -8.0  # degrees per row at the finest point, and its elevation
 
 
-ROW_ELEV = jnp.asarray(_row_elev())
+def _row_edges() -> np.ndarray:
+    """(H + 1,) row edges in degrees, top to bottom: e(r) = c + a sinh(b (r0 - r)), a b = ROW_PEAK,
+    with e(0) = ROW_TOP and e(H) = ROW_BOTTOM (b found by bisection)."""
+    c = ROW_CENTRE
+
+    def bottom_gap(b):
+        a = ROW_PEAK / b
+        r0 = np.arcsinh((ROW_TOP - c) / a) / b
+        return c - a * np.sinh(b * (H - r0)) - ROW_BOTTOM
+
+    lo, hi = 1e-4, 1.0
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        lo, hi = (lo, mid) if bottom_gap(lo) * bottom_gap(mid) <= 0 else (mid, hi)
+    b = (lo + hi) / 2
+    a = ROW_PEAK / b
+    r0 = np.arcsinh((ROW_TOP - c) / a) / b
+    return c + a * np.sinh(b * (r0 - np.arange(H + 1)))
+
+
+ROW_EDGES = _row_edges()  # degrees, numpy (H + 1,)
+ROW_DEG = -np.diff(ROW_EDGES)  # each row's height in degrees
+ROW_ELEV = jnp.asarray(np.deg2rad((ROW_EDGES[:-1] + ROW_EDGES[1:]) / 2), jnp.float32)
 COL_OFF = jnp.asarray(((np.arange(W) + 0.5) / W - 0.5) * FOV, jnp.float32)
 
 
 def row_of(elev: jax.Array) -> jax.Array:
     """Fractional row (0 = top edge) at which an elevation (radians) appears."""
-    e = jnp.rad2deg(elev)
-    return jnp.where(e > 10, (34 - e) / 3, jnp.where(e > -10, 8 + (10 - e) / 0.5, 48 + (-10 - e) / 4))
+    return jnp.interp(-jnp.rad2deg(elev), jnp.asarray(-ROW_EDGES), jnp.arange(H + 1, dtype=jnp.float32))
 
 
 def _c(*rgb):
@@ -248,6 +271,7 @@ def reticle_row(state: State, i: jax.Array) -> jax.Array:
     """Fractional row of the grass surface (or water) at sheep ``i``'s mouth point; its column is
     the centre, W / 2."""
     m, f = state.meadow, state.flock
-    on_water, g, inside = sim.mouth_tile(m, f.pos[i : i + 1], f.heading[i : i + 1])
-    h = jnp.where(on_water | ~inside, 0.0, GRASS_H * g / 3.0)[0]
+    p = sim.mouth(f.pos[i : i + 1], f.heading[i : i + 1])
+    on_water, _, inside = sim.mouth_tile(m, f.pos[i : i + 1], f.heading[i : i + 1])
+    h = jnp.where(on_water | ~inside, 0.0, GRASS_H * grass_at(m.grass, p) / 3.0)[0]
     return row_of(jnp.arctan2(h - EYE, sim.MOUTH))

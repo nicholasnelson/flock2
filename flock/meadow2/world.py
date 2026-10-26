@@ -6,9 +6,11 @@ objects and sheep have float positions in tile units (row, col) and sheep a floa
 sheep, body fat, an ``alive`` flag, and a flock that always starts within reach of water: its
 centre is 6-14 tiles from the nearest water (``START_WATER``).
 
-v2.1 (spec § 11): grass is a smooth field, and so is water (``water_at``). ``grass_at`` blends the four nearest tile centres
-bilinearly, and ``bite_weights`` spreads a bite over the same four tiles, so what the sheep sees,
-what it eats and what it depletes agree. Days are ``DAY_SCALE`` times longer (``DAY``). Sheep are
+v2.1 (spec § 11): grass is a smooth field on half-tile cells (``GRASS_RES``), and water is a
+smooth field too (``water_at``). ``grass_at`` blends the four nearest cell centres bilinearly. A
+bite crops a patch: every cell within ``PATCH_RADIUS`` of the mouth point (``patch``), and its
+nutrition is the patch's mean density (``patch_density``). So what the sheep sees under its
+mouth, what it eats and what it depletes agree, and a grazed patch shows as a bare spot. Days are ``DAY_SCALE`` times longer (``DAY``). Sheep are
 placed so that none overlaps another, a tree or the hut.
 
 All functions are pure and jittable; generate several meadows with vmap.
@@ -27,6 +29,9 @@ N_TILES = 48
 N_SHEEP = 12
 WATER = S.WATER  # ground state index of water
 N_GRASS_STATES = 4
+GRASS_RES = 2  # grass cells per tile (v2.1: half-tile cells, so a grazed patch can show)
+N_CELLS = N_TILES * GRASS_RES
+PATCH_RADIUS = 0.4  # tiles: a bite crops every grass cell within this of the mouth point
 DAY_SCALE = 2.0  # v2.1: days are this many times the first meadow's 1,200 steps
 DAY = int(1200 * DAY_SCALE)  # steps per day (sim.DAY); here so random_start need not import sim
 
@@ -52,7 +57,7 @@ CELL = 4  # tiles per interest cell (12 x 12 cells)
 
 class Meadow(NamedTuple):
     water: jax.Array  # (N, N) bool
-    grass: jax.Array  # (N, N) float biomass in [0, 3]
+    grass: jax.Array  # (N_CELLS, N_CELLS) float biomass in [0, 3], half-tile cells
     obj_kind: jax.Array  # (M,) int
     obj_variant: jax.Array  # (M,) int
     obj_pos: jax.Array  # (M, 2) float, tile units
@@ -79,13 +84,28 @@ class State(NamedTuple):
 
 
 def ground_state(m: Meadow) -> jax.Array:
-    g = jnp.clip(jnp.floor(m.grass), 0, N_GRASS_STATES - 1).astype(jnp.int32)
-    return jnp.where(m.water, WATER, g)
+    """(N, N) int ground state per tile (water, or the grass state of the tile's mean density), for
+    displays that want one value per tile."""
+    g = m.grass.reshape(N_TILES, GRASS_RES, N_TILES, GRASS_RES).mean((1, 3))
+    return jnp.where(m.water, WATER, jnp.clip(jnp.floor(g), 0, N_GRASS_STATES - 1).astype(jnp.int32))
+
+
+def _bilinear(p, res, n):
+    """Indices (..., 4, 2) and weights (..., 4) of the four grid points around p (tiles), on a grid of
+    ``res`` points per tile (point i at (i + 0.5) / res)."""
+    q = p * res - 0.5
+    f = jnp.floor(q)
+    u = q - f
+    corners = jnp.array([[0, 0], [0, 1], [1, 0], [1, 1]])
+    idx = jnp.clip(f.astype(jnp.int32)[..., None, :] + corners, 0, n - 1)
+    wr = jnp.stack([1 - u[..., 0], 1 - u[..., 0], u[..., 0], u[..., 0]], -1)
+    wc = jnp.stack([1 - u[..., 1], u[..., 1], 1 - u[..., 1], u[..., 1]], -1)
+    return idx, wr * wc
 
 
 def grass_at(grass: jax.Array, p: jax.Array) -> jax.Array:
-    """(...,) grass density at points p (..., 2): bilinear between tile centres."""
-    i, w = _bilinear(p)
+    """(...,) grass density at points p (..., 2): bilinear between grass-cell centres."""
+    i, w = _bilinear(p, GRASS_RES, N_CELLS)
     return jnp.sum(grass[i[..., 0], i[..., 1]] * w, -1)
 
 
@@ -93,26 +113,40 @@ def water_at(water: jax.Array, p: jax.Array) -> jax.Array:
     """(...,) bool: whether points p (..., 2) are in water. The water mask is blended bilinearly
     between tile centres and cut at one half, so shorelines are smooth curves rather than tile
     edges (v2.1); a straight shore still runs along the tile boundary."""
-    i, w = _bilinear(p)
+    i, w = _bilinear(p, 1, N_TILES)
     inside = jnp.all((p >= 0.0) & (p < N_TILES), -1)
     return inside & (jnp.sum(water[i[..., 0], i[..., 1]].astype(jnp.float32) * w, -1) >= 0.5)
 
 
-def bite_weights(p: jax.Array) -> tuple[jax.Array, jax.Array]:
-    """(indices (..., 4, 2), weights (..., 4)): the four tiles a bite at p takes grass from."""
-    return _bilinear(p)
+def cell_centres() -> jax.Array:
+    """(N_CELLS, N_CELLS, 2) grass-cell centres in tiles."""
+    yy, xx = jnp.mgrid[0:N_CELLS, 0:N_CELLS] + 0.5
+    return jnp.stack([yy, xx], -1) / GRASS_RES
 
 
-def _bilinear(p):
-    q = p - 0.5
-    f = jnp.floor(q)
-    u = q - f
-    i0 = f.astype(jnp.int32)
-    corners = jnp.array([[0, 0], [0, 1], [1, 0], [1, 1]])
-    idx = jnp.clip(i0[..., None, :] + corners, 0, N_TILES - 1)
-    wr = jnp.stack([1 - u[..., 0], 1 - u[..., 0], u[..., 0], u[..., 0]], -1)
-    wc = jnp.stack([1 - u[..., 1], u[..., 1], 1 - u[..., 1], u[..., 1]], -1)
-    return idx, wr * wc
+def dry_cells(water: jax.Array) -> jax.Array:
+    """(N_CELLS, N_CELLS) bool: grass cells on dry ground."""
+    return ~water_at(water, cell_centres())
+
+
+_PATCH = jnp.stack(jnp.meshgrid(jnp.arange(-2, 3), jnp.arange(-2, 3), indexing="ij"), -1).reshape(-1, 2)  # 5 x 5 cells
+
+
+def patch(p: jax.Array) -> tuple[jax.Array, jax.Array]:
+    """(indices (..., 25, 2), mask (..., 25)): the grass cells whose centres lie within
+    ``PATCH_RADIUS`` tiles of p, the patch a bite crops (v2.1). At least one cell always does."""
+    c = jnp.floor(p * GRASS_RES).astype(jnp.int32)
+    idx = c[..., None, :] + _PATCH
+    centre = (idx + 0.5) / GRASS_RES
+    ok = (jnp.linalg.norm(centre - p[..., None, :], axis=-1) <= PATCH_RADIUS) & jnp.all((idx >= 0) & (idx < N_CELLS), -1)
+    return jnp.clip(idx, 0, N_CELLS - 1), ok
+
+
+def patch_density(grass: jax.Array, p: jax.Array) -> jax.Array:
+    """(...,) mean grass density over the patch at p."""
+    idx, ok = patch(p)
+    g = grass[idx[..., 0], idx[..., 1]]
+    return jnp.sum(jnp.where(ok, g, 0.0), -1) / jnp.maximum(ok.sum(-1), 1)
 
 
 def _grid():
@@ -121,11 +155,12 @@ def _grid():
 
 
 def _blobs(key, n_blobs, r_min, r_max):
+    """(N_CELLS, N_CELLS) field on the grass cells: the maximum of random round blobs."""
     k1, k2 = jax.random.split(key)
     c = jax.random.uniform(k1, (n_blobs, 2), minval=0.0, maxval=N_TILES)
     r = jax.random.uniform(k2, (n_blobs,), minval=r_min, maxval=r_max)
-    yy, xx = _grid()
-    d2 = (yy[None] - c[:, 0, None, None]) ** 2 + (xx[None] - c[:, 1, None, None]) ** 2
+    q = cell_centres()
+    d2 = (q[None, ..., 0] - c[:, 0, None, None]) ** 2 + (q[None, ..., 1] - c[:, 1, None, None]) ** 2
     return jnp.max(jnp.exp(-d2 / (2 * r[:, None, None] ** 2)), axis=0)
 
 
@@ -179,7 +214,7 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     pick = jnp.where(ok.any(), jnp.argmax(ok), 0)
     water = cands[pick]
     centre = starts[pick] if centre is None else centre
-    grass = jnp.where(water, 0.0, grass)  # no grass under water (the smooth field fades at the shore)
+    grass = jnp.where(dry_cells(water), grass, 0.0)  # no grass under water (the field fades at the shore)
 
     kinds, poss = [], []
     for (kind, count), kk in zip(LAYOUT, jax.random.split(k_o, len(LAYOUT))):
