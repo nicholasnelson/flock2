@@ -492,3 +492,33 @@ PPO (`scripts/m2_ppo.py`, 1,500 updates, about 12 minutes per seed on the RTX 40
 *(judgement)* Meadow v2 is learnable from the right information, with clear headroom between
 random (0.83) and PPO (2.47). The question for the next rung is how much of this a sheep can get
 from its own eyes.
+
+## 14. The vision hybrid on meadow v2: design and pre-registered criteria (2026-10-26)
+
+Rung 1 of the ladder in `m1-map-world-model.md`: today's world model, given nothing for free.
+`scripts/m2_hybrid.py`:
+- **The world model** (`flock/wm.py`, new RGB mode) learns from birth, from each sheep's own view
+  (renderer v2, 64 × 256 RGB) and its 6 felt numbers. It reconstructs the view by summed squared
+  error on colour, as DreamerV3 does for images; otherwise it is unchanged (deterministic state
+  384, stochastic 32 × 16).
+- **The policy** is PPO on the model's state (h, z), trained from real experience, with death
+  handled as in the PPO baseline.
+- **Per iteration:**
+  - 8 meadows of 12 sheep act for 64 steps;
+  - 4 sheep a meadow feed the replay, in sequences of 32 steps kept only if the sheep was alive
+    throughout;
+  - 16 world-model updates on batches of 8 sequences;
+  - PPO on every living sheep's steps, after 50 iterations of world-model-only infancy.
+
+**Rendering cost:** every sheep needs its own view every step. Rendering the views one after
+another inside the compiled program (`render.render_flock` and `render_meadows`) takes 0.22 ms a
+view on the RTX 4080. Vectorising them with `vmap` took 2.7 ms a view, because its batched
+intermediates are memory-bound.
+
+**Pre-registered criteria**, on `m2_eval.py` (16 fixed meadows, 3 days), three seeds, 600
+iterations each, all settings default:
+- *Worked if* every seed beats random (0.83) by more than 5 SE, with at most 20 % of sheep dying.
+- *Strong if* every seed scores at least 2.0 with at most 5 % dying. That is between random and
+  the scripted flock (2.36); privileged PPO scores 2.47.
+- *Also reported, not criteria:* drinking success, the last day's hydration, and the action mix.
+  In the old meadow, drinking on dry ground was the signature failure.

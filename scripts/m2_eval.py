@@ -7,6 +7,7 @@ for ``--days`` days.
     python scripts/m2_eval.py --policy scripted
     python scripts/m2_eval.py --policy rest
     python scripts/m2_eval.py --policy ppo --agent ~/flock2_data/m2_ppo/s0
+    python scripts/m2_eval.py --policy hybrid --agent ~/flock2_data/m2_hybrid/s0   # world model + PPO, from its own view
 
 Reported (and written to ``--out``), with standard errors across meadows where marked:
 - reward per sheep per step, counting 0 after death (so dying costs), ± SE;
@@ -34,22 +35,39 @@ from flock.meadow2.world import DAY, random_start
 
 
 def policy_fn(name, agent):
+    """(init_mem(states), act(states, mem, key) -> (actions (B, S), mem)) over a batch of meadows."""
+    stateless = lambda per: (lambda st: jnp.zeros(()), lambda st, mem, k: (jax.vmap(per)(st, jax.random.split(k, st.t.shape[0])), mem))
     if name == "random":
-        return lambda st, k: jax.random.randint(k, st.flock.alive.shape, 0, sim.N_ACTIONS)
+        return stateless(lambda st, k: jax.random.randint(k, st.flock.alive.shape, 0, sim.N_ACTIONS))
     if name == "rest":
-        return lambda st, k: jnp.full(st.flock.alive.shape, sim.REST)
+        return stateless(lambda st, k: jnp.full(st.flock.alive.shape, sim.REST))
     if name == "scripted":
-        return scripted.policy
+        return stateless(scripted.policy)
     if name == "ppo":
-        return lambda st, k: jax.random.categorical(k, agent(P.observe(st))[0], -1)
+        return stateless(lambda st, k: jax.random.categorical(k, agent(P.observe(st))[0], -1))
+    if name == "hybrid":
+        world, policy, hy = agent
+
+        def init(st):
+            B, S = st.flock.alive.shape
+            return (jnp.zeros((B, S, hy.CFG.deter)), jnp.zeros((B, S, hy.CFG.stoch * hy.CFG.classes)), jnp.zeros((B, S), jnp.int32))
+
+        def act(st, mem, k):
+            new, mem, rec = hy.sheep_step(world, policy, st, mem, k)
+            return rec["act"], mem
+
+        return init, act
     raise ValueError(name)
 
 
-def run(act, n_meadows, steps, seed=0):
+def run(policy, n_meadows, steps, seed=0):
+    init, act = policy
     states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
 
-    def body(st, k):
-        a = jax.vmap(act)(st, jax.random.split(k, n_meadows)).astype(jnp.int32)
+    def body(carry, k):
+        st, mem = carry
+        a, mem = act(st, mem, k)
+        a = a.astype(jnp.int32)
         on_water, density, _ = jax.vmap(sim.mouth_tile)(st.meadow, st.flock.pos, st.flock.heading)
         new = jax.vmap(sim.step)(st, a)
         f = new.flock
@@ -60,9 +78,9 @@ def run(act, n_meadows, steps, seed=0):
             drank=(a == sim.DRINK) & on_water, grazed=(a == sim.GRAZE) & (density >= sim.MIN_BITE), drink=a == sim.DRINK, graze=a == sim.GRAZE,
             bad=f.taste < 0, act=a, huddled=huddled, resting=f.resting, night=jax.vmap(sim.is_night)(st.t),
         )
-        return new, rec
+        return (new, mem), rec
 
-    _, rec = jax.jit(lambda s, k: jax.lax.scan(body, s, jax.random.split(k, steps)))(states, jax.random.PRNGKey(seed))
+    _, rec = jax.jit(lambda s, k: jax.lax.scan(body, (s, init(s)), jax.random.split(k, steps)))(states, jax.random.PRNGKey(seed))
     return jax.tree.map(np.asarray, rec)
 
 
@@ -100,7 +118,7 @@ def summarise(rec):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "rest", "scripted", "ppo"), required=True)
+    p.add_argument("--policy", choices=("random", "rest", "scripted", "ppo", "hybrid"), required=True)
     p.add_argument("--agent", default=None)
     p.add_argument("--meadows", type=int, default=16)
     p.add_argument("--days", type=float, default=3.0)
@@ -117,6 +135,18 @@ def main():
         cfg = json.load(open(os.path.join(d, "config.json")))
         agent = mp.make_policy(0, cfg.get("hidden", 256))
         wm.load_into(agent, pickle.load(open(os.path.join(d, "ppo.pkl"), "rb")))
+    if a.policy == "hybrid":
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("m2_hybrid", os.path.join(os.path.dirname(__file__), "m2_hybrid.py"))
+        hy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hy)
+        d = os.path.expanduser(a.agent)
+        cfg = json.load(open(os.path.join(d, "config.json")))
+        world, policy = hy.make_world(0), hy.make_policy(0, cfg.get("hidden", 256))
+        wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
+        wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
+        agent = (world, policy, hy)
     rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY))
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, **summarise(rec)}
     print(json.dumps(res, indent=1))

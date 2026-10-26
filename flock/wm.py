@@ -74,7 +74,8 @@ BOTTOM = (2, 8)
 
 class Config(NamedTuple):
     """Sizes of a world model. Observations are (h, w) grids of class indices (n_classes), seen
-    one-hot; the encoder halves (h, w) at each stage down to ``bottom``."""
+    one-hot, or with ``rgb`` (h, w, 3) uint8 colour; the encoder halves (h, w) at each stage down
+    to ``bottom``."""
 
     h: int = H
     w: int = W
@@ -92,6 +93,8 @@ class Config(NamedTuple):
     recon_weight: float = 1.0  # loss rebalancing (third review, S3): <1 lets reward and felt levels count more
     reward_weight: float = REWARD_WEIGHT
     recon_balance: float = 0.0  # >0: weight each pixel by its class's inverse frequency in the batch, capped at this (third review, S5)
+    rgb: bool = False  # meadow v2: views are (h, w, 3) uint8 colour, not class indices; n_classes must be 3, and
+    # the strip is reconstructed by summed squared error on colour in [0, 1] (as DreamerV3 does for images)
 
     @property
     def feat(self) -> int:
@@ -261,6 +264,16 @@ class WorldModel(nnx.Module):
     def posterior(self, h, embed):
         return self.post_net(jnp.concatenate([h, embed], -1)).reshape(h.shape[:-1] + (self.cfg.stoch, self.cfg.classes))
 
+    def obs_input(self, views: jax.Array) -> jax.Array:
+        """The encoder's input for views: one-hot classes, or colour centred on 0 (``cfg.rgb``)."""
+        if self.cfg.rgb:
+            return views.astype(jnp.float32) / 255.0 - 0.5
+        return jax.nn.one_hot(views, self.cfg.n_classes)
+
+    def embed_obs(self, views: jax.Array, intero: jax.Array | None = None) -> jax.Array:
+        e = self.encoder(self.obs_input(views))
+        return e if self.intero_in is None else e + self.intero_in(intero)
+
     def initial(self, batch: int):
         return jnp.zeros((batch, self.cfg.deter)), jnp.zeros((batch, self.cfg.stoch * self.cfg.classes))
 
@@ -271,9 +284,7 @@ class WorldModel(nnx.Module):
         Returns the posterior rollout (time-major fields are (B, T, ...))."""
         B, T = views.shape[:2]
         nA = self.cfg.n_actions
-        embed = self.encoder(jax.nn.one_hot(views, self.cfg.n_classes))
-        if self.intero_in is not None:
-            embed = embed + self.intero_in(intero)
+        embed = self.embed_obs(views, intero)
         a_prev = jnp.concatenate([jnp.zeros((B, 1, nA)), jax.nn.one_hot(actions[:, :-1], nA)], 1)
         h0, z0 = self.initial(B)
 
@@ -340,6 +351,12 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     """``reward`` (B, T): the reward of the step taken after each view (as logged)."""
     s = model.observe(views, actions, key, intero)
     logits = model.decode(s)
+    if model.cfg.rgb:
+        target = views.astype(jnp.float32) / 255.0
+        err = jnp.sum((logits + 0.5 - target) ** 2, -1)  # the decoder predicts colour centred on 0
+        recon = jnp.mean(jnp.sum(err, axis=(-2, -1)))
+        acc = jnp.mean(jnp.abs(logits + 0.5 - target))  # reported as "pixel_acc": here the mean absolute colour error
+        return _rest(model, s, recon, acc, actions, intero, reward)
     ce = -jnp.take_along_axis(jax.nn.log_softmax(logits, -1), views[..., None], -1)[..., 0]
     if model.cfg.recon_balance > 0:
         # class-balanced reconstruction: rare classes (water) count as much as common ones (sky),
@@ -350,11 +367,16 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
         pix = jax.lax.stop_gradient(w[views])
         ce = ce * pix / jnp.mean(pix)
     recon = jnp.mean(jnp.sum(ce, axis=(-2, -1)))  # summed over the strip, mean over (B, T)
+    acc = jnp.mean(jnp.argmax(logits, -1) == views)
+    return _rest(model, s, recon, acc, actions, intero, reward)
+
+
+def _rest(model, s, recon, acc, actions, intero, reward):
+    """The losses after reconstruction: KL, felt numbers, reward, ensemble."""
     sg = jax.lax.stop_gradient
     dyn = jnp.mean(jnp.maximum(kl(sg(s.post), s.prior), FREE_NATS))
     rep = jnp.mean(jnp.maximum(kl(s.post, sg(s.prior)), FREE_NATS))
     loss = model.cfg.recon_weight * recon + KL_DYN * dyn + KL_REP * rep
-    acc = jnp.mean(jnp.argmax(logits, -1) == views)
     aux = {"recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
     if model.intero_head is not None:
         err = jnp.mean(jnp.sum((model.decode_intero(s) - intero) ** 2, -1))

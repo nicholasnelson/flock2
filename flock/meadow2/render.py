@@ -131,41 +131,40 @@ def _tri(x, y, y0, y1, w):
     return (y >= y0) & (y <= y1) & (jnp.abs(x) <= 0.5 * w * (y1 - y) / (y1 - y0))
 
 
-def _layers(x, y, kind, variant, view, side, is_sheep, night_glow):
-    """Painter's layers, back to front: (mask, colour, emits light). Only the hut's window emits,
-    so the night does not dim it."""
+def _layers(x, y, kind, variant, view, side, is_sheep):
+    """Painter's layers, back to front: a list of (mask, colour). The window's colour is None: it
+    depends on the light (it glows at night, undimmed), and is filled in by ``render``."""
     k = lambda kk: (kind == kk) & ~is_sheep
     s = side  # +1: head to the right
     side_v, front_v, back_v = is_sheep & (view == 0), is_sheep & (view == 1), is_sheep & (view == 2)
     pine = (variant % 2) == 1
-    flower_c = jnp.where(((variant % 2) == 0)[..., None], PINK, YELLOW)
-    window = GLASS + (GLOW - GLASS) * night_glow
     return [
         # sheep from the side
-        (side_v & (_rect(x * s, y, 0.16, 0.25, 0.0, 0.32) | _rect(x * s, y, -0.32, -0.23, 0.0, 0.32)), LEGS, False),
-        (side_v & _ellipse(x, y, -0.03 * s, 0.5, 0.42, 0.22), CREAM, False),
-        (side_v & _circle(x, y, 0.42 * s, 0.68, 0.14), FACE, False),
+        (side_v & (_rect(x * s, y, 0.16, 0.25, 0.0, 0.32) | _rect(x * s, y, -0.32, -0.23, 0.0, 0.32)), LEGS),
+        (side_v & _ellipse(x, y, -0.03 * s, 0.5, 0.42, 0.22), CREAM),
+        (side_v & _circle(x, y, 0.42 * s, 0.68, 0.14), FACE),
         # from the front and the back
-        ((front_v | back_v) & (_rect(x, y, -0.17, -0.08, 0.0, 0.3) | _rect(x, y, 0.08, 0.17, 0.0, 0.3)), LEGS, False),
-        ((front_v | back_v) & _circle(x, y, 0.0, 0.5, 0.3), CREAM, False),
-        (front_v & _circle(x, y, 0.0, 0.52, 0.15), FACE, False),
-        (back_v & _circle(x, y, 0.0, 0.38, 0.05), CREAM * 0.85, False),
+        ((front_v | back_v) & (_rect(x, y, -0.17, -0.08, 0.0, 0.3) | _rect(x, y, 0.08, 0.17, 0.0, 0.3)), LEGS),
+        ((front_v | back_v) & _circle(x, y, 0.0, 0.5, 0.3), CREAM),
+        (front_v & _circle(x, y, 0.0, 0.52, 0.15), FACE),
+        (back_v & _circle(x, y, 0.0, 0.38, 0.05), CREAM * 0.85),
         # trees: broadleaf (even variants) or pine
-        (k(TREE) & ~pine & _rect(x, y, -0.075, 0.075, 0.0, 0.85), TRUNK, False),
-        (k(TREE) & ~pine & _circle(x, y, 0.0, 1.3, 0.5), LEAVES, False),
-        (k(TREE) & pine & _rect(x, y, -0.07, 0.07, 0.0, 0.4), TRUNK, False),
-        (k(TREE) & pine & _tri(x, y, 0.3, 2.0, 0.9), PINE, False),
+        (k(TREE) & ~pine & _rect(x, y, -0.075, 0.075, 0.0, 0.85), TRUNK),
+        (k(TREE) & ~pine & _circle(x, y, 0.0, 1.3, 0.5), LEAVES),
+        (k(TREE) & pine & _rect(x, y, -0.07, 0.07, 0.0, 0.4), TRUNK),
+        (k(TREE) & pine & _tri(x, y, 0.3, 2.0, 0.9), PINE),
         # the hut
-        (k(HUT) & _rect(x, y, -0.7, 0.7, 0.0, 1.0), WALL, False),
-        (k(HUT) & _tri(x, y, 1.0, 1.5, 1.6), ROOF, False),
-        (k(HUT) & _rect(x, y, -0.15, 0.15, 0.0, 0.6), DOOR, False),
-        (k(HUT) & _rect(x, y, 0.3, 0.55, 0.5, 0.75), window, True),
+        (k(HUT) & _rect(x, y, -0.7, 0.7, 0.0, 1.0), WALL),
+        (k(HUT) & _tri(x, y, 1.0, 1.5, 1.6), ROOF),
+        (k(HUT) & _rect(x, y, -0.15, 0.15, 0.0, 0.6), DOOR),
+        (k(HUT) & _rect(x, y, 0.3, 0.55, 0.5, 0.75), None),
         # small things
-        (k(SALT) & _rect(x, y, -0.2, 0.2, 0.0, 0.3), SALT_C, False),
-        (k(FLOWER) & _rect(x, y, -0.012, 0.012, 0.0, 0.12), STEM, False),
-        (k(FLOWER) & _circle(x, y, 0.0, 0.13, 0.04), flower_c, False),
-        (k(MUSHROOM) & _rect(x, y, -0.02, 0.02, 0.0, 0.08), MUSH_STEM, False),
-        (k(MUSHROOM) & _ellipse(x, y, 0.0, 0.08, 0.075, 0.06) & (y >= 0.08), MUSH_CAP, False),
+        (k(SALT) & _rect(x, y, -0.2, 0.2, 0.0, 0.3), SALT_C),
+        (k(FLOWER) & _rect(x, y, -0.012, 0.012, 0.0, 0.12), STEM),
+        (k(FLOWER) & ~pine & _circle(x, y, 0.0, 0.13, 0.04), PINK),
+        (k(FLOWER) & pine & _circle(x, y, 0.0, 0.13, 0.04), YELLOW),
+        (k(MUSHROOM) & _rect(x, y, -0.02, 0.02, 0.0, 0.08), MUSH_STEM),
+        (k(MUSHROOM) & _ellipse(x, y, 0.0, 0.08, 0.075, 0.06) & (y >= 0.08), MUSH_CAP),
     ]
 
 
@@ -235,21 +234,22 @@ def render(state: State, i: jax.Array) -> jax.Array:
     y = EYE + rng[:, None, :] * jnp.tan(ROW_ELEV)[None, :, None]  # (J, H, W) height on the billboard
     J = near.shape[0]
     bc = lambda a: a.reshape((J,) + (1,) * 2)
-    obj_c = jnp.zeros((J, H, W, 3))
-    obj_m = jnp.zeros((J, H, W), bool)
-    obj_e = jnp.zeros((J, H, W), bool)
-    for mask, col, emits in _layers(x, y, bc(kind), bc(variant), bc(view), bc(side), bc(is_sheep), 1.0 - L):
-        mask = mask & bc(present)
-        obj_c = jnp.where(mask[..., None], col, obj_c)
-        obj_e = jnp.where(mask, emits, obj_e)
-        obj_m = obj_m | mask
-    odepth = jnp.where(obj_m, rng[:, None, :], jnp.inf)
-    j = jnp.argmin(odepth, 0)  # (H, W)
+    # which layer (if any) covers each pixel of each object: a small integer per pixel rather than a
+    # colour per object (12 x less memory traffic; colours are looked up once at the end)
+    layers = _layers(x, y, bc(kind), bc(variant), bc(view), bc(side), bc(is_sheep))
+    lay = jnp.full((J, H, W), -1, jnp.int8)
+    for li, (mask, _) in enumerate(layers):
+        lay = jnp.where(mask & bc(present), jnp.int8(li), lay)
+    window_id = [li for li, (_, col) in enumerate(layers) if col is None][0]
+    table = jnp.stack([GLASS + (GLOW - GLASS) * (1.0 - L) if col is None else col for _, col in layers])  # (layers, 3)
+    odepth = jnp.where(lay >= 0, rng[:, None, :], jnp.inf)
+    j = jnp.argmin(odepth, 0)  # (H, W) the nearest object covering each pixel
     od = jnp.min(odepth, 0)
     front = od < depth
-    o_col = jnp.take_along_axis(obj_c, j[None, :, :, None], 0)[0]
+    lay_px = jnp.take_along_axis(lay, j[None], 0)[0]
+    o_col = table[jnp.clip(lay_px, 0)]
     o_pos = (eye + rel)[j]  # (H, W, 2)
-    glow_px = front & jnp.take_along_axis(obj_e, j[None], 0)[0]
+    glow_px = front & (lay_px == window_id)
     colour = jnp.where(front[..., None], o_col, colour)
     depth = jnp.where(front, od, depth)
     gpos = jnp.where(front[..., None], o_pos, gpos)
@@ -275,3 +275,18 @@ def reticle_row(state: State, i: jax.Array) -> jax.Array:
     on_water, _, inside = sim.mouth_tile(m, f.pos[i : i + 1], f.heading[i : i + 1])
     h = jnp.where(on_water | ~inside, 0.0, GRASS_H * grass_at(m.grass, p) / 3.0)[0]
     return row_of(jnp.arctan2(h - EYE, sim.MOUTH))
+
+
+def render_flock(state: State) -> jax.Array:
+    """(S, H, W, 3) every sheep's view. Rendered one view after another (``lax.map``) rather than
+    vectorised: on the RTX 4080, 12 views take 2.7 ms this way against 32 ms with ``vmap``, whose
+    batched intermediates are memory-bound (measured 2026-10-26)."""
+    return jax.lax.map(lambda i: render(state, i), jnp.arange(state.flock.pos.shape[0]))
+
+
+def render_meadows(states: State) -> jax.Array:
+    """(B, S, H, W, 3) every sheep's view in a batch of meadows, one view after another."""
+    B, S = states.flock.pos.shape[:2]
+    idx = (jnp.repeat(jnp.arange(B), S), jnp.tile(jnp.arange(S), B))
+    out = jax.lax.map(lambda mi: render(jax.tree.map(lambda a: a[mi[0]], states), mi[1]), idx)
+    return out.reshape((B, S) + out.shape[1:])
