@@ -522,3 +522,35 @@ iterations each, all settings default:
   the scripted flock (2.36); privileged PPO scores 2.47.
 - *Also reported, not criteria:* drinking success, the last day's hydration, and the action mix.
   In the old meadow, drinking on dry ground was the signature failure.
+
+### Results (2026-10-26): criteria not met
+
+`meadow2-results/eval/hybrid_s*.json` and `meadow2-results/hybrid/s*_log.jsonl`. Each seed took
+about 16 minutes to train.
+
+| Seed | Reward / step (± SE) | Above random | Died | Days survived (of 3) | Drink success | Graze success | Last-day hydration (living) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 1.24 ± 0.07 | 5.9 SE | 76 % | 1.71 | 37 % | 89 % | 0.63 |
+| 1 | 1.21 ± 0.08 | 4.6 SE | 68 % | 1.68 | 19 % | 93 % | 0.89 |
+| 2 | 1.36 ± 0.07 | 7.8 SE | 58 % | 1.87 | 32 % | 84 % | 0.87 |
+
+For reference: random 0.83 (86 % die), scripted 2.36, privileged PPO 2.47.
+
+**Against the criteria:** *worked* fails. Seed 1 is only 4.6 SE above random, and every seed loses
+far more than 20 % of its sheep. *Strong* fails.
+
+**What the sheep did learn, from their own eyes alone** *(judgement)*:
+- **Food is solved.** Grazing succeeds 84–93 % of the time; gut energy stays near 1.1 and fat near
+  0.95.
+- **Drinking is partly learned.** 19–37 % of drink attempts hit water, against 2 % for random. The
+  old meadow's vision sheep drank on dry ground almost every time.
+- **They die of thirst, mostly on day 2.**
+- **They do not huddle at night** (1–5 % of night rest), unlike the scripted flock (65 %) and PPO
+  (31–37 %).
+
+**Training curves:** reward per living sheep-step rose to about 2.0–2.2 by iteration 300, then
+stayed flat to 600. The share of sheep alive swung between about 35 % and 95 % with the meadow
+restarts, so deaths were common in training too.
+
+**Open:** whether the limit is what the world model's state holds about water (where it is), or
+the policy and the amount of training.
