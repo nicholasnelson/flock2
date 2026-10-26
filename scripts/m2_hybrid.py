@@ -20,6 +20,9 @@ PPO handles death as ``m2_ppo.py`` does: no bootstrap past a death, no reward ce
 scaled by 1 - gamma), and steps taken while dead are left out. Meadows restart every
 ``--reset_every`` steps (staggered), or when every sheep in one has died, with model states zeroed.
 Checkpoints ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m2_eval.py --policy hybrid``.
+
+``--model spatial`` uses rung 3's world model (``flock.wm_spatial``: a grid-shaped state, all of it
+learned) instead of the RSSM's single vector (``--model vector``, the default).
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ import numpy as np
 import optax
 from flax import nnx
 
-from flock import ac, wm
+from flock import ac, wm, wm_spatial
 from flock.meadow2 import drives as D, render as R, sim
 from flock.meadow2.world import DAY, random_start
 
@@ -55,12 +58,19 @@ _ppo2 = _load("m2_ppo")
 CFG = wm.Config(n_classes=3, rgb=True, n_actions=sim.N_ACTIONS, body_dims=())
 
 
-def make_world(seed):
+def make_world(seed, kind="vector"):
+    if kind == "spatial":
+        return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS))
     return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG)
 
 
-def make_policy(seed, hidden=256):
-    return _ppo1.Policy(nnx.Rngs(seed), hidden=hidden, n_in=CFG.feat, n_out=sim.N_ACTIONS)
+def make_policy(seed, hidden=256, n_in=CFG.feat):
+    return _ppo1.Policy(nnx.Rngs(seed), hidden=hidden, n_in=n_in, n_out=sim.N_ACTIONS)
+
+
+def zero_mems(world, B, S):
+    c = world.cfg
+    return jnp.zeros((B, S, c.deter)), jnp.zeros((B, S, c.stoch * c.classes)), jnp.zeros((B, S), jnp.int32)
 
 
 def to_bytes(rgb):
@@ -75,7 +85,7 @@ def sheep_step(world, policy, states, mems, key):
     f = states.flock
     feel = D.felt(f.levels, f.fat, f.taste)
     embed = world.embed_obs(views, feel)
-    h = world.transition(h, z, jax.nn.one_hot(a_prev, CFG.n_actions))
+    h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z = wm._sample(world.posterior(h, embed), k1)
     feat = jax.lax.stop_gradient(ac.feat_of(h, z))
     logits, value = policy(feat)
@@ -104,7 +114,7 @@ def collect(world, policy, states, mems, key, steps, record, gamma_lam):
     views = to_bytes(R.render_meadows(states))
     f = states.flock
     embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
-    h2 = world.transition(h, z, jax.nn.one_hot(a_prev, CFG.n_actions))
+    h2 = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z2 = wm._sample(world.posterior(h2, embed), k)
     _, last_v = policy(ac.feat_of(h2, z2))
     r = tr["reward"] * (1 - gamma)
@@ -173,15 +183,16 @@ def main():
     p.add_argument("--ent", type=float, default=0.01)
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--reset_every", type=int, default=2 * DAY)
+    p.add_argument("--model", choices=("vector", "spatial"), default="vector")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
     os.makedirs(a.out, exist_ok=True)
     json.dump({**vars(a), "kind": "m2_hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
-    world = make_world(a.seed)
+    world = make_world(a.seed, a.model)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
-    policy = make_policy(a.seed + 1, a.hidden)
+    policy = make_policy(a.seed + 1, a.hidden, world.cfg.feat)
     opt = nnx.Optimizer(policy, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
@@ -190,7 +201,7 @@ def main():
     key, k = jax.random.split(key)
     states = fresh(jax.random.split(k, a.meadows))
     S = states.flock.pos.shape[1]
-    zero = lambda: (jnp.zeros((a.meadows, S, CFG.deter)), jnp.zeros((a.meadows, S, CFG.stoch * CFG.classes)), jnp.zeros((a.meadows, S), jnp.int32))
+    zero = lambda: zero_mems(world, a.meadows, S)
     mems = zero()
     age = (np.arange(a.meadows) % (a.reset_every // a.steps)) * a.steps
     log = open(os.path.join(a.out, "log.jsonl"), "a")

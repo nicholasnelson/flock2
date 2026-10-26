@@ -50,7 +50,7 @@ def policy_fn(name, agent):
 
         def init(st):
             B, S = st.flock.alive.shape
-            return (jnp.zeros((B, S, hy.CFG.deter)), jnp.zeros((B, S, hy.CFG.stoch * hy.CFG.classes)), jnp.zeros((B, S), jnp.int32))
+            return hy.zero_mems(world, B, S)
 
         def act(st, mem, k):
             new, mem, rec = hy.sheep_step(world, policy, st, mem, k)
@@ -143,7 +143,8 @@ def main():
         spec.loader.exec_module(hy)
         d = os.path.expanduser(a.agent)
         cfg = json.load(open(os.path.join(d, "config.json")))
-        world, policy = hy.make_world(0), hy.make_policy(0, cfg.get("hidden", 256))
+        world = hy.make_world(0, cfg.get("model", "vector"))
+        policy = hy.make_policy(0, cfg.get("hidden", 256), world.cfg.feat)
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
         agent = (world, policy, hy)

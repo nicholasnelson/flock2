@@ -103,7 +103,7 @@ def mlp_probe(x, y, epochs=8, seed=0):
 def collect(world, hy, n_meadows, warm, steps, seed):
     states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
     S = states.flock.pos.shape[1]
-    mems = (jnp.zeros((n_meadows, S, hy.CFG.deter)), jnp.zeros((n_meadows, S, hy.CFG.stoch * hy.CFG.classes)), jnp.zeros((n_meadows, S), jnp.int32))
+    mems = hy.zero_mems(world, n_meadows, S)
 
     def body(carry, k):
         st, (h, z, a_prev) = carry
@@ -111,7 +111,7 @@ def collect(world, hy, n_meadows, warm, steps, seed):
         views = hy.to_bytes(hy.R.render_meadows(st))
         f = st.flock
         embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
-        h = world.transition(h, z, jax.nn.one_hot(a_prev, hy.CFG.n_actions))
+        h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
         z = wm._sample(world.posterior(h, embed), k1)
         priv = jax.vmap(P.observe)(st)
         a = jax.vmap(scripted.policy)(st, jax.random.split(k2, n_meadows))
@@ -127,6 +127,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--agent", default=None)
     p.add_argument("--untrained", action="store_true")
+    p.add_argument("--model", choices=("vector", "spatial"), default=None, help="for --untrained (else read from the agent's config)")
     p.add_argument("--meadows", type=int, default=32)
     p.add_argument("--warm", type=int, default=150)
     p.add_argument("--steps", type=int, default=300)
@@ -134,7 +135,11 @@ def main():
     p.add_argument("--out", default=None)
     a = p.parse_args()
     hy = _load("m2_hybrid")
-    world = hy.make_world(0)
+    p_kind = "vector"
+    if a.agent:
+        cfg_path = os.path.join(os.path.expanduser(a.agent), "config.json")
+        p_kind = json.load(open(cfg_path)).get("model", "vector") if os.path.exists(cfg_path) else "vector"
+    world = hy.make_world(0, a.model or p_kind)
     if not a.untrained:
         wm.load_into(world, pickle.load(open(os.path.join(os.path.expanduser(a.agent), "wm.pkl"), "rb")))
     feat, priv, alive = collect(world, hy, a.meadows, a.warm, a.steps, a.seed)
