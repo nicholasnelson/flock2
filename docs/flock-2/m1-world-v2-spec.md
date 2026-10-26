@@ -755,7 +755,7 @@ Each is evaluated (`m2_eval.py`) and diagnosed (`m2_diag.py`).
 
 ### Screening results (2026-10-26)
 
-`meadow2-results/{eval,diag}/{n0,n1,s1}.json`, plus `hybrid/n0_log.jsonl`, `n1_log.jsonl` and
+`meadow2-results/eval/hybrid_{n0,n1}.json`, `eval/hybrid_spatial_s1arm.json`, `diag/{n0,n1,spatial_s1arm}.json`, plus `hybrid/n0_log.jsonl`, `n1_log.jsonl` and
 `spatial_s1arm_log.jsonl`. Peak RAM was 6.8, 7.5 and 8.2 GB, all under the 12 GB watchdog.
 
 | Arm | Reward / step | Died | Water redrawn by day, within 8 tiles | Night, < 4 / 4–8 | Bearing from h and z, day within 8 (ridge) | Bearing just after leaving view (D3) |
