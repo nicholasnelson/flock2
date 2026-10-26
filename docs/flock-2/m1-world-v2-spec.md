@@ -590,3 +590,13 @@ Reading *(judgement)*:
   deaths from thirst. The old meadow's model had the same gap.
 - This is the evidence the ladder (`m1-map-world-model.md`) asked for: the vector state does not
   organise "where". Rung 2 (more training, a larger model) is untested.
+
+### Rung-2 test: pre-registered (2026-10-26, owner's decision)
+
+The same hybrid, seed 0, trained for 2,000 iterations instead of 600, otherwise unchanged; then
+evaluated (`m2_eval.py`) and re-probed (`m2_probe.py`, same 32 meadows).
+
+**Rule:** take the better of the MLP and ridge probes for each component of the direction to water
+in view. If both the forward and the left components stay below R² 0.3, move to rung 3 (a state
+with spatial shape, all learned). If either reaches 0.3, rung 2 (more training, a larger model)
+gets a full three-seed test first. The evaluation score is reported but does not decide.
