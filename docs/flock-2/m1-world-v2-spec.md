@@ -625,3 +625,44 @@ rule says move to rung 3.
 - The Fable 5.1 review (`review-2026-10-26-water.md`) cautions that this probe cannot reach 1 by
   design: its "in view" is not true visibility, and its nearest-tile targets are noisy at the
   shore. It recommends a decode-from-posterior water check (its D1) before acting on the rule.
+
+## 15. The diagnosis gate (pre-registered 2026-10-26, before any of its results)
+
+Adopted from the plan review (`review-2026-10-26-plan.md`), agreed with the owner. The rung-2 rule's
+outcome stands as recorded, but rung 3 is **deferred pending this gate**: rung 2 tested more training
+of what the loss already pays for, not what rung 3 changes.
+
+**Measurements** (on the 600-iteration seed 0 and the 2,000-iteration seed 0, and the new arm):
+- **D1, water reconstruction.** Views are decoded from the model's posterior. A true water pixel
+  counts as redrawn if the decoded colour is closer to its true colour than to the colour the same
+  pixel shows with the water removed (rendered again without water). Reported as the share redrawn
+  ("recall"), by the pixel's distance (< 4, 4–8, 8–16, ≥ 16 tiles) and by day or night.
+- **D2/D3, a better probe.** "Visible" means water pixels are actually on screen (from the
+  renderer's own mask). Targets are the image column of the visible water's centre (its bearing),
+  and its distance. Results are binned by distance, and "just out of view" means not visible now
+  but visible within the last 30 steps. Ridge is the headline; an MLP with early stopping on held-out
+  meadows is reported beside it. The encoder's embedding, h and z are probed separately.
+- **The policy-reads-encoding arm.** PPO sees (h, z) and the current view's embedding (stop-gradient,
+  so PPO does not train the encoder). One seed, 600 iterations, `m2_eval`.
+- **Dispersion and the information gap**, added to `m2_eval`: nearest-neighbour distance, other sheep
+  in view, and the share of thirsty steps (hydration < 0.5) in which a sheep cannot see water but a
+  flockmate within 10 tiles saw water in the last 300 steps. "Sees water" here is a geometric proxy:
+  a water tile within 16 tiles inside the field of view, ignoring occlusion.
+
+**Branches**, decided by these written criteria, for water by day within 8 tiles (D1) and visible water
+(D2):
+- **A. "The loss is the limit"** if D1 recall within 8 tiles by day is below 0.5. Then the fixes
+  are to the loss and the data (multi-step prediction, the KL weight, the replay), and the night-water
+  world change goes to the owner. Rung 3 waits, because it would inherit the blind spot.
+- **B. "The state is the limit"** if D1 recall is at least 0.5 and the embedding's ridge probe for
+  bearing is at least 0.5, but h and z read at most 0.3. Then the bearing is seen and drawn but not
+  carried in a readable form; rung 3 (and a column-preserving state) is justified.
+- **C. "Perception is the limit"** if D1 recall is at least 0.5 but the embedding cannot read bearing
+  either (below 0.3). Then the encoder bottleneck is the problem: a column-preserving encoder first.
+- If the policy-reads-encoding arm clearly beats the plain hybrid (more than 5 SE), the bearing is
+  usable from the eyes. That supports B or C over A.
+
+**The week's success criterion** for Track A (pre-registered): at most 20 % of sheep die on `m2_eval`,
+**and** the ridge R² for water bearing is at least 0.5 on frames where the pond is visible by day
+within 8 tiles, **and** at least 0.3 for frames within 30 steps after it leaves view. Reported for
+embedding, h and z separately, with time to first drink and deaths per day.
