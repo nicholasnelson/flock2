@@ -25,6 +25,10 @@ Checkpoints ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m2_eval.
 embedding as well as (h, z), with the gradient stopped, so PPO does not train the encoder. The
 embedding is the sheep's own eyes, not privileged information.
 
+``--kl_dyn`` and ``--ms_weight`` set the world model's loss (``flock.wm.Config``); ``--add_frac`` adds
+only a random share of each iteration's sequences to the replay, so a replay of a given size covers
+a longer history.
+
 ``--model spatial`` uses rung 3's world model (``flock.wm_spatial``: a grid-shaped state, all of it
 learned) instead of the RSSM's single vector (``--model vector``, the default).
 """
@@ -62,10 +66,12 @@ _ppo2 = _load("m2_ppo")
 CFG = wm.Config(n_classes=3, rgb=True, n_actions=sim.N_ACTIONS, body_dims=())
 
 
-def make_world(seed, kind="vector"):
+def make_world(seed, kind="vector", kl_dyn=wm.KL_DYN, ms_weight=0.0):
+    """The world model. ``kl_dyn`` and ``ms_weight`` change only the loss, not the parameters, so a
+    checkpoint loads into a model made with the defaults."""
     if kind == "spatial":
-        return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS))
-    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG)
+        return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS, kl_dyn=kl_dyn, ms_weight=ms_weight))
+    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG._replace(kl_dyn=kl_dyn, ms_weight=ms_weight))
 
 
 def make_policy(seed, hidden=256, n_in=CFG.feat):
@@ -198,13 +204,16 @@ def main():
     p.add_argument("--reset_every", type=int, default=2 * DAY)
     p.add_argument("--model", choices=("vector", "spatial"), default="vector")
     p.add_argument("--policy_input", choices=("state", "state_embed"), default="state")
+    p.add_argument("--kl_dyn", type=float, default=wm.KL_DYN, help="dynamics KL weight (DreamerV3: 1)")
+    p.add_argument("--ms_weight", type=float, default=0.0, help="multi-step view prediction weight (0: off)")
+    p.add_argument("--add_frac", type=float, default=1.0, help="share of each iteration's sequences added to the replay")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
     os.makedirs(a.out, exist_ok=True)
     json.dump({**vars(a), "kind": "m2_hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
-    world = make_world(a.seed, a.model)
+    world = make_world(a.seed, a.model, a.kl_dyn, a.ms_weight)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     use_embed = a.policy_input == "state_embed"
     policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed))
@@ -230,7 +239,7 @@ def main():
         # world-model replay: recorded sheep, cut into sequences, kept if alive throughout
         T, L = a.steps, a.length
         cut = lambda x: x[:, :, : a.record].transpose((1, 2, 0) + tuple(range(3, x.ndim))).reshape((-1, T // L, L) + x.shape[3:]).reshape((-1, L) + x.shape[3:])
-        alive_seq = cut(tr["alive_before"]).all(-1)
+        alive_seq = cut(tr["alive_before"]).all(-1) & (rng.random(cut(tr["alive_before"]).shape[0]) < a.add_frac)
         if alive_seq.any():
             replay.add(cut(tr["views"])[alive_seq], cut(tr["act"])[alive_seq], cut(tr["feel"])[alive_seq], cut(tr["reward"])[alive_seq])
         t_b = time.time()
@@ -282,7 +291,7 @@ def main():
         log.write(json.dumps(rec) + "\n")
         log.flush()
         if it % 10 == 0 or it == 1:
-            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "alive_share", "deaths", "levels", "fat", "bad_taste", "ppo_entropy", "wm_recon", "wm_pixel_acc", "wm_reward_ce", "t_collect", "t_train")}), flush=True)
+            print(json.dumps({k2: rec.get(k2) for k2 in ("iter", "t", "reward", "alive_share", "deaths", "levels", "fat", "bad_taste", "ppo_entropy", "wm_recon", "wm_multistep", "wm_pixel_acc", "wm_reward_ce", "t_collect", "t_train")}), flush=True)
         if it % 25 == 0 or it == a.iters:
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(world))), open(os.path.join(a.out, "wm.pkl"), "wb"))
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(policy))), open(os.path.join(a.out, "policy.pkl"), "wb"))

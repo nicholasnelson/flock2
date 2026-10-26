@@ -95,6 +95,10 @@ class Config(NamedTuple):
     recon_balance: float = 0.0  # >0: weight each pixel by its class's inverse frequency in the batch, capped at this (third review, S5)
     rgb: bool = False  # meadow v2: views are (h, w, 3) uint8 colour, not class indices; n_classes must be 3, and
     # the strip is reconstructed by summed squared error on colour in [0, 1] (as DreamerV3 does for images)
+    kl_dyn: float = KL_DYN  # weight of the dynamics KL; 0.5 here historically; DreamerV3 uses 1 (plan review, 2026-10-26)
+    ms_weight: float = 0.0  # >0 (RGB only): multi-step prediction; from starts every ms_stride steps, the prior is rolled
+    ms_horizons: tuple = (2, 4, 8)  # forward with the actions taken and the view is decoded at these horizons and
+    ms_stride: int = 8  # compared with the real one (summed squared error, averaged), weighted by ms_weight
 
     @property
     def feat(self) -> int:
@@ -356,7 +360,12 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
         err = jnp.sum((logits + 0.5 - target) ** 2, -1)  # the decoder predicts colour centred on 0
         recon = jnp.mean(jnp.sum(err, axis=(-2, -1)))
         acc = jnp.mean(jnp.abs(logits + 0.5 - target))  # reported as "pixel_acc": here the mean absolute colour error
-        return _rest(model, s, recon, acc, actions, intero, reward)
+        loss, aux = _rest(model, s, recon, acc, actions, intero, reward)
+        if getattr(model.cfg, "ms_weight", 0.0) > 0:
+            ms = _multistep(model, s, views, actions, jax.random.fold_in(key, 1))
+            loss = loss + model.cfg.ms_weight * ms
+            aux = {**aux, "multistep": ms, "loss": loss}
+        return loss, aux
     ce = -jnp.take_along_axis(jax.nn.log_softmax(logits, -1), views[..., None], -1)[..., 0]
     if model.cfg.recon_balance > 0:
         # class-balanced reconstruction: rare classes (water) count as much as common ones (sky),
@@ -371,12 +380,34 @@ def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Ar
     return _rest(model, s, recon, acc, actions, intero, reward)
 
 
+def _multistep(model, s, views, actions, key):
+    """Open-loop prediction of the view: from the posterior at each start, roll the prior forward
+    with the actions taken, decode at each horizon, and compare with the real view (summed squared
+    colour error per frame, averaged over starts and horizons)."""
+    c = model.cfg
+    T = views.shape[1]
+    H = max(c.ms_horizons)
+    starts = list(range(0, T - H, c.ms_stride))
+    target = views.astype(jnp.float32) / 255.0
+    errs = []
+    for i, t0 in enumerate(starts):
+        h, z = s.h[:, t0], s.z[:, t0]
+        k = jax.random.fold_in(key, i)
+        for step in range(1, H + 1):
+            h = model.transition(h, z, jax.nn.one_hot(actions[:, t0 + step - 1], c.n_actions))
+            z = _sample(model.prior(h), jax.random.fold_in(k, step))
+            if step in c.ms_horizons:
+                pred = model.decode(Step(h, z, None, None))
+                errs.append(jnp.mean(jnp.sum((pred + 0.5 - target[:, t0 + step]) ** 2, axis=(-3, -2, -1))))
+    return jnp.mean(jnp.stack(errs))
+
+
 def _rest(model, s, recon, acc, actions, intero, reward):
     """The losses after reconstruction: KL, felt numbers, reward, ensemble."""
     sg = jax.lax.stop_gradient
     dyn = jnp.mean(jnp.maximum(kl(sg(s.post), s.prior), FREE_NATS))
     rep = jnp.mean(jnp.maximum(kl(s.post, sg(s.prior)), FREE_NATS))
-    loss = model.cfg.recon_weight * recon + KL_DYN * dyn + KL_REP * rep
+    loss = model.cfg.recon_weight * recon + getattr(model.cfg, "kl_dyn", KL_DYN) * dyn + KL_REP * rep
     aux = {"recon": recon, "kl_dyn": dyn, "kl_rep": rep, "pixel_acc": acc}
     if model.intero_head is not None:
         err = jnp.mean(jnp.sum((model.decode_intero(s) - intero) ** 2, -1))

@@ -60,6 +60,10 @@ class SpatialConfig(NamedTuple):
     reward_weight: float = wm.REWARD_WEIGHT
     recon_balance: float = 0.0
     body_dims: tuple = ()
+    kl_dyn: float = wm.KL_DYN
+    ms_weight: float = 0.0
+    ms_horizons: tuple = (2, 4, 8)
+    ms_stride: int = 8
 
     @property
     def n_cells(self) -> int:

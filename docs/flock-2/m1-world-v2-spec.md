@@ -715,3 +715,31 @@ boundary for the 2,000-iteration one. The arm's gain points the same way.
   problem (the loss, and the night-water world fact), even though the rule's threshold, set within
   8 tiles, did not trigger it.
 - **No memory once out of view.**
+
+## 16. Branch B's fixes and the loss fixes: screening (pre-registered 2026-10-26)
+
+**World change (owner, 2026-10-26):** water reflects the sky. A water pixel mixes in 30 % of the
+sky at the mirrored elevation, and is never lit below 45 % of its day brightness, so ponds stay
+visible at night (`render.REFLECT`, `WATER_FLOOR`). Night contrast had been about 70× lower than
+by day, and the models barely redrew water at night. This changes the world, so every
+vision-based result after it is on the new rendering. Scripted and privileged-PPO results are
+unaffected: they do not use the view.
+
+**Arms** (seed 0, 600 iterations, `m2_hybrid.py`; the policy reads (h, z) only, since the probe is
+about the state):
+
+| Arm | World model | Loss | Replay |
+| --- | --- | --- | --- |
+| **N0**, the new baseline | vector RSSM | dynamics KL weight 1 (DreamerV3's), was 0.5 | 2,048 sequences; half of each iteration's added, about 64 iterations of history (was 1,024, all added, 16) |
+| **N1** | vector RSSM | as N0, plus multi-step prediction (weight 1; horizons 2, 4, 8; starts every 8 steps) | as N0 |
+| **S1** | rung 3, spatial (`flock/wm_spatial.py`) | as N1 | as N0 |
+
+Each is evaluated (`m2_eval.py`) and diagnosed (`m2_diag.py`).
+
+**Screening rule** (written before the runs):
+- A fix is **kept** if, against N0, it raises the ridge R² for water bearing from h and z (visible
+  by day within 8 tiles) by at least 0.1, **or** brings the bearing just after water leaves view
+  (D3, the better of sine and cosine) to at least 0.3.
+- The arm that does best on those, if any is kept, goes to three seeds.
+- The week's criterion (§ 15) stays the target. Evaluation scores are reported but do not decide
+  the screening, which is about what the state holds.

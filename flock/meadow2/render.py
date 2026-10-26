@@ -19,6 +19,8 @@ tiles away 6.6 (was 1.7), and the sky 18 rows (was 28).
   hidden by anything nearer, grass included. A sheep is drawn from the side (head toward where it
   is going), from the front or from the back, by how it moves relative to the line of sight.
   Dead sheep are not drawn.
+- **Water reflects the sky** (``REFLECT``) and is never lit below ``WATER_FLOOR`` of its day
+  brightness, so ponds stay visible at night (owner, 2026-10-26).
 - **Light.** Every colour is scaled by the light level (``sim.light``), with a slight blue cast at
   night. Within ``HUT_LIGHT_R`` tiles of the hut, the light is at least ``HUT_LIGHT``, and its
   window glows at night.
@@ -45,6 +47,10 @@ HAZE = 30.0
 K = 192
 DISTS = jnp.asarray(0.15 * (90.0 / 0.15) ** (np.arange(K) / (K - 1)), jnp.float32)
 HUT_LIGHT, HUT_LIGHT_R = 0.6, 3.0
+# water reflects the sky (owner, 2026-10-26: at night it was ~70x lower in contrast and the world
+# model lost it): a water pixel mixes in REFLECT of the sky at the mirrored elevation, and is never
+# lit below WATER_FLOOR of its day brightness, like a pond catching the last light
+REFLECT, WATER_FLOOR = 0.3, 0.45
 FENCE_H, POST_H, POST_EVERY = 0.4, 0.5, 2.0
 
 
@@ -264,13 +270,17 @@ def render_aux(state: State, i: jax.Array):
     hut = m.obj_present & (m.obj_kind == HUT)
     d_hut = jnp.min(jnp.where(hut[None, None, :], jnp.linalg.norm(gpos[:, :, None, :] - m.obj_pos[None, None], axis=-1), jnp.inf), -1)
     lit = jnp.maximum(L, HUT_LIGHT * jnp.clip(1.0 - d_hut / HUT_LIGHT_R, 0.0, 1.0))
+    water_vis = hit & wet_px & ~fence & ~front
+    mirror = sky(-ROW_ELEV, jnp.maximum(L, WATER_FLOOR))[:, None, :]  # (H, 1, 3): the sky seen in the water
+    colour = jnp.where(water_vis[..., None], (1 - REFLECT) * colour + REFLECT * mirror, colour)
+    lit = jnp.where(water_vis, jnp.maximum(lit, WATER_FLOOR), lit)
     colour = jnp.where(glow_px[..., None], colour, colour * lit[..., None] + (1.0 - L) * NIGHT_CAST)
     horizon = sky(jnp.zeros(()), L)
     fade = 1.0 - jnp.exp(-jnp.where(jnp.isfinite(depth), depth, 1e3) / HAZE)
     colour = colour + (horizon - colour) * fade[..., None]
     above = ~jnp.isfinite(depth)
     colour = jnp.where(above[..., None], sky(ROW_ELEV, L)[:, None, :], colour)
-    water_px = hit & wet_px & ~fence & ~front
+    water_px = water_vis
     return jnp.clip(colour, 0.0, 1.0), water_px, depth
 
 
