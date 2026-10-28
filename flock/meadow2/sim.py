@@ -28,6 +28,7 @@ import jax
 import jax.numpy as jnp
 
 from flock.meadow2 import drives as D
+from flock.meadow2 import world as W
 from flock.meadow2.world import CELL, DAY, DAY_SCALE, HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, Flock, Meadow, State, dry_cells, patch, patch_density, water_at
 
 STOP, WALK, TROT, LEFT, RIGHT, GRAZE, DRINK, REST = range(8)
@@ -39,7 +40,7 @@ MOUTH = 0.6
 BITE = 0.05
 MIN_BITE = 0.5  # mean grass density over the patch needed for a mouthful
 JOSTLE_MOVER = 0.7  # share of an overlap taken by the sheep that walked into another
-REGROW = 0.00013  # fraction of the gap to full (3) regrown per step: a time constant of ~7,700 steps
+REGROW = W.REGROW  # the default regrowth; the meadow's own ``regrow`` is what ``step`` uses (stage 2a)
 DAY_FRACTION = 0.6
 NIGHT_LIGHT = 0.12
 RAMP = int(120 * DAY_SCALE)  # steps for dawn and for dusk
@@ -135,8 +136,13 @@ def step(state: State, actions: jax.Array) -> State:
     bad_taste = (((a == DRINK) & ~drinking) | ((a == GRAZE) & ~grazing)) & alive
     idx, in_patch = patch(mouth(pos, heading))
     take = jnp.where(grazing[:, None] & in_patch, BITE, 0.0)
-    grass = jnp.clip(m.grass - jnp.zeros_like(m.grass).at[idx[..., 0], idx[..., 1]].add(take), 0.0, 3.0)
-    grass = jnp.where(dry_cells(m.water), grass + REGROW * (3.0 - grass), 0.0)
+    worn = jnp.zeros_like(m.grass).at[idx[..., 0], idx[..., 1]].add(take)
+    # trampling (stage 2a, spec § 21): the cells under a sheep that moved this step lose m.trample
+    moved = (speed > 0) & alive
+    t_idx, under = patch(pos)
+    worn = worn.at[t_idx[..., 0], t_idx[..., 1]].add(jnp.where(moved[:, None] & under, m.trample, 0.0))
+    grass = jnp.clip(m.grass - worn, 0.0, 3.0)
+    grass = jnp.where(dry_cells(m.water), grass + m.regrow * (3.0 - grass), 0.0)
     # the rest of the body
     night = is_night(state.t + 1)
     cover = m.obj_present & ((m.obj_kind == TREE) | (m.obj_kind == HUT))

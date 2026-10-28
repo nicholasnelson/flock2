@@ -1108,3 +1108,49 @@ fix 2) or to PPO's budget, pre-registered first, and nothing about memory until 
 
 **If A2 passes too:** willows did not matter; the world model was the cost, and stage 2a's pressure
 must come with its own demand check against A2's brain.
+
+## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
+
+**The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),
+let the flock make the bare ring itself: once stage 1's brain has peaked on the world as it is, slow the
+grass's regrowth so the bank is eaten faster than it recovers, and make grass lose growth where sheep
+tread, so the bank wears bare and paths form along the routes the flock uses. The ring then grows until
+grazing has to happen out of sight of the willows, which is where memory starts to pay; the pressure
+ramps continuously and adjusts itself to how much the flock camps. The paths are worth watching in
+themselves.
+
+**Mechanics (built now; neutral by default).** Two numbers carried in every meadow (`Meadow.regrow`,
+`Meadow.trample`), so a curriculum can change them on live meadows without recompiling:
+- `regrow`: the share of the gap to full regrown per step (was the constant `REGROW` = 0.00013, a time
+  constant of about 7,700 steps; unchanged by default);
+- `trample`: biomass lost per step by every grass cell within `PATCH_RADIUS` of a sheep that **moved**
+  this step (walk or trot; a resting or grazing sheep wears nothing). Default 0.
+
+**The ring-growth measurement (CPU, scripted flock, before any learning).** `scripts/meadow2_ring.py`:
+the scripted flock (privileged water knowledge, so it never needs memory) on 16 meadows for 5 days at
+each setting of a grid, regrowth × {1, 1/2, 1/4, 1/8} and trample ∈ {0, 0.005, 0.02, 0.05}. Per day
+and setting: the mean grass density by distance band from water (0–2, 2–4, 4–8, 8–12, 12–16, > 16
+tiles); the **bare radius** (the outermost band, counted from the water, whose mean density is still
+below `MIN_BITE`, i.e. ungrazeable); the mean distance from water at which successful bites happen;
+deaths, by cause (hydration or gut energy at death); and the share of dry cells below 0.5 biomass more
+than 8 tiles from water (trails and over-grazing beyond the ring).
+
+**Reading, written before running:**
+- The pressure is usable if some setting drives the bare radius beyond **8 tiles** (the willows' sure
+  range by day) within 3 days while the scripted flock still passes its survival check (≤ 2 % die), and
+  those that die do so of thirst, not hunger. That setting (or the mildest such) is the ramp's end
+  point; the ramp's start is the world as it is.
+- If no setting gets the ring past 8 tiles without starving the scripted flock, depletion alone is too
+  weak with 12 sheep and the pressure needs help (a wider trample radius, or the review's fixed bare
+  bank as a floor), decided then.
+
+**The learning stage (to be pre-registered after stage 1, with its numbers):** continue from stage 1's
+brain, add the recurrent column progressive-style, ramp `regrow` down and `trample` up on a schedule
+toward the end point, with the demand check (the stage-1 brain at the end point loses ≥ 40 %, of
+thirst) and the scripted gate at every setting. **Route-around list:** (i) grazing at the ring's edge
+where the willows are still in view (bite distance against the willows' readable range; the ring
+should keep growing if they do); (ii) **following the paths**: a trampled path to the pond is persistent
+information a sheep that never met its makers can read (stigmergy, the kind of mark stage 4 wants). A
+named capacity if it appears, not a cheat, but it is not memory: the swap test erases or scrambles the
+worn ground at evaluation and survival must not fall for a sheep said to remember; (iii) following
+other sheep (nearest-neighbour distance, others in view). D3 stays the memory probe.

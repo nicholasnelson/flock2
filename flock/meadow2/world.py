@@ -20,6 +20,11 @@ All functions are pure and jittable; generate several meadows with vmap.
 from far. A world fact, told to nobody: a sheep must learn that willows mean water. Willows block
 movement like trees and are **not** cover for warmth (so resting by the pond gains nothing; the
 landmark is only a landmark). ``willows=0`` is meadow v2.1 unchanged.
+
+**Stage 2a (spec § 21): terrain.** Every meadow carries two numbers the sim reads each step:
+``regrow`` (the share of the gap to full that grass regrows per step; ``REGROW`` by default, as it
+was) and ``trample`` (biomass every grass cell under a moving sheep loses per step; 0 by default).
+``with_terrain`` sets them on a meadow or a batch, so a curriculum can change the world live.
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ WILLOW_BANK = 0.9  # tiles outside the pond's radius
 SHEEP_RADIUS = 0.3
 
 N_PONDS = 2
+REGROW = 0.00013  # fraction of the gap to full (3) regrown per step: a time constant of ~7,700 steps
 POND_RADIUS = (2.0, 3.5)  # tiles
 # the flock starts with its centre this far from the nearest water (tiles). This replaces the
 # spec's "every dry tile within 20 tiles of water", which two ponds cannot meet in 48 x 48 (the
@@ -70,6 +76,8 @@ class Meadow(NamedTuple):
     obj_variant: jax.Array  # (M,) int
     obj_pos: jax.Array  # (M, 2) float, tile units
     obj_present: jax.Array  # (M,) bool
+    regrow: jax.Array = jnp.float32(REGROW)  # () grass regrowth per step (stage 2a's first dial)
+    trample: jax.Array = jnp.float32(0.0)  # () biomass lost per step under a moving sheep (the second)
 
 
 class Flock(NamedTuple):
@@ -278,6 +286,17 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     )
     meadow = Meadow(water=water, grass=grass, obj_kind=obj_kind, obj_variant=obj_variant, obj_pos=obj_pos, obj_present=obj_present)
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))
+
+
+def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None) -> State:
+    """The same state (or batch of states) with new terrain numbers."""
+    m = state.meadow
+    like = lambda v, old: jnp.broadcast_to(jnp.asarray(v, jnp.float32), old.shape)
+    if regrow is not None:
+        m = m._replace(regrow=like(regrow, m.regrow))
+    if trample is not None:
+        m = m._replace(trample=like(trample, m.trample))
+    return state._replace(meadow=m)
 
 
 def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0) -> State:
