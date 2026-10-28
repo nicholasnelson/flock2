@@ -24,11 +24,19 @@ day (light >= 0.5) or night.
 Probed inputs: the encoder's embedding, h, z, and (h, z). Probes are fitted on the first 75 % of
 meadows and scored on the rest. Ridge (standardised by a floored spread) is the headline; an MLP
 with weight decay, early-stopped on held-out training meadows, is reported beside it.
+
+**Stage 1 (spec § 20).** A reactive agent (``config.json`` kind ``m2_reactive``) is probed on its
+policy's embedding alone (no D1, no D3). **D2_true**, for every agent: the sine and cosine of the true
+bearing of the nearest water tile inside the field of view, binned by its true distance, on frames
+where there is one within 32 tiles, whether or not water pixels show. This is the measure of "can the
+eyes read where water is at this distance", which with willows should hold where water pixels do not
+(the willows mark it). The meadows carry the agent's willows.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -64,8 +72,56 @@ def render_all(states, fn):
     return jax.tree.map(lambda x: x.reshape((B, S) + x.shape[1:]), out)
 
 
-def collect(world, hy, n_meadows, warm, steps, decode_every, seed):
-    states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
+FAR = 32.0
+
+
+def true_water(st):
+    """(bearing, distance, found) of the nearest water tile inside the field of view within FAR tiles."""
+    vec, dist, found = P.visible_water(st, FAR)
+    return P.bearing(vec, st.flock.heading), dist, found
+
+
+def _targets(st, water, depth):
+    """The probe targets shared by every agent, from the renderer and the true state."""
+    f = st.flock
+    priv = jax.vmap(P.observe)(st)
+    n_px = water.sum((-2, -1))
+    cols = jnp.arange(R.W)[None, None, None, :]
+    col_c = jnp.sum(jnp.where(water, cols, 0), (-2, -1)) / jnp.maximum(n_px, 1)
+    bearing = ((col_c + 0.5) / R.W - 0.5) * 300.0
+    near_px = jnp.min(jnp.where(water, depth, jnp.inf), (-2, -1))
+    light = sim.light(st.t)
+    tb, td, tf = jax.vmap(true_water)(st)
+    return dict(n_px=n_px, bearing=bearing, near_px=near_px,
+                wbear=jnp.arctan2(priv[..., D.N_FELT + 5], priv[..., D.N_FELT + 4]), wdist=priv[..., D.N_FELT + 6] * 32.0, alive=f.alive,
+                light=jnp.broadcast_to(light[:, None], n_px.shape), heading=f.heading, wbear_v=tb, wdist_v=td, found_v=tf)
+
+
+def _starts(n_meadows, willows):
+    return jax.vmap(functools.partial(random_start, willows=willows))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
+
+
+def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
+    """The reactive sheep's embedding (stage 1) under the scripted flock's behaviour."""
+    states = _starts(n_meadows, willows)
+
+    def body(st, xs):
+        k, t = xs
+        rgb, water, depth = render_all(st, R.render_aux)
+        f = st.flock
+        embed = policy.embed(ra.to_bytes(rgb), D.felt(f.levels, f.fat, f.taste))
+        a = jax.vmap(scripted.policy)(st, jax.random.split(k, n_meadows))
+        st2 = jax.vmap(sim.step)(st, a)
+        return st2, dict(embed=embed.astype(jnp.float16), **_targets(st, water, depth))
+
+    T = warm + steps
+    run = jax.jit(lambda s, k: jax.lax.scan(body, s, (jax.random.split(k, T), jnp.arange(T)))[1])
+    out = run(states, jax.random.PRNGKey(seed))
+    return {k: np.asarray(v[warm:]) for k, v in out.items()}
+
+
+def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0):
+    states = _starts(n_meadows, willows)
     S = states.flock.pos.shape[1]
     mems = hy.zero_mems(world, n_meadows, S)
 
@@ -79,14 +135,6 @@ def collect(world, hy, n_meadows, warm, steps, decode_every, seed):
         embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
         h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
         z = wm._sample(world.posterior(h, embed), k1)
-        priv = jax.vmap(P.observe)(st)
-        n_px = water.sum((-2, -1))
-        cols = jnp.arange(R.W)[None, None, None, :]
-        col_c = jnp.sum(jnp.where(water, cols, 0), (-2, -1)) / jnp.maximum(n_px, 1)
-        bearing = ((col_c + 0.5) / R.W - 0.5) * 300.0
-        near_px = jnp.min(jnp.where(water, depth, jnp.inf), (-2, -1))
-        light = sim.light(st.t)
-
         def d1(_):
             dec = world.decode(wm.Step(h, z, None, None)) + 0.5  # (B, S, H, W, 3)
             dry = st._replace(meadow=st.meadow._replace(water=jnp.zeros_like(st.meadow.water)))
@@ -101,9 +149,7 @@ def collect(world, hy, n_meadows, warm, steps, decode_every, seed):
         rec_d1 = jax.lax.cond(t % decode_every == 0, d1, lambda _: jnp.zeros((n_meadows, len(BINS), 2), jnp.int32), None)
         a = jax.vmap(scripted.policy)(st, jax.random.split(k2, n_meadows))
         st2 = jax.vmap(sim.step)(st, a)
-        out = dict(embed=embed.astype(jnp.float16), h=h.astype(jnp.float16), z=z.astype(jnp.float16), n_px=n_px, bearing=bearing, near_px=near_px,
-                   wbear=jnp.arctan2(priv[..., D.N_FELT + 5], priv[..., D.N_FELT + 4]), wdist=priv[..., D.N_FELT + 6] * 32.0, alive=f.alive,
-                   light=jnp.broadcast_to(light[:, None], n_px.shape), d1=rec_d1, heading=f.heading)
+        out = dict(embed=embed.astype(jnp.float16), h=h.astype(jnp.float16), z=z.astype(jnp.float16), d1=rec_d1, **_targets(st, water, depth))
         return (st2, (h, z, a)), out
 
     T = warm + steps
@@ -175,23 +221,33 @@ def main():
     p.add_argument("--validate_d3", action="store_true", help="only D3, on the model state and on inputs of known content (spec § 17)")
     p.add_argument("--out", default=None)
     a = p.parse_args()
-    hy = _load("m2_hybrid")
     d = os.path.expanduser(a.agent)
     cfg = json.load(open(os.path.join(d, "config.json")))
-    world = hy.make_world(0, cfg.get("model", "vector"))
-    wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
-    rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps}
+    willows = int(cfg.get("willows", 0))
+    reactive = cfg.get("kind") == "m2_reactive"
+    world = None
+    if reactive:
+        ra = _load("m2_reactive")
+        policy = ra.make_policy(0, cfg.get("hidden", 256))
+        wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
+        rec = collect_reactive(policy, ra, a.meadows, a.warm, a.steps, a.seed, willows)
+    else:
+        hy = _load("m2_hybrid")
+        world = hy.make_world(0, cfg.get("model", "vector"))
+        wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
+        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows)
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows}
 
-    # D1: recall of water pixels by distance and day/night (light of the decoded step)
-    d1 = rec["d1"]  # (T, B, bins, 2)
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
-    res["D1"] = {}
-    for name, m in (("day", day), ("night", ~day), ("all", np.ones_like(day))):
-        s = d1[m].sum(0)
-        res["D1"][name] = {f"{lo}-{hi if hi < 1e8 else 'inf'}": {"recall": round(float(s[i, 0] / max(1, s[i, 1])), 3), "water_px": int(s[i, 1])} for i, (lo, hi) in enumerate(BINS)}
-    s = d1[day].sum(0)
-    res["D1"]["day_within_8_recall"] = round(float((s[0, 0] + s[1, 0]) / max(1, s[0, 1] + s[1, 1])), 3)
+    if not reactive:
+        # D1: recall of water pixels by distance and day/night (light of the decoded step)
+        d1 = rec["d1"]  # (T, B, bins, 2)
+        res["D1"] = {}
+        for name, m in (("day", day), ("night", ~day), ("all", np.ones_like(day))):
+            s = d1[m].sum(0)
+            res["D1"][name] = {f"{lo}-{hi if hi < 1e8 else 'inf'}": {"recall": round(float(s[i, 0] / max(1, s[i, 1])), 3), "water_px": int(s[i, 1])} for i, (lo, hi) in enumerate(BINS)}
+        s = d1[day].sum(0)
+        res["D1"]["day_within_8_recall"] = round(float((s[0, 0] + s[1, 0]) / max(1, s[0, 1] + s[1, 1])), 3)
 
     # D2/D3 probes
     T, B, S = rec["n_px"].shape
@@ -206,8 +262,10 @@ def main():
         recent[t] = (t - last_seen <= RECENT) & ~seen[t]
         last_seen = np.where(seen[t], t, last_seen)
     recent &= alive & (rec["wdist"] > NEAR)
-    inputs = {"embed": rec["embed"], "h": rec["h"], "z": rec["z"], "hz": np.concatenate([rec["h"], rec["z"]], -1)}
-    if world.cfg.rot_bins:  # rung 4: the ring and the GRU state, probed apart as well
+    inputs = {"embed": rec["embed"]}
+    if not reactive:
+        inputs.update({"h": rec["h"], "z": rec["z"], "hz": np.concatenate([rec["h"], rec["z"]], -1)})
+    if world is not None and world.cfg.rot_bins:  # rung 4: the ring and the GRU state, probed apart as well
         inputs["ring"], inputs["gru"] = rec["h"][..., world.cfg.deter :], rec["h"][..., : world.cfg.deter]
     day_full = rec["light"] >= 0.5
 
@@ -262,11 +320,20 @@ def main():
         res["D2_visible"][key] = {"frames": int(m.sum()), "bearing": probe(m, rec["bearing"], f"bearing {key}"), "distance": probe(m, rec["near_px"], f"distance {key}")}
     m8 = vis & (rec["near_px"] < 8) & day_full
     res["D2_visible"]["day_within_8"] = {"frames": int(m8.sum()), "bearing": probe(m8, rec["bearing"], "bearing day<8")}
-    if world.cfg.rot_bins:  # spec § 18: noise as wide as h and z, as the D3 floor
-        inputs = {**inputs, "noise_wide": np.random.default_rng(0).normal(size=inputs["hz"].shape).astype(np.float16)}
-    res["D3_recent"] = {"frames": int(recent.sum()),
-                        "sin_bearing": probe(recent, np.sin(rec["wbear"]), "recent sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "recent cos")}
-    print(json.dumps({"D1": res["D1"]}, indent=1))
+    # D2_true: the true bearing of the nearest water tile in the field of view, by its true distance,
+    # by day and by night, whether or not water pixels show (stage 1: the willows should carry it)
+    res["D2_true"] = {}
+    for dn, dm in (("day", day_full), ("night", ~day_full)):
+        for lo, hi in BINS[:-1]:
+            m = alive & rec["found_v"] & (rec["wdist_v"] >= max(lo, NEAR)) & (rec["wdist_v"] < hi) & dm
+            key = f"{dn}_{lo}-{hi}"
+            res["D2_true"][key] = {"frames": int(m.sum()), "sin": probe(m, np.sin(rec["wbear_v"]), f"true sin {key}"), "cos": probe(m, np.cos(rec["wbear_v"]), f"true cos {key}")}
+    if not reactive:
+        if world.cfg.rot_bins:  # spec § 18: noise as wide as h and z, as the D3 floor
+            inputs = {**inputs, "noise_wide": np.random.default_rng(0).normal(size=inputs["hz"].shape).astype(np.float16)}
+        res["D3_recent"] = {"frames": int(recent.sum()),
+                            "sin_bearing": probe(recent, np.sin(rec["wbear"]), "recent sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "recent cos")}
+    print(json.dumps({"D1": res.get("D1"), "D2_true": res["D2_true"]}, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
         json.dump(res, open(a.out, "w"), indent=1)
