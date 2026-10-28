@@ -142,7 +142,7 @@ def step(state: State, actions: jax.Array) -> State:
     t_idx, under = patch(pos)
     worn = worn.at[t_idx[..., 0], t_idx[..., 1]].add(jnp.where(moved[:, None] & under, m.trample, 0.0))
     grass = jnp.clip(m.grass - worn, 0.0, 3.0)
-    grass = jnp.where(dry_cells(m.water), grass + m.regrow * (3.0 - grass), 0.0)
+    grass = jnp.where(dry_cells(m.water), grass + m.regrow * m.regrow_map * (3.0 - grass), 0.0)
     # the rest of the body
     night = is_night(state.t + 1)
     cover = m.obj_present & ((m.obj_kind == TREE) | (m.obj_kind == HUT))

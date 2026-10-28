@@ -1178,3 +1178,31 @@ toward water beyond `CAMP_DIST` = 6 tiles, as the learner does). Same reading as
 some setting bares the bank past 8 tiles within 3 days of the camping flock's arrival while the
 scripted flocks still survive. If the camping flock bares it and the wandering one does not, the
 pressure is real but conditional on camping, which is exactly what the stage-1 brain is expected to do.
+
+### Ring-growth measurement, grid 2: result (2026-10-29)
+
+`meadow2-results/ring_grid2_{wander,camp}.json`: 16 meadows with willows, 8 days, regrowth ×
+{¼, 1/16, 0} × trample {0.05, 0.15, 0.4}, the wandering and the camping scripted flocks.
+
+**Depletion alone cannot make the ring.** Even with **no regrowth at all** and trample 0.4, the bare
+radius reached only 2–4 tiles by day 7–8 (both flocks), and the meadow thinned everywhere instead: the
+8–12-tile band fell to 0.8–1.0 and hunger deaths rose (wandering flock at regrowth 0: 2, 26 and 34
+of 192 as trampling rose; camping flock: 5–8). The bank band plateaus at about 0.5 because a bite
+needs patch density ≥ `MIN_BITE` = 0.5: grazing cannot push grass below the bite floor, so the flock
+half-eats every patch it reaches and moves on, and only trampling takes a cell lower. Camping did not
+change the picture (its bank reached 0.41–0.45 against the wanderers' 0.45–0.50); the camping flock's
+bites moved out to 10–13 tiles by day 8 because the near grass was ungrazeable, which is the pressure
+working, but on a meadow that was by then thin everywhere.
+
+**By the rule: the pressure needs help.** The help that keeps the owner's mechanism emergent is
+**muddy banks**: each cell's regrowth is scaled by its distance from water over `bank` tiles (0 at
+the water's edge, full beyond `bank`; `Meadow.regrow_map`, set by `with_terrain(bank=…)`; `bank` 0 is
+the world as it was). Near the pond, grazing and trampling beat regrowth and the bank bares; far away
+the grass recovers at full rate, so nobody starves; the ring's size depends on how hard the flock camps,
+and `bank` is the one dial the curriculum ramps. This is a world fact (mud by the water), not a rule
+about the sheep.
+
+**Grid 3 (pre-registered here):** full regrowth, `bank` ∈ {4, 8, 12, 16} × trample ∈ {0, 0.05,
+0.15}, 8 days, both flocks. Same reading: usable if some setting bares the bank past 8 tiles within 3
+days of the camping flock's arrival while both scripted flocks still survive (≤ 2 % die), and those
+that die do so of thirst. The mildest such setting is the ramp's end point.

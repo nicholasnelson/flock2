@@ -25,6 +25,10 @@ landmark is only a landmark). ``willows=0`` is meadow v2.1 unchanged.
 ``regrow`` (the share of the gap to full that grass regrows per step; ``REGROW`` by default, as it
 was) and ``trample`` (biomass every grass cell under a moving sheep loses per step; 0 by default).
 ``with_terrain`` sets them on a meadow or a batch, so a curriculum can change the world live.
+**Muddy banks** (spec § 21, grid 3): ``regrow_map`` scales each cell's regrowth by its distance from
+water over ``bank`` tiles (0 at the water's edge, full beyond ``bank``); ``bank`` 0 is uniform
+regrowth, as it was. The ring the flock wears then depends on how hard it camps, and ``bank`` is the
+one dial a curriculum ramps.
 """
 
 from __future__ import annotations
@@ -78,6 +82,7 @@ class Meadow(NamedTuple):
     obj_present: jax.Array  # (M,) bool
     regrow: jax.Array = jnp.float32(REGROW)  # () grass regrowth per step (stage 2a's first dial)
     trample: jax.Array = jnp.float32(0.0)  # () biomass lost per step under a moving sheep (the second)
+    regrow_map: jax.Array = jnp.ones((N_CELLS, N_CELLS), jnp.float32)  # per-cell regrowth factor (muddy banks)
 
 
 class Flock(NamedTuple):
@@ -288,14 +293,35 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))
 
 
-def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None) -> State:
-    """The same state (or batch of states) with new terrain numbers."""
+def cell_water_distance(water: jax.Array) -> jax.Array:
+    """(N_CELLS, N_CELLS) distance (tiles) from each grass cell's centre to the nearest water tile centre."""
+    yy, xx = _grid()
+    tiles = jnp.stack([yy.ravel(), xx.ravel()], -1)
+    cells = cell_centres().reshape(-1, 2)
+    d = jnp.linalg.norm(cells[:, None, :] - tiles[None, :, :], axis=-1)
+    return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1).reshape(N_CELLS, N_CELLS)
+
+
+def bank_map(water: jax.Array, bank: float | jax.Array) -> jax.Array:
+    """(N_CELLS, N_CELLS) regrowth factor: distance from water over ``bank`` tiles, clipped to [0, 1];
+    all ones when ``bank`` is 0."""
+    d = cell_water_distance(water)
+    return jnp.where(bank > 0, jnp.clip(d / jnp.maximum(bank, 1e-6), 0.0, 1.0), 1.0)
+
+
+def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None, bank: float | jax.Array | None = None) -> State:
+    """The same state (or batch of states) with new terrain numbers. ``bank`` recomputes
+    ``regrow_map`` from the water (0: uniform)."""
     m = state.meadow
     like = lambda v, old: jnp.broadcast_to(jnp.asarray(v, jnp.float32), old.shape)
     if regrow is not None:
         m = m._replace(regrow=like(regrow, m.regrow))
     if trample is not None:
         m = m._replace(trample=like(trample, m.trample))
+    if bank is not None:
+        b = like(bank, m.trample)
+        fn = bank_map if m.water.ndim == 2 else jax.vmap(bank_map)
+        m = m._replace(regrow_map=fn(m.water, b))
     return state._replace(meadow=m)
 
 

@@ -23,18 +23,9 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import drives as D, scripted, sim
-from flock.meadow2.world import DAY, GRASS_RES, N_CELLS, REGROW, cell_centres, dry_cells, random_start, water_at, with_terrain
+from flock.meadow2.world import DAY, GRASS_RES, N_CELLS, REGROW, cell_centres, cell_water_distance, dry_cells, random_start, water_at, with_terrain
 
 BANDS = ((0, 2), (2, 4), (4, 8), (8, 12), (12, 16), (16, 1e9))
-_CELLS = cell_centres().reshape(-1, 2)
-
-
-def cell_water_distance(water):
-    """(N_CELLS, N_CELLS) distance from each grass cell's centre to the nearest water tile centre."""
-    yy, xx = jnp.meshgrid(jnp.arange(48) + 0.5, jnp.arange(48) + 0.5, indexing="ij")
-    tiles = jnp.stack([yy.ravel(), xx.ravel()], -1)
-    d = jnp.linalg.norm(_CELLS[:, None, :] - tiles[None, :, :], axis=-1)
-    return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1).reshape(N_CELLS, N_CELLS)
 
 
 def run(states, key, steps, camp=False):
@@ -78,6 +69,7 @@ def main():
     p.add_argument("--days", type=int, default=5)
     p.add_argument("--regrow", default="1,0.5,0.25,0.125", help="factors on REGROW")
     p.add_argument("--trample", default="0,0.005,0.02,0.05")
+    p.add_argument("--bank", default="0", help="muddy-bank widths (tiles; 0 = uniform regrowth), grid 3")
     p.add_argument("--willows", type=int, default=3)
     p.add_argument("--camp", action="store_true", help="the camping scripted flock (spec § 21, grid 2)")
     p.add_argument("--seed", type=int, default=0)
@@ -88,9 +80,10 @@ def main():
     runj = jax.jit(functools.partial(run, camp=a.camp), static_argnums=(2,))
     res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "camp": a.camp, "bands": [list(b) for b in BANDS], "settings": []}
     t0 = time.time()
-    for rf in (float(x) for x in a.regrow.split(",")):
-        for tr in (float(x) for x in a.trample.split(",")):
-            states = with_terrain(base, regrow=REGROW * rf, trample=tr)
+    grid = [(rf, tr, bk) for rf in (float(x) for x in a.regrow.split(",")) for tr in (float(x) for x in a.trample.split(",")) for bk in (float(x) for x in a.bank.split(","))]
+    for rf, tr, bk in grid:
+        if True:
+            states = with_terrain(base, regrow=REGROW * rf, trample=tr, bank=bk)
             out = jax.tree.map(np.asarray, runj(states, jax.random.PRNGKey(a.seed), a.days * DAY))
             bands = out["bands"].mean(1)  # (days, bands)
             bare = []
@@ -103,7 +96,7 @@ def main():
                         break
                 bare.append(r)
             row = {
-                "regrow_factor": rf, "trample": tr,
+                "regrow_factor": rf, "trample": tr, "bank": bk,
                 "band_density_by_day": np.round(bands, 2).tolist(),
                 "bare_radius_by_day": bare,
                 "bite_distance_by_day": np.round(out["bite_dist"].sum(1) / np.maximum(out["bites"].sum(1), 1), 2).tolist(),
@@ -113,7 +106,7 @@ def main():
                 "far_bare_by_day": np.round(out["far_bare"].mean(1), 3).tolist(),
             }
             res["settings"].append(row)
-            print(json.dumps({k: row[k] for k in ("regrow_factor", "trample", "bare_radius_by_day", "bite_distance_by_day", "alive_end_by_day", "died_thirst", "died_hunger", "far_bare_by_day")}), f"{time.time() - t0:.0f}s", flush=True)
+            print(json.dumps({k: row[k] for k in ("regrow_factor", "trample", "bank", "bare_radius_by_day", "bite_distance_by_day", "alive_end_by_day", "died_thirst", "died_hunger", "far_bare_by_day")}), f"{time.time() - t0:.0f}s", flush=True)
             os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
             json.dump(res, open(a.out, "w"), indent=1)
 
