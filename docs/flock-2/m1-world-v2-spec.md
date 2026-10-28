@@ -942,3 +942,38 @@ h and z are now 1,920 numbers wide (was 1,408).
 - **Reported, not deciding:** D3 from the ring alone and from the GRU state alone, the
   early-stopped MLP's D3, the bearing in view, water redrawn (D1), reward and deaths against arm M
   (1.54 ± 0.08, 57 % died).
+
+### Arm R: result (2026-10-29)
+
+`meadow2-results/{eval/hybrid_,diag/}rot_s0.json`, `hybrid/rot_s0_log.jsonl`. Peak RAM 9.3 GB.
+
+| | Arm R (M + ring) | Arm M |
+| --- | --- | --- |
+| Reward / step (± SE) | 1.54 ± 0.11 | 1.54 ± 0.08 |
+| Died | 48 % | 57 % |
+| Water redrawn, day within 8 | 0.70 | 0.62 |
+| Bearing in view from h and z (ridge) | 0.37 | 0.26 |
+| … from the ring alone / the GRU state alone | 0.41 / 0.38 | — |
+| **D3 from h and z, ridge (sin / cos)** | **−1.08 / −0.26** | −0.74 / −0.46 |
+| D3 from the ring alone (sin / cos) | −1.10 / −0.56 | — |
+| D3, early-stopped MLP on h and z (sin / cos) | −1.43 / −0.37 | — |
+| D3 on noise 1,920 wide (sin / cos) | −0.28 / −0.24 | — |
+
+**By the rule:**
+- **Validity:** the wide noise scores −0.28 / −0.24, below 0.1, so the D3 result counts.
+- **D3 stays below 0.3** (best −0.26), so **the ring did not give memory.** The decision returns to
+  the owner.
+
+*(judgement)*
+- **The ring is used, but for the present, not the past.** It carries the bearing of water in view
+  better than the GRU state (0.41 against 0.38), and the state as a whole now reads it better than
+  any earlier arm (0.37). But once water leaves view, nothing in the ring points to it.
+- The likeliest reason is the **write**: every bin is rewritten from z each step through one learned
+  gate. Nothing in the design ties a bin to a direction in the view, so there is no reason for the
+  bins behind the sheep to be left alone, and the gate can simply learn to refresh everything.
+- **The wide noise answers § 17's caveat:** ridge at this width overfits to about −0.25 on these
+  frames. h and z's cosine score (−0.26) is at that floor; the sine scores (about −1.1, also for the
+  current view's embedding) are well below it, which suggests the probe meets meadow-specific
+  patterns that do not carry to the test meadows.
+- Survival is a little better (48 % against 57 % died) at the same reward, on one seed: not a
+  difference to rely on.
