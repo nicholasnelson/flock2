@@ -13,6 +13,11 @@ PPO (Schulman et al. 2017, arXiv:1707.06347) with GAE (Schulman et al. 2015, arX
 - **no reward centring**: subtracting the mean reward would cancel the alive bonus and make
   dying free. Rewards are instead scaled by (1 - gamma), so values stay near the reward per step.
 
+**Stage 0, the myopic oracle (spec § 19):** ``--water_range r`` restricts the water features to water
+within r tiles and inside the field of view; ``--memory rot|place --window W`` adds an ideal memory of
+the last water seen (``privileged.Perception``). The memory is carried through the rollout and reset
+with the meadow. Both are recorded in ``config.json`` and used again by the evaluation.
+
 Each update collects ``--steps`` steps from ``--meadows`` meadows of 12 sheep (one shared policy).
 Meadows start as ``world.random_start`` and restart every ``--reset_every`` steps (staggered), or
 as soon as every sheep in one has died. Checkpoint ``ppo.pkl`` and ``config.json``; scored by
@@ -48,28 +53,41 @@ def _load(name):
 _ppo = _load("m1_ppo")
 
 
-def make_policy(seed, hidden=256):
-    return _ppo.Policy(nnx.Rngs(seed), hidden=hidden, n_in=P.N_OBS, n_out=sim.N_ACTIONS)
+def make_policy(seed, hidden=256, n_in=P.N_OBS):
+    return _ppo.Policy(nnx.Rngs(seed), hidden=hidden, n_in=n_in, n_out=sim.N_ACTIONS)
 
 
-@nnx.jit(static_argnums=(4,))
-def rollout(policy, states, key, gamma_lam, steps):
+def perception(cfg: dict) -> P.Perception:
+    """The oracle's perception from a run's ``config.json`` (older runs: full perception)."""
+    r = cfg.get("water_range", 0.0) or None
+    mem = cfg.get("memory", "none")
+    return P.Perception(r, None if mem in (None, "none") else mem, int(cfg.get("window", 0)))
+
+
+def init_memories(n_meadows, n_sheep):
+    return jax.tree.map(lambda x: jnp.broadcast_to(x, (n_meadows,) + x.shape), P.init_memory(n_sheep))
+
+
+@nnx.jit(static_argnums=(5, 6))
+def rollout(policy, states, mems, key, gamma_lam, steps, cfg):
     gamma, lam = gamma_lam
 
-    def one(st, k):
-        obs = P.observe(st)
+    def one(carry, k):
+        st, mem = carry
+        obs, mem = P.observe_mem(st, mem, cfg)
         logits, value = policy(obs)
         a = jax.random.categorical(k, logits, -1)
         logp = jax.nn.log_softmax(logits)[jnp.arange(a.shape[0]), a]
         new = sim.step(st, a)
-        return new, dict(obs=obs, act=a, logp=logp, value=value, reward=new.flock.reward * (1 - gamma), raw_reward=new.flock.reward,
-                         alive_before=st.flock.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
+        return (new, mem), dict(obs=obs, act=a, logp=logp, value=value, reward=new.flock.reward * (1 - gamma), raw_reward=new.flock.reward,
+                                alive_before=st.flock.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
 
-    def run(st, k):
-        return jax.lax.scan(one, st, jax.random.split(k, steps))
+    def run(st, mem, k):
+        return jax.lax.scan(one, (st, mem), jax.random.split(k, steps))
 
-    states, tr = jax.vmap(run)(states, jax.random.split(key, states.t.shape[0]))  # (B, T, S, ...)
-    _, last_v = policy(jax.vmap(P.observe)(states))
+    (states, mems), tr = jax.vmap(run)(states, mems, jax.random.split(key, states.t.shape[0]))  # (B, T, S, ...)
+    last_obs, _ = jax.vmap(lambda s, m: P.observe_mem(s, m, cfg))(states, mems)
+    _, last_v = policy(last_obs)
 
     def gae(carry, x):
         adv_next, v_next = carry
@@ -86,7 +104,7 @@ def rollout(policy, states, key, gamma_lam, steps):
     adv = jax.vmap(per_meadow)(tr["reward"], tr["value"], cont, last_v)
     tr["adv"] = adv
     tr["ret"] = adv + tr["value"]
-    return states, tr
+    return states, mems, tr
 
 
 @nnx.jit
@@ -128,23 +146,28 @@ def main():
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--reset_every", type=int, default=2 * DAY)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--water_range", type=float, default=0.0, help="tiles; 0 = any water, anywhere (spec § 19)")
+    p.add_argument("--memory", choices=("none", "rot", "place"), default="none")
+    p.add_argument("--window", type=int, default=30, help="steps the ideal memory lasts")
     a = p.parse_args()
     assert a.reset_every % a.steps == 0
     os.makedirs(a.out, exist_ok=True)
     json.dump({**vars(a), "kind": "m2_ppo"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
-    policy = make_policy(a.seed, a.hidden)
+    cfg = perception(vars(a))
+    policy = make_policy(a.seed, a.hidden, P.n_obs(cfg))
     opt = nnx.Optimizer(policy, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
     fresh = jax.jit(jax.vmap(random_start))
     key = jax.random.PRNGKey(a.seed)
     key, k = jax.random.split(key)
     states = fresh(jax.random.split(k, a.meadows))
+    mems = init_memories(a.meadows, states.flock.alive.shape[1])
     age = (np.arange(a.meadows) % (a.reset_every // a.steps)) * a.steps
     rng = np.random.default_rng(a.seed)
     log = open(os.path.join(a.out, "log.jsonl"), "a")
     t0 = time.time()
     for u in range(1, a.updates + 1):
         key, k = jax.random.split(key)
-        states, tr = rollout(policy, states, k, (a.gamma, a.lam), a.steps)
+        states, mems, tr = rollout(policy, states, mems, k, (a.gamma, a.lam), a.steps, cfg)
         tr = jax.tree.map(np.asarray, tr)
         flat = lambda x: x.reshape((-1,) + x.shape[3:])
         obs, act, lp, ad, rt, w = (flat(tr[k2]) for k2 in ("obs", "act", "logp", "adv", "ret", "alive_before"))
@@ -160,7 +183,9 @@ def main():
             key, k = jax.random.split(key)
             nw = fresh(jax.random.split(k, a.meadows))
             m = jnp.asarray(reset)
-            states = jax.tree.map(lambda o, n: jnp.where(m.reshape((-1,) + (1,) * (o.ndim - 1)), n, o), states, nw)
+            where = lambda o, n: jnp.where(m.reshape((-1,) + (1,) * (o.ndim - 1)), n, o)
+            states = jax.tree.map(where, states, nw)
+            mems = jax.tree.map(where, mems, init_memories(a.meadows, states.flock.alive.shape[1]))
             age[reset] = 0
         alive = tr["alive_before"]
         rec = {

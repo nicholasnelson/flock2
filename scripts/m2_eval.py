@@ -22,6 +22,10 @@ Reported (and written to ``--out``), with standard errors across meadows where m
   ``KNOWS_FOR`` steps. "Sees water" is a geometric proxy: a water tile within ``SEE_RANGE`` tiles
   inside the 300-degree field of view, ignoring occlusion. Also reported: the share of thirsty steps
   in which the sheep itself sees water.
+- **Stage 0 (spec § 19.1):** the same two with an 8-tile cone (``NEAR_RANGE``, the eyes' range); the
+  share of living steps within 8 tiles of water; deaths per day; and for every death, the day, the
+  levels, the distance to water and the steps since water was last in the 8-tile cone and last within
+  8 tiles (summarised in the result; the full list written to ``--deaths``).
 """
 
 from __future__ import annotations
@@ -50,7 +54,17 @@ def policy_fn(name, agent):
     if name == "scripted":
         return stateless(scripted.policy)
     if name == "ppo":
-        return stateless(lambda st, k: jax.random.categorical(k, agent(P.observe(st))[0], -1))
+        policy, cfg = agent
+
+        def init(st):
+            B, S = st.flock.alive.shape
+            return jax.tree.map(lambda x: jnp.broadcast_to(x, (B,) + x.shape), P.init_memory(S))
+
+        def act(st, mem, k):
+            obs, mem = jax.vmap(lambda s, m: P.observe_mem(s, m, cfg))(st, mem)
+            return jax.random.categorical(k, policy(obs)[0], -1), mem
+
+        return init, act
     if name == "hybrid":
         world, policy, hy, use_embed = agent
 
@@ -66,19 +80,20 @@ def policy_fn(name, agent):
     raise ValueError(name)
 
 
-EARSHOT, KNOWS_FOR, SEE_RANGE, THIRSTY = 10.0, 300, 16.0, 0.5
+EARSHOT, KNOWS_FOR, SEE_RANGE, NEAR_RANGE, THIRSTY = 10.0, 300, 16.0, 8.0, 0.5
+NEVER = -100_000
 _TILES = jnp.stack(jnp.meshgrid(jnp.arange(48) + 0.5, jnp.arange(48) + 0.5, indexing="ij"), -1).reshape(-1, 2)
 
 
-def sees_water(st):
-    """(S,) whether a water tile lies within SEE_RANGE inside each sheep's field of view (occlusion ignored)."""
+def sees_water(st, rng=SEE_RANGE):
+    """(S,) whether a water tile lies within ``rng`` tiles inside each sheep's field of view (occlusion ignored)."""
     from flock.meadow2.world import water_at
 
     wet = water_at(st.meadow.water, _TILES)
     rel = _TILES[None] - st.flock.pos[:, None]
     d = jnp.linalg.norm(rel, axis=-1)
     alpha = (jnp.arctan2(rel[..., 1], -rel[..., 0]) - st.flock.heading[:, None] + jnp.pi) % (2 * jnp.pi) - jnp.pi
-    return jnp.any(wet[None] & (d <= SEE_RANGE) & (jnp.abs(alpha) < sim.FOV / 2), -1)
+    return jnp.any(wet[None] & (d <= rng) & (jnp.abs(alpha) < sim.FOV / 2), -1)
 
 
 def run(policy, n_meadows, steps, seed=0):
@@ -86,7 +101,7 @@ def run(policy, n_meadows, steps, seed=0):
     states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
 
     def body(carry, k):
-        (st, mem), (last_seen, t) = carry[:2], carry[2:]
+        (st, mem), (last_seen, last_seen8, last_near8, t) = carry[:2], carry[2:]
         a, mem = act(st, mem, k)
         a = a.astype(jnp.int32)
         on_water, density, _ = jax.vmap(sim.mouth_tile)(st.meadow, st.flock.pos, st.flock.heading)
@@ -103,22 +118,67 @@ def run(policy, n_meadows, steps, seed=0):
         al = st.flock.alive
         sees = jax.vmap(sees_water)(st) & al
         last_seen = jnp.where(sees, t, last_seen)
+        sees8 = jax.vmap(lambda s: sees_water(s, NEAR_RANGE))(st) & al
+        last_seen8 = jnp.where(sees8, t, last_seen8)
+        wdist = jax.vmap(lambda s: P.visible_water(s, None)[1])(st)
+        last_near8 = jnp.where((wdist <= NEAR_RANGE) & al, t, last_near8)
         p = st.flock.pos
         d = jnp.linalg.norm(p[:, :, None] - p[:, None], axis=-1)
         others = al[:, None, :] & al[:, :, None] & ~jnp.eye(p.shape[1], dtype=bool)
         nn = jnp.min(jnp.where(others, d, jnp.inf), -1)
         knows = (t - last_seen <= KNOWS_FOR) & al
         told = jnp.any(others & (d <= EARSHOT) & knows[:, None, :], -1)
+        knows8 = (t - last_seen8 <= KNOWS_FOR) & al
+        told8 = jnp.any(others & (d <= EARSHOT) & knows8[:, None, :], -1)
         thirsty = al & (st.flock.levels[..., D.HYDRATION] < THIRSTY)
-        rec.update(nn=nn, seen=st.flock.seen, thirsty=thirsty, thirsty_sees=thirsty & sees, gap=thirsty & ~sees & told, alive_now=al)
-        return (new, mem, last_seen, t + 1), rec
+        rec.update(nn=nn, seen=st.flock.seen, thirsty=thirsty, thirsty_sees=thirsty & sees, gap=thirsty & ~sees & told, alive_now=al,
+                   thirsty_sees8=thirsty & sees8, gap8=thirsty & ~sees8 & told8, wdist=wdist, last_seen8=last_seen8, last_near8=last_near8,
+                   levels_before=st.flock.levels)
+        return (new, mem, last_seen, last_seen8, last_near8, t + 1), rec
 
     def scan(s, k):
         B, S = s.flock.alive.shape
-        return jax.lax.scan(body, (s, init(s), jnp.full((B, S), -100_000), jnp.int32(0)), jax.random.split(k, steps))
+        never = jnp.full((B, S), NEVER)
+        return jax.lax.scan(body, (s, init(s), never, never, never, jnp.int32(0)), jax.random.split(k, steps))
 
     _, rec = jax.jit(scan)(states, jax.random.PRNGKey(seed))
     return jax.tree.map(np.asarray, rec)
+
+
+def deaths(rec):
+    """One record per sheep that died: when, its levels, how far water was and how long since it was
+    last in the 8-tile cone or within 8 tiles (spec § 19.1)."""
+    died_step = rec["alive_before"] & ~rec["alive"]  # (T, B, S), true once
+    out = []
+    for t, b, s in zip(*np.nonzero(died_step)):
+        since = lambda last: int(t - last[t, b, s]) if last[t, b, s] != NEVER else None
+        out.append({"meadow": int(b), "sheep": int(s), "step": int(t), "day": int(t // DAY),
+                    "levels": {n: round(float(v), 3) for n, v in zip(D.NAMES, rec["levels_before"][t, b, s])},
+                    "water_dist": round(float(rec["wdist"][t, b, s]), 2),
+                    "since_seen8": since(rec["last_seen8"]), "since_near8": since(rec["last_near8"])})
+    return out
+
+
+def forensics(dl, steps):
+    """Summary of ``deaths``: deaths per day, and the distribution of time since water."""
+    days = int(np.ceil(steps / DAY))
+    by_day = [sum(1 for d in dl if d["day"] == k) for k in range(days)]
+    if not dl:
+        return {"deaths_by_day": by_day}
+    q = lambda xs: [round(float(v), 1) for v in np.percentile(xs, (25, 50, 75))] if len(xs) else None
+    seen = [d["since_seen8"] for d in dl if d["since_seen8"] is not None]
+    near = [d["since_near8"] for d in dl if d["since_near8"] is not None]
+    return {
+        "deaths_by_day": by_day,
+        "deaths": len(dl),
+        "water_dist_at_death_q": q([d["water_dist"] for d in dl]),
+        "since_seen8_q": q(seen),
+        "since_seen8_over_300": round(float(np.mean([v > 300 for v in seen])), 3) if seen else None,
+        "never_seen8": round(float(np.mean([d["since_seen8"] is None for d in dl])), 3),
+        "since_near8_q": q(near),
+        "hydration_at_death_median": round(float(np.median([d["levels"]["hydration"] for d in dl])), 3),
+        "energy_at_death_median": round(float(np.median([d["levels"]["energy"] for d in dl])), 3),
+    }
 
 
 def summarise(rec):
@@ -155,6 +215,10 @@ def summarise(rec):
         "thirsty_share_of_living_steps": float(rec["thirsty"].sum() / max(1, rec["alive_now"].sum())),
         "thirsty_sees_water": float(rec["thirsty_sees"].sum() / max(1, rec["thirsty"].sum())),
         "information_gap": float(rec["gap"].sum() / max(1, rec["thirsty"].sum())),
+        "thirsty_sees_water_8": float(rec["thirsty_sees8"].sum() / max(1, rec["thirsty"].sum())),
+        "information_gap_8": float(rec["gap8"].sum() / max(1, rec["thirsty"].sum())),
+        "within_8_share_of_living_steps": float(((rec["wdist"] <= NEAR_RANGE) & rec["alive_now"]).sum() / max(1, rec["alive_now"].sum())),
+        "forensics": forensics(deaths(rec), T),
     }
 
 
@@ -165,6 +229,7 @@ def main():
     p.add_argument("--meadows", type=int, default=16)
     p.add_argument("--days", type=float, default=3.0)
     p.add_argument("--out", default=None)
+    p.add_argument("--deaths", default=None, help="write every death's record here (spec § 19.1)")
     a = p.parse_args()
     agent = None
     if a.policy == "ppo":
@@ -175,8 +240,10 @@ def main():
         spec.loader.exec_module(mp)
         d = os.path.expanduser(a.agent)
         cfg = json.load(open(os.path.join(d, "config.json")))
-        agent = mp.make_policy(0, cfg.get("hidden", 256))
-        wm.load_into(agent, pickle.load(open(os.path.join(d, "ppo.pkl"), "rb")))
+        perc = mp.perception(cfg)
+        policy = mp.make_policy(0, cfg.get("hidden", 256), P.n_obs(perc))
+        wm.load_into(policy, pickle.load(open(os.path.join(d, "ppo.pkl"), "rb")))
+        agent = (policy, perc)
     if a.policy == "hybrid":
         import importlib.util
 
@@ -197,6 +264,9 @@ def main():
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
         json.dump(res, open(a.out, "w"), indent=1)
+    if a.deaths:
+        os.makedirs(os.path.dirname(a.deaths) or ".", exist_ok=True)
+        json.dump({"policy": res["policy"], "deaths": deaths(rec)}, open(a.deaths, "w"), indent=1)
 
 
 if __name__ == "__main__":

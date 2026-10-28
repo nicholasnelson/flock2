@@ -983,3 +983,76 @@ h and z are now 1,920 numbers wide (was 1,408).
 Paused for the owner's decision. The summary of every arm, the review's reading (the meadow may not
 demand this kind of memory) and the proposed staged plan are in [`status-2026-10-29.md`](status-2026-10-29.md)
 and [`review-2026-10-29-staged.md`](review-2026-10-29-staged.md).
+
+## 19. Stage 0: does the meadow demand memory? (pre-registered 2026-10-29, before any run)
+
+The owner adopted the staged plan ([`status-2026-10-29.md`](status-2026-10-29.md) § 5) and chose to run
+stage 0 first. Stage 0 trains no learning sheep. It measures what the *world* demands, with privileged
+policies, which the owner's principle allows in evaluation and probes. Nothing from it is carried into
+a sheep. Two parts, the free one first.
+
+### 19.1 Death forensics (free: the existing checkpoints, re-evaluated with a trace)
+
+`m2_eval.py --deaths <file>` re-runs the fixed evaluation (16 meadows, 3 days) and, for every sheep
+that dies, records the day of death, its levels, the distance to the nearest water and the steps since
+water was last inside an **8-tile** cone (the eyes' range, spec § 15) and since it was last within 8
+tiles at all. The summary also gains, for every policy: deaths per day; the share of living steps
+within 8 tiles of water; and `thirsty_sees_water` and the information gap recomputed with an 8-tile
+cone beside the 16-tile ones (the review's § 5.2). Run on: the scripted flock, privileged PPO
+(`ppo_s0`), and the hybrids `s0`, `long_s0`, `embed_s0`, `n1` (three seeds), `mem_s0`, `rot_s0`.
+
+**Reading, written before running:** if the median hybrid death comes more than **300 steps** after
+water was last in the 8-tile cone, a 30-step memory could not have saved most of them, and the review's
+first branch (§ 19.2) is already the likely one. If instead most deaths come within 300 steps of losing
+sight of water, the D3 capacity was plausibly the right target. The forensics decide nothing by
+themselves; the ladder does.
+
+### 19.2 The myopic-oracle ladder
+
+`m2_ppo.py` unchanged in its learning, with two options in `privileged.observe`:
+
+- **`--water_range r`:** the water features (forward, left, distance) describe the nearest water tile
+  that lies **within r tiles and inside the 300° field of view**, and are masked to (0, 0, 1) when there
+  is none. (Not "the nearest water, hidden when far": a sheep with a pond ahead and a nearer one behind
+  would see the one ahead.) Occlusion by trees and night are ignored, so each arm is an *upper bound* on
+  what eyes of that range could give.
+- **`--memory kind --window W`:** four extra inputs, an ideal memory of the last water seen under the
+  same mask: forward, left, distance / 32 and age / W, masked to (0, 0, 1, 1) once the age exceeds W
+  or if water was never seen. Two kinds. **`rot`:** the bearing when last seen, turned by the sheep's
+  heading change since (the capacity the D3 probe measures; distance held), which ignores the sheep's
+  own travel. **`place`:** the position of the last-seen water tile, re-expressed in the sheep's frame
+  each step from the true pose (perfect path integration). The memory is carried through the rollout
+  and the evaluation and reset with the meadow.
+
+**Arms**, each 1,500 updates as `ppo_s*` (about 7 minutes a seed), **three seeds each**, evaluated by
+`m2_eval.py` on the same 16 meadows with the same observation function:
+
+| Arm | Range | Memory |
+| --- | --- | --- |
+| `r4`, `r8`, `r16` | 4, 8, 16 tiles | none |
+| `rinf` | unlimited | none (the existing `ppo_s0–s2`, not rerun) |
+| `r8_rot30` | 8 | rot, 30 steps |
+| `r8_place30` | 8 | place, 30 steps |
+| `r8_place1000` | 8 | place, 1,000 steps |
+
+**Rule** (the deciding statistic is the death share on `m2_eval.py`, mean of three seeds, every seed
+reported):
+
+1. **`r8` loses ≤ 20 %:** the meadow does not demand memory at the eyes' present range. The vision
+   sheep's limit is reading what they see and using it. Stage 1 (the reactive sheep) follows, and
+   stage 2a's pressure must be built, not assumed.
+2. **`r8` loses ≥ 40 % and `r8_rot30` brings it to ≤ 20 %:** the D3 capacity was the right target
+   and the failure was learning, not demand. Stage 1 still runs (it is the demand check's "previous
+   brain"), and stage 2a's module is aimed at exactly this memory on the present world.
+3. **`r8` loses ≥ 40 %, `r8_rot30` does not rescue it, and `r8_place1000` does:** the demanded
+   capacity is a place memory lasting hours (or far perception), and D3 has been measuring the wrong
+   thing. Stage 2a's probe and pressure are redesigned before it runs. `r8_place30` against `r8_rot30`
+   says whether path integration or duration made the difference.
+4. **`r8` between 20 and 40 %:** memory is weakly demanded. Proceed to stage 1; whichever memory arm
+   rescues `r8` names stage 2a's target.
+5. **No arm rescues `r8`:** the deaths are not about water knowledge at all (the forensics say what
+   they are about), and the plan is revised before stage 1.
+
+**Reported, not deciding:** `r4` against `r8` against `r16` against `rinf` (how much range buys, and
+whether willows must be seen from 8 or 16 tiles); reward per step; deaths per day; the forensics of
+§ 19.1 for every arm.
