@@ -1154,3 +1154,27 @@ information a sheep that never met its makers can read (stigmergy, the kind of m
 named capacity if it appears, not a cheat, but it is not memory: the swap test erases or scrambles the
 worn ground at evaluation and survival must not fall for a sheep said to remember; (iii) following
 other sheep (nearest-neighbour distance, others in view). D3 stays the memory probe.
+
+### Ring-growth measurement, grid 1: result (2026-10-29)
+
+`meadow2-results/ring_grid1.json`: 16 meadows with willows, 5 days, the scripted flock, regrowth ×
+{1, ½, ¼, ⅛} × trample {0, 0.005, 0.02, 0.05}.
+
+**The ring did not form at any setting.** The bare radius stayed at 0 everywhere: the 0–2-tile band's
+mean density fell from 1.54 to **0.80** at the strongest setting (regrowth ⅛, trample 0.05) over five
+days, still above `MIN_BITE` (0.5). Nobody died. Trampling did more than slower regrowth (at full
+regrowth, trample 0.05 took the bank to 1.82; at ⅛ regrowth with no trampling, 1.61). The scripted
+flock bites at 5.6–8.7 tiles from water, and at baseline the meadow is so under-grazed by 12 sheep that
+grass rises from 1.5 to 2.7 in five days. More than 8 tiles from water, trampling bared 0.7–7 % of
+cells (the beginnings of trails).
+
+**By the rule: the second branch.** Depletion at these settings is too weak with 12 sheep. Two
+caveats before reaching for the fixed bank: (i) the scripted flock wanders out to graze and keeps only
+69 % of its steps within 8 tiles of water, where the privileged learner camps 96 % of the time, so a
+learned flock would wear the bank far harder; (ii) the bank was still falling at day 5. Grid 2
+(pre-registered here): regrowth × {¼, 1/16, 0} × trample {0.05, 0.15, 0.4}, **8 days**, with the
+scripted flock and with a **camping** scripted flock (the same rules, but when idle it drifts back
+toward water beyond `CAMP_DIST` = 6 tiles, as the learner does). Same reading as before: usable if
+some setting bares the bank past 8 tiles within 3 days of the camping flock's arrival while the
+scripted flocks still survive. If the camping flock bares it and the wandering one does not, the
+pressure is real but conditional on camping, which is exactly what the stage-1 brain is expected to do.

@@ -83,8 +83,13 @@ def _steer(m, f, vec: jax.Array, trot: jax.Array, water_ok: jax.Array | None = N
     return jnp.where(jnp.abs(diff) > sim.TURN / 2, turn, jnp.where(trot, sim.TROT, sim.WALK))
 
 
-def policy(state: State, key: jax.Array) -> jax.Array:
-    """(S,) actions for the scripted flock (dead sheep's actions are ignored by the simulator)."""
+CAMP_DIST = 6.0  # the camping flock (spec § 21, grid 2) drifts back toward water beyond this when idle
+
+
+def policy(state: State, key: jax.Array, camp: bool = False) -> jax.Array:
+    """(S,) actions for the scripted flock (dead sheep's actions are ignored by the simulator).
+    ``camp``: when idle, drift back toward water beyond ``CAMP_DIST`` tiles, as the privileged learner
+    does (it keeps 96 % of its steps within 8 tiles of water); for the ring-growth measurement only."""
     m, f = state.meadow, state.flock
     n = f.pos.shape[0]
     k1, k3, k4 = jax.random.split(key, 3)
@@ -125,6 +130,8 @@ def policy(state: State, key: jax.Array) -> jax.Array:
     wander = jnp.where(u < 0.12, sim.LEFT, jnp.where(u < 0.24, sim.RIGHT, jnp.where(u < 0.3, sim.STOP, sim.WALK)))
     wander = jnp.where(here >= 2.5, jnp.where(u < 0.5, sim.GRAZE, wander), wander)
     idle_act = jnp.where(jnp.linalg.norm(to_c, axis=-1) > COHESION_DIST, _steer(m, f, to_c, jnp.zeros(n, bool)), wander)
+    if camp:
+        idle_act = jnp.where(dist_w > CAMP_DIST, _steer(m, f, to_water, jnp.zeros(n, bool)), idle_act)
 
     night = sim.is_night(state.t)
     want_water = (1.0 - hydration > THIRSTY) | (m_water & (hydration < FULL))

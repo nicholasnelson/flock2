@@ -37,12 +37,13 @@ def cell_water_distance(water):
     return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1).reshape(N_CELLS, N_CELLS)
 
 
-def run(states, key, steps):
+def run(states, key, steps, camp=False):
     wd = jax.vmap(cell_water_distance)(states.meadow.water)  # (B, C, C)
     dry = jax.vmap(dry_cells)(states.meadow.water)
+    pol = functools.partial(scripted.policy, camp=camp)
 
     def body(st, k):
-        a = jax.vmap(scripted.policy)(st, jax.random.split(k, st.t.shape[0]))
+        a = jax.vmap(pol)(st, jax.random.split(k, st.t.shape[0]))
         _, density, _ = jax.vmap(sim.mouth_tile)(st.meadow, st.flock.pos, st.flock.heading)
         st2 = jax.vmap(sim.step)(st, a)
         f = st2.flock
@@ -68,7 +69,7 @@ def run(states, key, steps):
         return st, out
 
     _, out = jax.lax.scan(day, states, jax.random.split(key, steps // DAY))
-    return jax.tree.map(np.asarray, out)  # (days, B, ...)
+    return out  # (days, B, ...)
 
 
 def main():
@@ -78,18 +79,19 @@ def main():
     p.add_argument("--regrow", default="1,0.5,0.25,0.125", help="factors on REGROW")
     p.add_argument("--trample", default="0,0.005,0.02,0.05")
     p.add_argument("--willows", type=int, default=3)
+    p.add_argument("--camp", action="store_true", help="the camping scripted flock (spec § 21, grid 2)")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/meadow2/ring.json")
     a = p.parse_args()
     keys = jax.random.split(jax.random.PRNGKey(80_000 + a.seed), a.meadows)
     base = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))(keys)
-    runj = jax.jit(run, static_argnums=(2,))
-    res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "bands": [list(b) for b in BANDS], "settings": []}
+    runj = jax.jit(functools.partial(run, camp=a.camp), static_argnums=(2,))
+    res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "camp": a.camp, "bands": [list(b) for b in BANDS], "settings": []}
     t0 = time.time()
     for rf in (float(x) for x in a.regrow.split(",")):
         for tr in (float(x) for x in a.trample.split(",")):
             states = with_terrain(base, regrow=REGROW * rf, trample=tr)
-            out = runj(states, jax.random.PRNGKey(a.seed), a.days * DAY)
+            out = jax.tree.map(np.asarray, runj(states, jax.random.PRNGKey(a.seed), a.days * DAY))
             bands = out["bands"].mean(1)  # (days, bands)
             bare = []
             for d in range(a.days):
