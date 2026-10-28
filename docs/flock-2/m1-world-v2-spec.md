@@ -898,3 +898,47 @@ probe can detect memory, so **"no memory" stands.**
 - **A limit of this validation:** the noise control was 5 numbers wide, not as wide as h and z
   (1,408). Ridge on 1,408 inputs fitted on 6,849 samples can overfit. That may explain why h and z
   score below the noise rather than at it, though it cannot turn a real signal into a negative R².
+
+## 18. Rung 4, minimal: a memory rotated by the sheep's own turns (pre-registered 2026-10-29, owner's decision)
+
+**Why this piece only.** § 17's validation showed that, within 30 steps of losing sight of water,
+the bearing when last seen, turned by the sheep's own heading change, gives the current bearing
+almost exactly. The world model is given the turns but has not learned to rotate anything by them.
+So rung 4 adds that one operation, and nothing else: no body sense of movement, no map, no
+translation by steps walked.
+
+**The ring** (`flock/wm.py`, `rot_bins`; `m2_hybrid.py --model rotmem`):
+- 32 bins × 16 numbers, carried in h beside the GRU's 384. One bin is 11.25°, so a 22.5° turn rolls
+  the ring by exactly 2 bins.
+- Each step, the ring is first **written** from the stochastic state z and the GRU state through a
+  learned gate (biased toward keeping, like the GRU's), then **rolled** 2 bins one way if the action
+  was "turn left", 2 bins the other way if "turn right", and left in place otherwise.
+- The ring is **read** by the GRU's input and by everything that reads h (prior, posterior, decoder,
+  reward and felt-number heads, and the policy).
+- **Built in:** only the roll, i.e. that a turn is a turn of 22.5°. **Learned:** what is written,
+  into which bins, how much is kept, and how it is read. Nothing tells the model which bin is
+  "ahead" or that the view covers 300°.
+- In open-loop multi-step prediction the ring is rolled by the planned turns and written from the
+  model's own predicted z. That is where the learning signal for it should come from: predicting
+  what reappears when the sheep turns back.
+
+Tests (`tests/test_wm_rotmem.py`): a left turn rolls by 2 bins, a right turn undoes it, no other
+action moves it, 16 left turns make a full circle, the write receives gradient through the losses,
+and a model without the ring is unchanged.
+
+**Arm R** (seed 0, 600 iterations): arm M (§ 17: multi-step horizons to 32, sequences of 64,
+batches of 4, the policy also reading the view's embedding) **plus the ring**. That is the only
+change. Run name `rot_s0`. Evaluated (`m2_eval.py`) and diagnosed (`m2_diag.py`) as before.
+h and z are now 1,920 numbers wide (was 1,408).
+
+**Rule** (written before the run):
+- **Memory works** if D3 (the bearing just after water leaves view; the better of sine and cosine,
+  ridge, from h and z with the ring) reaches **at least 0.3**. R then goes to three seeds, the
+  week's criterion is re-checked, and the communication work builds on it.
+- **Validity:** D3 is also run on noise as wide as h and z (1,920 numbers), answering § 17's caveat.
+  If that noise scores **0.1 or more**, the probe is overfitting at this width and the D3 result is
+  not counted until the probe is fixed.
+- **Not working** if D3 stays below 0.3. The decision returns to the owner.
+- **Reported, not deciding:** D3 from the ring alone and from the GRU state alone, the
+  early-stopped MLP's D3, the bearing in view, water redrawn (D1), reward and deaths against arm M
+  (1.54 ± 0.08, 57 % died).

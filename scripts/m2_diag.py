@@ -207,6 +207,8 @@ def main():
         last_seen = np.where(seen[t], t, last_seen)
     recent &= alive & (rec["wdist"] > NEAR)
     inputs = {"embed": rec["embed"], "h": rec["h"], "z": rec["z"], "hz": np.concatenate([rec["h"], rec["z"]], -1)}
+    if world.cfg.rot_bins:  # rung 4: the ring and the GRU state, probed apart as well
+        inputs["ring"], inputs["gru"] = rec["h"][..., world.cfg.deter :], rec["h"][..., : world.cfg.deter]
     day_full = rec["light"] >= 0.5
 
     def probe(mask, target, label):
@@ -260,6 +262,8 @@ def main():
         res["D2_visible"][key] = {"frames": int(m.sum()), "bearing": probe(m, rec["bearing"], f"bearing {key}"), "distance": probe(m, rec["near_px"], f"distance {key}")}
     m8 = vis & (rec["near_px"] < 8) & day_full
     res["D2_visible"]["day_within_8"] = {"frames": int(m8.sum()), "bearing": probe(m8, rec["bearing"], "bearing day<8")}
+    if world.cfg.rot_bins:  # spec § 18: noise as wide as h and z, as the D3 floor
+        inputs = {**inputs, "noise_wide": np.random.default_rng(0).normal(size=inputs["hz"].shape).astype(np.float16)}
     res["D3_recent"] = {"frames": int(recent.sum()),
                         "sin_bearing": probe(recent, np.sin(rec["wbear"]), "recent sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "recent cos")}
     print(json.dumps({"D1": res["D1"]}, indent=1))

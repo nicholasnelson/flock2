@@ -39,6 +39,13 @@ first-person strip (``flock.fpv``: 64 x 256, 16 palette colours) and their actio
 - Loss: per-pixel cross-entropy summed over the strip, plus KL balancing — a dynamics term
   KL(sg(post) || prior) weighted 0.5 and a representation term KL(post || sg(prior)) weighted
   0.1, each with 1 nat of free bits (all as in DreamerV3).
+- Turn-rotated memory (optional, ``rot_bins`` > 0; rung 4's minimal piece, meadow v2 spec § 18): a
+  ring of ``rot_bins`` x ``rot_ch`` numbers carried beside the GRU state in h. Each transition first
+  writes to it from (z, GRU state) through a learned gate, then **rolls it by ``rot_shift`` bins
+  when the action taken was a turn** (one way for ``rot_left``, the other for ``rot_right``). The
+  roll is the only built-in geometry: what is written where, and how it is read (by the GRU's
+  input, and by everything that reads h), is learned. With ``rot_bins`` = 0 the model is unchanged
+  and h is the GRU state alone.
 
 Sizes are chosen to land in the plan's 2-8M parameters; ``count_params`` reports the real number.
 They live in a ``Config``: ``MEADOW`` (the default, the meadow's first-person strip) and any other,
@@ -99,10 +106,20 @@ class Config(NamedTuple):
     ms_weight: float = 0.0  # >0 (RGB only): multi-step prediction; from starts every ms_stride steps, the prior is rolled
     ms_horizons: tuple = (2, 4, 8)  # forward with the actions taken and the view is decoded at these horizons and
     ms_stride: int = 8  # compared with the real one (summed squared error, averaged), weighted by ms_weight
+    rot_bins: int = 0  # >0: the turn-rotated memory (module docstring), a ring of rot_bins x rot_ch numbers in h
+    rot_ch: int = 16
+    rot_shift: int = 1  # bins the ring rolls per turn action
+    rot_left: int = -1  # the turn actions' indices
+    rot_right: int = -1
+
+    @property
+    def state(self) -> int:
+        """Width of h: the GRU state, plus the ring when there is one."""
+        return self.deter + self.rot_bins * self.rot_ch
 
     @property
     def feat(self) -> int:
-        return self.deter + self.stoch * self.classes
+        return self.state + self.stoch * self.classes
 
 
 MEADOW = Config()
@@ -191,10 +208,16 @@ class EnsembleHead(nnx.Module):
 
 
 class Step(NamedTuple):
-    h: jax.Array  # (..., DETER)
+    h: jax.Array  # (..., cfg.state): DETER, plus the ring if there is one
     z: jax.Array  # (..., STOCH*CLASSES) one-hot (straight-through)
     prior: jax.Array  # (..., STOCH, CLASSES) logits
     post: jax.Array  # (..., STOCH, CLASSES) logits (= prior when imagining)
+
+
+def rotate_memory(m: jax.Array, a_onehot: jax.Array, cfg: Config) -> jax.Array:
+    """(..., rot_bins, rot_ch) -> the ring rolled by rot_shift bins for a left turn, back for a right."""
+    left, right = a_onehot[..., cfg.rot_left, None, None], a_onehot[..., cfg.rot_right, None, None]
+    return left * jnp.roll(m, cfg.rot_shift, -2) + right * jnp.roll(m, -cfg.rot_shift, -2) + (1 - left - right) * m
 
 
 def _probs(logits):
@@ -253,14 +276,24 @@ class WorldModel(nnx.Module):
         self.ensemble_target = ensemble_target
         out = len(c.body_dims) if ensemble_target == "body" else c.stoch * c.classes
         self.ensemble = nnx.List([EnsembleHead(rngs, out, cfg=c) for _ in range(ensemble)]) if ensemble else None
-        self.img_in = MLP(c.stoch * c.classes + c.n_actions, c.hidden, rngs, c.hidden)
+        n_mem = c.rot_bins * c.rot_ch
+        self.mem_write = nnx.Linear(c.stoch * c.classes + c.deter, 2 * n_mem, rngs=rngs) if n_mem else None
+        self.img_in = MLP(c.stoch * c.classes + c.n_actions + n_mem, c.hidden, rngs, c.hidden)
         self.gru = GRU(c.hidden, c.deter, rngs)
-        self.prior_net = MLP(c.deter, c.stoch * c.classes, rngs, c.hidden)
-        self.post_net = MLP(c.deter + c.embed, c.stoch * c.classes, rngs, c.hidden)
+        self.prior_net = MLP(c.state, c.stoch * c.classes, rngs, c.hidden)
+        self.post_net = MLP(c.state + c.embed, c.stoch * c.classes, rngs, c.hidden)
 
     # --- one step -----------------------------------------------------------------------------
     def transition(self, h, z, a_onehot):
-        return self.gru(_act(self.img_in(jnp.concatenate([z, a_onehot], -1))), h)
+        c = self.cfg
+        if not c.rot_bins:
+            return self.gru(_act(self.img_in(jnp.concatenate([z, a_onehot], -1))), h)
+        g, m = h[..., : c.deter], h[..., c.deter :].reshape(h.shape[:-1] + (c.rot_bins, c.rot_ch))
+        cand, gate = jnp.split(self.mem_write(jnp.concatenate([z, g], -1)).reshape(m.shape[:-1] + (2 * c.rot_ch,)), 2, -1)
+        gate = jax.nn.sigmoid(gate - 1.0)  # biased toward keeping, as the GRU's update gate
+        m = rotate_memory(gate * jnp.tanh(cand) + (1 - gate) * m, a_onehot, c).reshape(h.shape[:-1] + (-1,))
+        g = self.gru(_act(self.img_in(jnp.concatenate([z, a_onehot, m], -1))), g)
+        return jnp.concatenate([g, m], -1)
 
     def prior(self, h):
         return self.prior_net(h).reshape(h.shape[:-1] + (self.cfg.stoch, self.cfg.classes))
@@ -279,7 +312,7 @@ class WorldModel(nnx.Module):
         return e if self.intero_in is None else e + self.intero_in(intero)
 
     def initial(self, batch: int):
-        return jnp.zeros((batch, self.cfg.deter)), jnp.zeros((batch, self.cfg.stoch * self.cfg.classes))
+        return jnp.zeros((batch, self.cfg.state)), jnp.zeros((batch, self.cfg.stoch * self.cfg.classes))
 
     # --- sequences ----------------------------------------------------------------------------
     def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None) -> Step:

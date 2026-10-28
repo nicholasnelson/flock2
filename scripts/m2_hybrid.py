@@ -30,7 +30,10 @@ only a random share of each iteration's sequences to the replay, so a replay of 
 a longer history.
 
 ``--model spatial`` uses rung 3's world model (``flock.wm_spatial``: a grid-shaped state, all of it
-learned) instead of the RSSM's single vector (``--model vector``, the default).
+learned) instead of the RSSM's single vector (``--model vector``, the default). ``--model rotmem`` is
+the RSSM with rung 4's turn-rotated memory (``flock.wm``, ``rot_bins``; spec § 18): a ring of
+``ROT_BINS`` x 16 numbers in h, rolled ``ROT_SHIFT`` bins by each 22.5-degree turn, so one bin is
+11.25 degrees.
 """
 
 from __future__ import annotations
@@ -64,6 +67,7 @@ _ppo1 = _load("m1_ppo")
 _ppo2 = _load("m2_ppo")
 
 CFG = wm.Config(n_classes=3, rgb=True, n_actions=sim.N_ACTIONS, body_dims=())
+ROT_BINS, ROT_SHIFT = 32, 2  # rung 4's ring: 360 degrees in 32 bins, a turn (22.5 degrees) is 2 of them
 
 
 def make_world(seed, kind="vector", kl_dyn=wm.KL_DYN, ms_weight=0.0, ms_horizons=(2, 4, 8), ms_stride=8):
@@ -71,7 +75,10 @@ def make_world(seed, kind="vector", kl_dyn=wm.KL_DYN, ms_weight=0.0, ms_horizons
     checkpoint loads into a model made with the defaults."""
     if kind == "spatial":
         return wm_spatial.SpatialWorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, cfg=wm_spatial.SpatialConfig(n_actions=sim.N_ACTIONS, kl_dyn=kl_dyn, ms_weight=ms_weight, ms_horizons=ms_horizons, ms_stride=ms_stride))
-    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=CFG._replace(kl_dyn=kl_dyn, ms_weight=ms_weight, ms_horizons=ms_horizons, ms_stride=ms_stride))
+    cfg = CFG._replace(kl_dyn=kl_dyn, ms_weight=ms_weight, ms_horizons=ms_horizons, ms_stride=ms_stride)
+    if kind == "rotmem":
+        cfg = cfg._replace(rot_bins=ROT_BINS, rot_shift=ROT_SHIFT, rot_left=sim.LEFT, rot_right=sim.RIGHT)
+    return wm.WorldModel(nnx.Rngs(seed), n_intero=D.N_FELT, reward=True, cfg=cfg)
 
 
 def make_policy(seed, hidden=256, n_in=CFG.feat):
@@ -80,7 +87,7 @@ def make_policy(seed, hidden=256, n_in=CFG.feat):
 
 def zero_mems(world, B, S):
     c = world.cfg
-    return jnp.zeros((B, S, c.deter)), jnp.zeros((B, S, c.stoch * c.classes)), jnp.zeros((B, S), jnp.int32)
+    return jnp.zeros((B, S, getattr(c, "state", c.deter))), jnp.zeros((B, S, c.stoch * c.classes)), jnp.zeros((B, S), jnp.int32)
 
 
 def to_bytes(rgb):
@@ -207,7 +214,7 @@ def main():
     p.add_argument("--ent", type=float, default=0.01)
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--reset_every", type=int, default=2 * DAY)
-    p.add_argument("--model", choices=("vector", "spatial"), default="vector")
+    p.add_argument("--model", choices=("vector", "spatial", "rotmem"), default="vector")
     p.add_argument("--policy_input", choices=("state", "state_embed"), default="state")
     p.add_argument("--kl_dyn", type=float, default=wm.KL_DYN, help="dynamics KL weight (DreamerV3: 1)")
     p.add_argument("--ms_weight", type=float, default=0.0, help="multi-step view prediction weight (0: off)")
