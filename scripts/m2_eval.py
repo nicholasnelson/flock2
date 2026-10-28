@@ -8,6 +8,10 @@ for ``--days`` days.
     python scripts/m2_eval.py --policy rest
     python scripts/m2_eval.py --policy ppo --agent ~/flock2_data/m2_ppo/s0
     python scripts/m2_eval.py --policy hybrid --agent ~/flock2_data/m2_hybrid/s0   # world model + PPO, from its own view
+    python scripts/m2_eval.py --policy reactive --agent ~/flock2_data/m2_reactive/a1_s0   # stage 1: eyes + PPO, no world model
+
+The meadows carry the willows of the agent's ``config.json`` (``--willows`` for the baselines, or to
+override), so a policy is always scored on the world it learned.
 
 Reported (and written to ``--out``), with standard errors across meadows where marked:
 - reward per sheep per step, counting 0 after death (so dying costs), ± SE;
@@ -31,6 +35,7 @@ Reported (and written to ``--out``), with standard errors across meadows where m
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import pickle
@@ -77,7 +82,15 @@ def policy_fn(name, agent):
             return rec["act"], mem
 
         return init, act
+    if name == "reactive":
+        policy, ra = agent
+        return stateless_batch(lambda st, k: ra.act(policy, st, k)[0])
     raise ValueError(name)
+
+
+def stateless_batch(per_batch):
+    """A policy over the whole batch of meadows at once, without memory."""
+    return lambda st: jnp.zeros(()), lambda st, mem, k: (per_batch(st, k), mem)
 
 
 EARSHOT, KNOWS_FOR, SEE_RANGE, NEAR_RANGE, THIRSTY = 10.0, 300, 16.0, 8.0, 0.5
@@ -96,9 +109,9 @@ def sees_water(st, rng=SEE_RANGE):
     return jnp.any(wet[None] & (d <= rng) & (jnp.abs(alpha) < sim.FOV / 2), -1)
 
 
-def run(policy, n_meadows, steps, seed=0):
+def run(policy, n_meadows, steps, seed=0, willows=0):
     init, act = policy
-    states = jax.vmap(random_start)(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
+    states = jax.vmap(functools.partial(random_start, willows=willows))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
 
     def body(carry, k):
         (st, mem), (last_seen, last_seen8, last_near8, t) = carry[:2], carry[2:]
@@ -224,7 +237,8 @@ def summarise(rec):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--policy", choices=("random", "rest", "scripted", "ppo", "hybrid"), required=True)
+    p.add_argument("--policy", choices=("random", "rest", "scripted", "ppo", "hybrid", "reactive"), required=True)
+    p.add_argument("--willows", type=int, default=None, help="willows per pond (default: the agent's config, else 0)")
     p.add_argument("--agent", default=None)
     p.add_argument("--meadows", type=int, default=16)
     p.add_argument("--days", type=float, default=3.0)
@@ -232,6 +246,20 @@ def main():
     p.add_argument("--deaths", default=None, help="write every death's record here (spec § 19.1)")
     a = p.parse_args()
     agent = None
+    willows = a.willows or 0
+    if a.agent and a.willows is None:
+        willows = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json"))).get("willows", 0)
+    if a.policy == "reactive":
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("m2_reactive", os.path.join(os.path.dirname(__file__), "m2_reactive.py"))
+        ra = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ra)
+        d = os.path.expanduser(a.agent)
+        cfg = json.load(open(os.path.join(d, "config.json")))
+        policy = ra.make_policy(0, cfg.get("hidden", 256))
+        wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
+        agent = (policy, ra)
     if a.policy == "ppo":
         import importlib.util
 
@@ -258,8 +286,8 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
         agent = (world, policy, hy, use_embed)
-    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY))
-    res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, **summarise(rec)}
+    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows)
+    res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

@@ -1056,3 +1056,55 @@ reported):
 **Reported, not deciding:** `r4` against `r8` against `r16` against `rinf` (how much range buys, and
 whether willows must be seen from 8 or 16 tiles); reward per step; deaths per day; the forensics of
 § 19.1 for every arm.
+
+## 20. Stage 1: the reactive sheep in a meadow that can be seen (pre-registered 2026-10-29, before any run)
+
+Runs only if § 19.2's rule lands on branch 1, 2 or 4 (branch 5 revises the plan first; branch 3
+redesigns stage 2a but stage 1 still runs). Written before stage 0's ladder had finished; the forensics
+of § 19.1 for the embed hybrid were in (median death 2,300 steps after water was last within 8 tiles;
+41 % of the dead never had water within 8 tiles; privileged PPO spends 96 % of its living steps within
+8 tiles of water).
+
+**World change (one, a fact of the world):** `--willows 3`: three willows (`world.WILLOW`, a new kind:
+a 1.6-tile trunk, a wide pale crown reaching 2.45 tiles, a skirt to the ground) stand 0.9 tiles outside
+each pond's edge at random angles. They block movement like trees, are **not** cover for warmth (so a
+night by the pond gains nothing), and are told to nobody. A distinct kind rather than more broadleaf
+trees, because the meadow already has two copses of three trees: "three trees" would be an ambiguous
+cue and the test is of far perception, not of disambiguation. Gate: `meadow2_checks.py --willows 3` on
+64 meadows for 5 days must still pass (≤ 2 % scripted deaths, no meadow losing more than one).
+
+**Model:** `scripts/m2_reactive.py`: the world model's RGB conv encoder (5 strided convolutions,
+64 × 256 → 512) plus a linear map of the 6 felt numbers, layer-normed, then the felt numbers again,
+into the actor and critic MLPs (256 wide). Trained end-to-end by PPO (the reward trains the eyes); no
+world model, no recurrence, no replay. Rollouts of 8 meadows × 12 sheep × 64 steps, 4 epochs of 8
+minibatches, Adam 3e-4, γ 0.998, λ 0.95, clip 0.2, entropy 0.01, death handled as `m2_ppo.py`.
+Budget **2,000 iterations** (about 8 M sheep-steps, the `long` hybrid's budget).
+
+**Arms** (seed 0 to screen; the stage arm then at three seeds):
+
+| Arm | World | Brain | Question |
+| --- | --- | --- | --- |
+| A1 | willows | reactive | the stage proper |
+| A2 | no willows | reactive | does far perception matter, or was the world model the cost? |
+| A3 | willows | the `embed` hybrid (`m2_hybrid.py --policy_input state_embed --willows 3`, 2,000 iterations) | does the RSSM cost or buy survival once water can be seen? |
+
+**Pass (pre-registered):** every seed of A1 ≤ 20 % dead on `m2_eval.py` (16 meadows, 3 days, willows 3)
+and reward ≥ 2.0. *Strong:* ≤ 5 %. **Demand check for stage 2a** (run with the pass): A1's brain on
+the stage-2a world must lose ≥ 40 %, or that pressure is not a pressure.
+
+**Reported:** deaths per day; the forensics of § 19.1; the share of living steps within 8 tiles of
+water (the route-around measure); `thirsty_sees_water_8` and the gap at 8; the D2 bearing probe on A1's
+embedding by distance band (expect ≥ 0.5 at 8–16 tiles by day with willows, where the hybrids read 0).
+
+**Route-around list:** (i) stay-within-sight-of-water: the 8-tile share. The privileged oracle does it
+96 % of the time, so a reactive learner that finds it is doing what the upper bound does; it is allowed
+at stage 1, noted, and it is the first thing stage 2a's bare banks must break. (ii) Camping at the pond
+and starving: graze success and gut energy on the last day. (iii) Following: nearest-neighbour distance
+and others-in-view against the hybrids' (6 tiles, 0.4).
+
+**If A1 fails:** the problem is perception or policy learning from pixels, not memory and not the
+world model. The next change is to the encoder (a column-preserving change, as the 2026-10-26 review's
+fix 2) or to PPO's budget, pre-registered first, and nothing about memory until A1 passes.
+
+**If A2 passes too:** willows did not matter; the world model was the cost, and stage 2a's pressure
+must come with its own demand check against A2's brain.

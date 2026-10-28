@@ -37,7 +37,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import sim
-from flock.meadow2.world import FLOWER, HUT, MUSHROOM, N_TILES, SALT, TREE, State, grass_at, water_at
+from flock.meadow2.world import FLOWER, HUT, MUSHROOM, N_TILES, SALT, TREE, WILLOW, State, grass_at, water_at
 
 H, W = 64, 256
 FOV = np.deg2rad(300.0)
@@ -100,6 +100,7 @@ SKY_NIGHT_HI, SKY_NIGHT_LO = _c(0.04, 0.06, 0.13), _c(0.08, 0.10, 0.18)
 NIGHT_CAST = _c(0.01, 0.015, 0.04)
 CREAM, FACE, LEGS = _c(0.93, 0.91, 0.84), _c(0.25, 0.24, 0.24), _c(0.20, 0.18, 0.17)
 TRUNK, LEAVES, PINE = _c(0.42, 0.29, 0.17), _c(0.16, 0.38, 0.17), _c(0.10, 0.30, 0.16)
+WILLOW_C, WILLOW_SKIRT = _c(0.62, 0.70, 0.34), _c(0.52, 0.62, 0.30)  # pale yellow-green crown and drooping skirt
 WALL, ROOF, DOOR, GLASS, GLOW = _c(0.78, 0.65, 0.45), _c(0.55, 0.22, 0.16), _c(0.35, 0.22, 0.12), _c(0.30, 0.35, 0.40), _c(1.0, 0.85, 0.45)
 SALT_C, STEM, PINK, YELLOW, MUSH_STEM, MUSH_CAP = _c(0.86, 0.86, 0.84), _c(0.30, 0.55, 0.22), _c(0.90, 0.45, 0.65), _c(0.95, 0.85, 0.30), _c(0.90, 0.88, 0.80), _c(0.72, 0.55, 0.36)
 
@@ -159,6 +160,10 @@ def _layers(x, y, kind, variant, view, side, is_sheep):
         (k(TREE) & ~pine & _circle(x, y, 0.0, 1.3, 0.5), LEAVES),
         (k(TREE) & pine & _rect(x, y, -0.07, 0.07, 0.0, 0.4), TRUNK),
         (k(TREE) & pine & _tri(x, y, 0.3, 2.0, 0.9), PINE),
+        # willows (stage 1's landmark): a tall trunk, a wide pale crown, a skirt drooping to the ground
+        (k(WILLOW) & _rect(x, y, -0.09, 0.09, 0.0, 1.6), TRUNK),
+        (k(WILLOW) & _ellipse(x, y, 0.0, 1.0, 0.75, 0.75) & (y <= 1.0), WILLOW_SKIRT),
+        (k(WILLOW) & _ellipse(x, y, 0.0, 1.75, 1.0, 0.7), WILLOW_C),
         # the hut
         (k(HUT) & _rect(x, y, -0.7, 0.7, 0.0, 1.0), WALL),
         (k(HUT) & _tri(x, y, 1.0, 1.5, 1.6), ROOF),

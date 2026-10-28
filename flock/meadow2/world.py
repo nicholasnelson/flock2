@@ -14,6 +14,12 @@ mouth, what it eats and what it depletes agree, and a grazed patch shows as a ba
 placed so that none overlaps another, a tree or the hut.
 
 All functions are pure and jittable; generate several meadows with vmap.
+
+**Stage 1 (spec § 20): willows.** ``generate(..., willows=k)`` stands k willows (a new object kind,
+``WILLOW``: tall, pale, drooping, drawn by ``render``) on each pond's bank, so that water can be seen
+from far. A world fact, told to nobody: a sheep must learn that willows mean water. Willows block
+movement like trees and are **not** cover for warmth (so resting by the pond gains nothing; the
+landmark is only a landmark). ``willows=0`` is meadow v2.1 unchanged.
 """
 
 from __future__ import annotations
@@ -40,7 +46,9 @@ SALT, TREE, FLOWER, HUT, MUSHROOM = (S.OBJECT_NAMES.index(n) for n in ("salt", "
 LAYOUT = ((TREE, 14), (HUT, 1), (SALT, 1), (FLOWER, 6), (MUSHROOM, 4))
 N_OBJECTS = sum(n for _, n in LAYOUT)
 N_TREELINE = 8  # of the trees, along the north edge; the rest in two copses
-RADIUS = jnp.zeros(S.N_OBJECT_TYPES).at[TREE].set(0.35).at[HUT].set(0.7).at[SALT].set(0.35)
+WILLOW = S.N_OBJECT_TYPES  # stage 1's landmark kind, beyond the sprite set's kinds
+RADIUS = jnp.zeros(S.N_OBJECT_TYPES + 1).at[TREE].set(0.35).at[HUT].set(0.7).at[SALT].set(0.35).at[WILLOW].set(0.35)
+WILLOW_BANK = 0.9  # tiles outside the pond's radius
 SHEEP_RADIUS = 0.3
 
 N_PONDS = 2
@@ -174,13 +182,13 @@ def water_distance(water: jax.Array) -> jax.Array:
 
 
 def _ponds(key):
-    """Water: N_PONDS round ponds."""
+    """Water: N_PONDS round ponds. Returns (water (N, N) bool, centres (N_PONDS, 2), radii (N_PONDS,))."""
     k1, k2 = jax.random.split(key)
     c = jax.random.uniform(k1, (N_PONDS, 2), minval=5.0, maxval=N_TILES - 5.0)
     r = jax.random.uniform(k2, (N_PONDS,), minval=POND_RADIUS[0], maxval=POND_RADIUS[1])
     yy, xx = _grid()
     d = jnp.sqrt((yy[None] - c[:, 0, None, None]) ** 2 + (xx[None] - c[:, 1, None, None]) ** 2)
-    return jnp.any(d < r[:, None, None], 0)
+    return jnp.any(d < r[:, None, None], 0), c, r
 
 
 def start_distance(water: jax.Array, centres: jax.Array) -> jax.Array:
@@ -200,19 +208,20 @@ def _choose(key, water):
     return ok.any(), c[jnp.argmax(ok)]
 
 
-def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = None) -> State:
+def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = None, willows: int = 0) -> State:
     """A meadow, with the flock grouped around ``centre`` or (default) a centre 6-14 tiles from the
     nearest water; levels 0.6-0.9 (energy, hydration, warmth) and 0.8 (interest), fat 0.5,
-    at dawn. Of N_CANDIDATES pond layouts, the first that admits such a start is used."""
-    k_g, k_b, k_w, k_o, k_s, k_v = jax.random.split(key, 6)
+    at dawn. Of N_CANDIDATES pond layouts, the first that admits such a start is used.
+    ``willows`` > 0 stands that many willows on each pond's bank (stage 1)."""
+    k_g, k_b, k_w, k_o, k_s, k_v, k_l = jax.random.split(key, 7)
     n = N_TILES
     grass = jnp.clip(1.2 + 1.8 * _blobs(k_g, 14, 1.5, 3.75) - 1.4 * _blobs(k_b, 8, 0.75, 1.9), 0.0, 3.0)
 
     kw1, kw2 = jax.random.split(k_w)
-    cands = jax.vmap(_ponds)(jax.random.split(kw1, N_CANDIDATES))
+    cands, pond_c, pond_r = jax.vmap(_ponds)(jax.random.split(kw1, N_CANDIDATES))
     ok, starts = jax.vmap(_choose)(jax.random.split(kw2, N_CANDIDATES), cands)
     pick = jnp.where(ok.any(), jnp.argmax(ok), 0)
-    water = cands[pick]
+    water, pond_c, pond_r = cands[pick], pond_c[pick], pond_r[pick]
     centre = starts[pick] if centre is None else centre
     grass = jnp.where(dry_cells(water), grass, 0.0)  # no grass under water (the field fades at the shore)
 
@@ -230,10 +239,15 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
             p = jax.random.uniform(ka, (count, 2), minval=3.0, maxval=n - 3.0)
         kinds.append(jnp.full((count,), kind))
         poss.append(p)
+    if willows > 0:
+        theta = jax.random.uniform(k_l, (N_PONDS, willows), maxval=2 * jnp.pi)
+        ring = jnp.stack([jnp.cos(theta), jnp.sin(theta)], -1) * (pond_r[:, None, None] + WILLOW_BANK)
+        kinds.append(jnp.full((N_PONDS * willows,), WILLOW))
+        poss.append((pond_c[:, None, :] + ring).reshape(-1, 2))
     obj_kind = jnp.concatenate(kinds)
     obj_pos = jnp.clip(jnp.concatenate(poss), 1.0, n - 1.0)
     obj_present = ~water[obj_pos[:, 0].astype(jnp.int32), obj_pos[:, 1].astype(jnp.int32)]
-    obj_variant = jax.random.randint(k_v, (N_OBJECTS,), 0, 4)
+    obj_variant = jax.random.randint(k_v, (obj_kind.shape[0],), 0, 4)
 
     # each sheep at the first of 32 random spots around the centre that is dry, clear of blocking
     # objects (a sheep placed inside a tree's footprint could never move) and, since sheep are solid
@@ -266,11 +280,11 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
     return State(meadow=meadow, flock=flock, t=jnp.int32(0))
 
 
-def random_start(key: jax.Array, n_sheep: int = N_SHEEP) -> State:
+def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0) -> State:
     """A new meadow with the flock at a random place, a random time of day, levels drawn from
     [0.2, 1.0] and fat from [0.2, 0.8] (the agents' varied starts)."""
     k1, k3, k4, k5 = jax.random.split(key, 4)
-    st = generate(k1, n_sheep)
+    st = generate(k1, n_sheep, willows=willows)
     levels = jax.random.uniform(k3, st.flock.levels.shape, minval=0.2, maxval=1.0)
     fat = jax.random.uniform(k5, (n_sheep,), minval=0.2, maxval=0.8)
     return st._replace(flock=st.flock._replace(levels=levels, fat=fat), t=jax.random.randint(k4, (), 0, DAY))

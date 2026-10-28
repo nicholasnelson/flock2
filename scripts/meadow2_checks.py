@@ -26,6 +26,7 @@ blocked (owner, 2026-10-26); the § 7 wanderer, which turns only at random, is s
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 
@@ -93,10 +94,11 @@ def main():
     p.add_argument("--walk_steps", type=int, default=4000)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/meadow2/checks.json")
+    p.add_argument("--willows", type=int, default=0, help="willows per pond bank (stage 1)")
     p.add_argument("--walker_only", action="store_true", help="only the explorer measures (both walkers)")
     a = p.parse_args()
     keys = jnp.stack([jax.random.PRNGKey(30_000 + i) for i in range(a.meadows)])
-    states = jax.jit(jax.vmap(random_start))(keys)
+    states = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))(keys)
     grass0 = np.asarray(states.meadow.grass)
     water = np.asarray(states.meadow.water)
     d_start = np.asarray(jax.vmap(lambda w, p: start_distance(w, p.mean(0)[None])[0])(states.meadow.water, states.flock.pos))

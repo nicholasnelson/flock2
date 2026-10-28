@@ -39,6 +39,7 @@ the RSSM with rung 4's turn-rotated memory (``flock.wm``, ``rot_bins``; spec § 
 from __future__ import annotations
 
 import argparse
+import functools
 import importlib.util
 import json
 import os
@@ -221,6 +222,7 @@ def main():
     p.add_argument("--ms_horizons", default="2,4,8", help="steps ahead at which the view is predicted")
     p.add_argument("--ms_stride", type=int, default=8, help="steps between prediction starts")
     p.add_argument("--add_frac", type=float, default=1.0, help="share of each iteration's sequences added to the replay")
+    p.add_argument("--willows", type=int, default=0, help="willows per pond bank (stage 1's world change; 0 = none)")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
@@ -237,7 +239,7 @@ def main():
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
-    fresh = jax.jit(jax.vmap(random_start))
+    fresh = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))
     key, k = jax.random.split(key)
     states = fresh(jax.random.split(k, a.meadows))
     S = states.flock.pos.shape[1]
