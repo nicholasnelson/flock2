@@ -7,8 +7,8 @@ borrowed from an LLM.
 
 This folder holds the research, the staged implementation plan and the record of each
 milestone as it is built. Milestone 0 (the toy drawing game) is closed; Milestone 1 (the meadow,
-drives and world model) is in progress — start with [`HANDOFF.md`](HANDOFF.md) for where things
-stand.
+drives and world model) is in progress — start with [`status-2026-10-29.md`](status-2026-10-29.md), then
+[`HANDOFF.md`](HANDOFF.md) for practical notes.
 
 ## Documents
 
@@ -21,6 +21,12 @@ stand.
 | [`research/`](research/) | Per-topic research notes with citations. The survey above is built from these. |
 | [`CURRENT-DESIGN.md`](CURRENT-DESIGN.md) | The design as it stands in the code, one page, with a dated decision log. Where other documents disagree, this one is current. |
 | [`review-2026-10-24.md`](review-2026-10-24.md) | An outside review of progress at 12abf7d (reading only) and its recommendations. |
+| [`status-2026-10-29.md`](status-2026-10-29.md) | Where meadow v2 stands: every arm's result, what was learned, the latest review, and the proposed staged plan. Read first. |
+| [`m1-world-v2-spec.md`](m1-world-v2-spec.md) | Meadow v2: design, pre-registered checks and every result (§§ 10–18). |
+| [`meadow2-results/`](meadow2-results/) | Meadow v2 evaluations, diagnoses, probes and training logs. |
+| [`m1-map-world-model.md`](m1-map-world-model.md) | The ladder of world-model rungs (1: today's model … 4: built-in geometry). |
+| [`trackB-grid-communication.md`](trackB-grid-communication.md) | Track B: the grid with 4 sheep and a signal channel (built, not yet run). |
+| [`review-2026-10-26-water.md`](review-2026-10-26-water.md), [`review-2026-10-26-plan.md`](review-2026-10-26-plan.md), [`review-2026-10-29-staged.md`](review-2026-10-29-staged.md) | Reviews: why water isn't tracked; the plan; does the world demand memory, and a staged plan. |
 | [`HANDOFF.md`](HANDOFF.md) | Where things stand, what to read first, practical gotchas. Newest update at the top. |
 | [`m0-toy-README.md`](m0-toy-README.md) | Milestone 0: the toy drawing game — design, every experiment grid, the result. |
 | [`m1-meadow-README.md`](m1-meadow-README.md) | Milestone 1: the meadow, drives, world model and actor-critic — what was built, every run, the diagnosis, what is next. |

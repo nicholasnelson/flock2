@@ -1,5 +1,15 @@
 # Handoff
 
+## Update — meadow v2, paused at a decision (2026-10-29)
+
+**Where things are.** Read [`status-2026-10-29.md`](status-2026-10-29.md) first: results of every
+meadow v2 arm, what was learned, the latest review
+([`review-2026-10-29-staged.md`](review-2026-10-29-staged.md)) and the proposed staged plan. The full
+record with pre-registered rules is [`m1-world-v2-spec.md`](m1-world-v2-spec.md) §§ 10–18. Nothing is
+running. **Decision waiting on the owner:** adopt the staged ("forced evolution") plan, and whether to
+run its stage 0 (does the world need memory?) before stage 1 (a reactive sheep with willows marking
+the ponds). Gotchas from this stretch are in the status document's § 6.
+
 ## Update — M1 in progress (2026-10-24)
 
 **Where things are.** M1 steps 1–2 are done; step 3 (drives and the actor-critic) is built and

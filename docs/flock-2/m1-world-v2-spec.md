@@ -977,3 +977,9 @@ h and z are now 1,920 numbers wide (was 1,408).
   patterns that do not carry to the test meadows.
 - Survival is a little better (48 % against 57 % died) at the same reward, on one seed: not a
   difference to rely on.
+
+### Where this leaves Track A (2026-10-29)
+
+Paused for the owner's decision. The summary of every arm, the review's reading (the meadow may not
+demand this kind of memory) and the proposed staged plan are in [`status-2026-10-29.md`](status-2026-10-29.md)
+and [`review-2026-10-29-staged.md`](review-2026-10-29-staged.md).

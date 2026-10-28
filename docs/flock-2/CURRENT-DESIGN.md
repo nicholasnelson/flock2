@@ -8,6 +8,9 @@ decision log at the end.*
 
 ## Where the project is
 
+**Superseded for meadow v2:** this page describes the first meadow. For meadow v2 and the current
+plan see [`status-2026-10-29.md`](status-2026-10-29.md).
+
 - **M0 (toy drawing game): closed.** Sheep reliably learn to communicate with drawings; without a
   resemblance reward the drawings are an arbitrary but consistent code, not pictures. Emergence
   relied on a stack of nine channel interventions (below), not on the game alone. The human
@@ -145,3 +148,7 @@ default. Each closed a cheat in the toy; which are load-bearing in the meadow is
 | 2026-10-24 | Hybrid rung (PPO on the world model's state); latent probes; reward centring; two-hot critic as an option | `review-2026-10-24b.md`; commit log; M1 README § The grid world |
 | 2026-10-24 | Grid world adopted as the learner's test bed (owner's proposal); `wm.Config` makes one model serve both worlds | M1 README § The grid world |
 | 2026-10-24 | Third review: one critic for target and baseline, return normalisation, replay value loss, γ as a setting; success criteria written before runs; three seeds per comparison | `review-2026-10-24c.md`; M1 README § Pre-registered criteria |
+| 2026-10-26 | Meadow v2: 48 × 48 tiles, fat reserve and death with an alive bonus, renderer v2 (RGB), scripted checks before learning | `m1-world-v2-spec.md` §§ 1–13 |
+| 2026-10-26 | Vision hybrid on meadow v2; diagnosis gate (branch B: the state is the limit); night water reflects the sky; multi-step prediction kept; spatial model (rung 3) not kept | spec §§ 14–16; `review-2026-10-26-*.md` |
+| 2026-10-27 | Learned memory arm M fails; D3 memory probe validated | spec § 17 |
+| 2026-10-29 | Rung 4's minimal piece (a ring rolled by the sheep's turns) fails and is retired; review proposes a staged plan; paused for the owner's decision | spec § 18; `review-2026-10-29-staged.md`; `status-2026-10-29.md` |
