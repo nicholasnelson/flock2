@@ -1,0 +1,57 @@
+/mnt/c/Users/nnels/Documents/projects/flock2/scripts/m2_eval.py:232: RuntimeWarning: Mean of empty slice
+  "nearest_neighbour_tiles": float(np.nanmean(np.where(np.isfinite(rec["nn"]) & rec["alive_now"], rec["nn"], np.nan)[rec["alive_now"]])) if rec["alive_now"].any() else None,
+{
+ "policy": "hybrid:/home/nnels/flock2_data/m2_hybrid/s2a_s2",
+ "meadows": 64,
+ "days": 5.0,
+ "willows": 3,
+ "sheep": 1,
+ "inner": 8.0,
+ "edge": 2.0,
+ "trample": 0.0,
+ "reward": 2.4590067863464355,
+ "reward_se": 0.001575433649122715,
+ "drive": 0.04063019901514053,
+ "drive_se": 0.0015633486909791827,
+ "death_share": 0.0,
+ "deaths_per_meadow_max": 0,
+ "days_survived_mean": 5.0,
+ "last_day_levels": {
+  "energy": 1.037,
+  "hydration": 1.047,
+  "warmth": 1.105,
+  "interest": 1.117
+ },
+ "last_day_fat": 0.99,
+ "drink_success": 0.9038693588609122,
+ "graze_success": 0.9305623781830858,
+ "bad_taste_per_step": 0.00726171875,
+ "huddled_share_of_night_rest": 0.0,
+ "actions": {
+  "stop": 0.18,
+  "walk": 0.087,
+  "trot": 0.156,
+  "left": 0.111,
+  "right": 0.099,
+  "graze": 0.082,
+  "drink": 0.016,
+  "rest": 0.269
+ },
+ "nearest_neighbour_tiles": NaN,
+ "others_in_view": 0.0,
+ "thirsty_share_of_living_steps": 0.0035677083333333333,
+ "thirsty_sees_water": 0.8598540145985402,
+ "information_gap": 0.0,
+ "thirsty_sees_water_8": 0.3802919708029197,
+ "information_gap_8": 0.0,
+ "within_8_share_of_living_steps": 0.486,
+ "forensics": {
+  "deaths_by_day": [
+   0,
+   0,
+   0,
+   0,
+   0
+  ]
+ }
+}

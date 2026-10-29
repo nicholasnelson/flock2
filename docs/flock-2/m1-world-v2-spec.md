@@ -1701,6 +1701,56 @@ grazing at 12 tiles at dusk must get back to water in the dark. (c) is the small
 that makes night the memory test the probe now reads; (a) and (b) change what can be seen by day.
 
 
+### 21.3 Stage 2a, three seeds: survival passed, memory failed (2026-10-29, 23:50)
+
+Seeds 1 and 2 ran the registered recipe unchanged (the chain started before the § 21.2 amendment; the
+amendment changed only what the probe reports). Training had the same shape at all three seeds: reward
+2.46–2.47 at the 8-tile hold, training survival 100 %, grazing falling from 12 % to 9 % of steps as the
+bank bared, no dip anywhere on the ramp. Peak GPU memory 6.2 GB.
+
+| seed | mud 8, 5 days (rule ≤ 20 %) | stage 1 still passes (plain, 3 days; ≤ 20 %) | alone on the mud | D3 night from **g** (MLP, sin / cos; rule ≥ 0.3) | D3 night, embedding (must be ≈ 0) | D3 day, g against the embedding (cos) |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | **1.0 %** | 11.5 % (was 4.7) | 9.4 % | **−0.37 / −1.84** | −0.32 / −0.66 | 0.55 vs 0.76 |
+| 1 | **2.1 %** | 19.8 % (was 6.8) | 1.6 % | **−1.76 / −1.25** | −0.29 / −0.48 | 0.64 vs 0.73 |
+| 2 | **0.0 %** | 2.6 % (was 9.9) | 0.0 % | **−1.49 / −2.31** | −1.16 / −0.52 | 0.50 vs 0.74 |
+
+(Night frames: 2,208 per seed, 1,279 for fitting; the ridge on so few frames is unstable, so the
+early-stopped MLP is the number read. Ridge values are in `meadow2-results/diag/s2a_s*_mud8.json`;
+noise floors at night: g −0.56 / −0.77, [h, z, g] −0.49 / −0.37.)
+
+**Verdict under the registered rule (§ 21.1), three seeds agreeing: stage 2a fails on memory with
+survival passed.** The night split is clean, since the embedding reads nothing at night in any seed,
+and in that split nothing holds the water's bearing: not the column's state g, not the world model's h
+or [h, z], at any seed (all ≤ 0; h −0.03 / −0.24, −0.16 / −0.14, −0.64 / −0.44). By day g decodes the
+bearing at 0.5–0.6 (cos), but the embedding alone does better (0.73–0.76) in every seed, so g carries
+nothing that the current view does not. The reward-trained column learned to be ignorable, because the
+pressure never asked for more: all three brains survive the mud by grazing out on the ring in sight of
+the willows by day (within-8 share 45 / 25 / 46 % of living steps, against the stage-1 brain's 95 %) and
+sitting out the night, which a full sheep's 1.6–1.8-day hydration reserve allows (route-around (i) of
+§ 21.1, confirmed at three seeds).
+
+**Stage 1's regression is real at one seed.** Seed 1 passes at 19.8 %, at the line; its plain-world deaths
+are on days 1–2, of thirst, with 68 % of the dead never having had water within 8 tiles: the search
+failure of § 20.1, more frequent than in the brain it continued from (6.8 %). The other seeds moved
+4.7 → 11.5 and 9.9 → 2.6. Noted as a cost of continuing training on a world the sheep must leave
+water in; not a stage failure.
+
+**What is not run.** § 21.1's fallbacks (freeze the old weights, a longer ramp, the horizon compass as
+2a-ii, a larger PPO budget) are for a brain that cannot learn what the pressure demands. This result is
+the other case: a pressure that does not demand memory, met in full without it. Running the fallbacks
+would change the brain against a world that is not asking anything of its memory, so under "one change
+per comparison" the world is what changes next, and that choice is the owner's (§ 21.2): **(a)** a mud
+radius beyond the willows' readable range (12–16 tiles; the scripted demand gate must be re-defined,
+since the scripted flock camps and starves at any radius by design); **(b)** stage 3's hiding of the
+willows pulled forward (hills, or weather); **(c)** a thirst that does not last the night, which makes
+night the memory test the probe now reads. For (c): at the current decay (0.0008 / 3 per step) a full
+sheep empties in 3,750 steps, 1.6 days; roughly doubling the decay makes that under a day, so a sheep
+that drank in the morning and grazed out to the ring through the afternoon must find the water again
+in the dark. (c) is one constant, but it changes the plain world too, so stage 1's pass (and the scripted
+sheep's survival) must be re-read under it before the mud is put back. The stage-2a brains stay in
+`~/flock2_data/m2_hybrid/s2a_s{0,1,2}` as the starting point for whichever pressure is chosen.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
