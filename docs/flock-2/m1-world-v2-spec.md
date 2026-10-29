@@ -1290,6 +1290,52 @@ last-day hydration 1.04–1.10. (iii) Following: nearest neighbour 1.3–4.2 til
   by day, so the pond itself is still not segmented beyond 8 tiles; the bearing at 8–16 is read from the
   willows. D3_recent (bearing of water seen in the last 300 steps, now out of view): negative, no memory.
 
+### 20.4 The demand check and the lone-sheep evaluation (2026-10-29, 18:30)
+
+**Lone sheep** (one per meadow, 64 meadows, 3 days, the willow world):
+
+| seed | lone dead | flock dead (§ 20.3) | lone reward | within 8 | deaths by day | never within 8 | water at death |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 7.8 % | 4.7 % | 2.27 | 86 % | 3 / 2 / 0 | 1.00 | 19 / 21 / 24 |
+| 1 | 17.2 % | 6.8 % | 2.11 | 92 % | 7 / 4 / 0 | 0.91 | 13 / 15 / 17 |
+| 2 | 14.1 % | 9.9 % | 2.20 | 76 % | 6 / 1 / 2 | 0.56 | 10 / 12 / 19 |
+
+Alone, every seed still passes § 20's rule (≤ 20 %, reward ≥ 2.0), so the survival is the sheep's own,
+but the flock helps: 13.0 % mean dead alone against 7.1 % in a flock, and most for seed 1, the tight
+herd (17.2 against 6.8). Every lone death is a day-1 or day-2 far-start search death: the dead never
+had water within 8 tiles and died of thirst 10–24 tiles from it. The flock's help is the obvious one: a
+sheep that cannot see water follows one that can. Route-around (iii) is therefore real but partial,
+and § 20.2's rule for it (lone > 20 % with flock < 5 %) is not triggered. Stage 2a is read on both.
+
+**Demand check** (each seed on the 8-tile mud, 16 meadows, 3 days; the scripted flock through the
+same script lost 0 of 192, reward 2.31, within-8 share 43 %, last-day hydration 0.70):
+
+| seed | dead | max / meadow | reward | within 8 | graze success | last-day gut / fat | deaths by day | cause | water at death |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0 | 14.6 % | 4 | 1.98 | 95 % | 0.04 | 0.30 / 0.28 | 3 / 3 / 22 | starved by the pond (gut 0, hydration 1.04) | 0.8 / 1.3 / 2.1 |
+| 1 | 17.2 % | 4 | 2.02 | 91 % | 0.16 | 0.29 / 0.28 | 5 / 1 / 27 | starved by the pond (gut 0, hydration 1.14) | 0.7 / 1.1 / 2.5 |
+| 2 | 25.5 % | 9 | 1.94 | 50 % | 0.45 | 0.78 / 0.56 | 27 / 12 / 10 | thirst beyond the mud (hydration 0) | 8.5 / 12.2 / 15.4 |
+
+**Reading, by the rule as registered: not a pressure at 3 days** (14.6, 17.2, 25.5 %, all under 40 %).
+**Reading of the evidence: the rule's window was wrong for this pressure.** § 20 set the 40 % line
+with thirst deaths in mind, which arrive within a day. The mud kills by hunger, and a sheep's fat
+(FAT_CAPACITY 4 gut-units, starts at 0.2–0.8) carries it for about two days without grass. Seeds 0 and 1
+do exactly what stage 2a predicted of a memoryless brain: they stay within 8 tiles of water (95 and
+91 % of steps, the route-around § 20 named first) where there is now no grass, graze successfully on 4
+and 16 % of attempts, and start dying on day 3 (22 and 27 of their 25 and 33 deaths) with the last day's
+gut at 0.30 and fat at 0.28, which is a flock a day from collapse. Seed 2 wanders instead (within 8:
+50 %) and dies of thirst 8–15 tiles out, the other failure of a brain without memory: it leaves water to
+eat and does not find its way back. Both are the failure the pressure was built to produce; the 3-day
+evaluation simply ends before the first style has finished killing.
+
+**Pre-registered before running (18:35): the demand check's window is 5 days,** the same window § 20's
+gate used for the scripted flock (`meadow2_checks.py --days 5`). The 40 % line is kept. Each seed and
+the scripted flock run again on the 8-tile mud for 5 days through `m2_eval.py --days 5 --inner 8`.
+If the 5-day share is ≥ 40 % at every seed the mud is a pressure and stage 2a's learning stage is
+written (§ 21's column, the ramp 0 → 8, D3 ≥ 0.3); if the scripted flock also loses sheep at 5 days the
+end point moves in; if a seed stays under 40 % at 5 days with gut and fat still falling, the window,
+not the world, is reported and the owner decides. Nothing about the window is changed after this run.
+
 ## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
 
 **The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),
