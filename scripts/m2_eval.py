@@ -207,12 +207,15 @@ def forensics(dl, steps):
 # water, and within 8 tiles of water in the last RECENT steps (it has something to remember). The
 # episode ends when water is back in the 8-tile cone (resolved), or after M1_CAP steps, or at death or
 # the end (censored at M1_CAP); the next onset needs a new approach to within 8 tiles first (one
-# episode per excursion). The time to resight is compared, per bin of the distance at onset, with the
+# episode per excursion). RECENT is 4,000 steps, more than a full hydration reserve (3,750): a sheep
+# that drinks its fill and leaves is urgent about 2,800 steps later, so a half-day window (the first
+# draft, 1,200) found almost no onsets (spec section 21.5); the age of the knowledge at onset is
+# reported in two halves, fresh (<= 1,200 steps) and stale. The time to resight is compared, per bin of the distance at onset, with the
 # best memoryless search rule of § 20.1 (the wall-aware correlated trot, turn probability 0.1, scattered
 # starts, 2026-10-29): its median steps to the 8-tile cone. The rule reads the "unsighted" split,
 # onsets in fog or at night, where the willows cannot carry the water's bearing; the other splits are
 # reported. The scripted flock, which knows where the water is, is the positive control.
-RECENT, M1_CAP = 1200, 600
+RECENT, M1_CAP, FRESH = 4000, 600, 1200
 M1_THIRST = scripted.URGENT
 M1_BINS = ((8, 12), (12, 16), (16, 24), (24, 1e9))
 M1_BASELINE_MEDIAN = {"8-12": 90.0, "12-16": 254.0, "16-24": 244.0, "24-inf": 321.5}  # walk_p0.1_wall, meadow2-results/search/search.json
@@ -227,17 +230,18 @@ def memory_return(rec):
     t_idx = np.arange(T)[:, None, None]
     knows = (t_idx - near8 <= RECENT) & (near8 != NEVER)
     can_start = al & urgent & ~sees8 & (wdist > NEAR_RANGE) & knows
-    onsets = []  # (dist, duration, resolved, fog, night)
+    onsets = []  # (dist, duration, resolved, fog, night, age of the knowledge at onset)
     active = np.zeros((B, S), bool)
     t0 = np.zeros((B, S), int)
     t_close = np.full((B, S), NEVER)  # when the last episode closed; a new one needs a later approach
     d0 = np.zeros((B, S))
     f0 = np.zeros((B, S), bool)
     n0 = np.zeros((B, S), bool)
+    a0 = np.zeros((B, S), int)
 
     def close(mask, t, resolved):
         for b, s in zip(*np.nonzero(mask)):
-            onsets.append((d0[b, s], min(t - t0[b, s], M1_CAP), bool(resolved), bool(f0[b, s]), bool(n0[b, s])))
+            onsets.append((d0[b, s], min(t - t0[b, s], M1_CAP), bool(resolved), bool(f0[b, s]), bool(n0[b, s]), a0[b, s]))
         active[mask] = False
         t_close[mask] = t
 
@@ -246,12 +250,14 @@ def memory_return(rec):
         close(active & (~al[t] | (t - t0 >= M1_CAP)), t, False)
         start = can_start[t] & ~active & (near8[t] > t_close)
         active |= start
-        t0[start], d0[start], f0[start], n0[start] = t, wdist[t][start], fog[t][start], night[t][start]
+        t0[start], d0[start], f0[start], n0[start], a0[start] = t, wdist[t][start], fog[t][start], night[t][start], (t - near8[t])[start]
     close(active, T, False)
-    arr = np.array(onsets, dtype=float).reshape(-1, 5)
+    arr = np.array(onsets, dtype=float).reshape(-1, 6)
     out = {"onsets": int(len(arr)), "recent": RECENT, "cap": M1_CAP, "thirst": float(M1_THIRST), "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec § 20.1)"}
-    splits = {"all": np.ones(len(arr), bool), "unsighted": (arr[:, 3] > 0) | (arr[:, 4] > 0), "clear_day": (arr[:, 3] == 0) & (arr[:, 4] == 0),
-              "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0}
+    unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
+    splits = {"all": np.ones(len(arr), bool), "unsighted": unsighted, "clear_day": (arr[:, 3] == 0) & (arr[:, 4] == 0),
+              "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0,
+              "unsighted_fresh": unsighted & (arr[:, 5] <= FRESH), "unsighted_stale": unsighted & (arr[:, 5] > FRESH)}
     passes = []
     for name, sm in splits.items():
         bins = {}

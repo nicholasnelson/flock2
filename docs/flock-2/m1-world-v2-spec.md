@@ -1831,6 +1831,59 @@ lives in h and z, and that is said). Fallbacks, one at a time, each pre-register
 (iii) a longer ramp; (iv) the owner's horizon compass. About 95 minutes per seed on the GPU.
 
 
+### 21.5 The fog demand check, and two amendments to M1 (2026-10-30, 02:43–03:30)
+
+**Survival on mud 8 + fog 0.5, 16 meadows, 5 days, the stage-2a brains** (run twice: the second run
+re-read M1 with the window below; the same meadows and policy, and the GPU is not bit-exact, so the
+two runs differ by a point or two):
+
+| brain | dead, run 1 | dead, run 2 | cause | water at death (quartiles) | last near water before death |
+| --- | --- | --- | --- | --- | --- |
+| s2a_s0 | **47.9 %** | 48.4 % | thirst (hydration 0, energy 1.0) | 19 / 21 / 27 tiles | 3,500–4,200 steps |
+| s2a_s1 | **36.5 %** | 42.2 % | thirst (energy 0.8) | 12 / 20 / 26 | 560–3,400 |
+| s2a_s2 | **20.8 %** | 18.8 % | thirst (energy 1.1) | 17 / 21 / 25 | 2,800–4,100 |
+| scripted flock | 0.0 % | 0.0 % (64 meadows) | | | |
+
+The fog kills as it was meant to: a sheep grazes out on the ring, the fog comes, it never finds its way
+back, with a full stomach. Seed 2 sits on the 20 % line (one run over, one under).
+
+**Amendment 1 (made after seeing the onset counts, before any M1 reading of the brains; it makes the
+test harder for the sheep, never easier).** The draft rule required the sheep to have been within 8
+tiles of water in the last 1,200 steps. But a sheep that drinks its fill is not urgent (hydration
+< 0.25) until about 2,800 steps later, and the dead above were last near water 3,500–4,200 steps
+before dying, so the draft found 8 onsets in a run with 92 deaths. The window is now **4,000 steps**,
+more than a full reserve; the age of the knowledge at onset is reported in two halves (fresh ≤ 1,200,
+stale). The scripted control at 16 meadows also had too few onsets to read a bin (27 in the 8–12 bin,
+median 12 steps), so the control runs on **64 meadows**.
+
+**Amendment 2.** The decoding probes split train and test by meadow, and fog is drawn per meadow, so
+the fog-day split of D3 came back empty (no test frames). The fog reading of the probes now comes from
+a run with **every day foggy** (`m2_diag.py --fog 1.0`, files `*_mud8_fog1.json`); `D2_true` gets the
+same fog/clear split. Those runs are in progress as this is written.
+
+**M1 with the 4,000-step window.** The scripted flock **passes**: on the unsighted split, 8–12 tiles,
+186 onsets, median 13 steps (bar 45); 12–16 tiles, 38 onsets, median 33 (bar 127); 16–24 tiles, 21
+onsets (not read), median 52; 99–100 % resolved. The stage-2a brains **fail**, as expected before
+learning:
+
+| brain | onsets | 8–12 (n, median, resolved) | 12–16 | 16–24 | 24+ |
+| --- | --- | --- | --- | --- | --- |
+| s2a_s0 | 93 | 14, 196, 64 % | 5, 600, 0 % | 23, 600, 4 % | 33, 600, 0 % |
+| s2a_s1 | 113 | 32, 171, 66 % | 6, 536, 67 % | 20, 600, 20 % | 25, 600, 16 % |
+| s2a_s2 | 58 | 9, 380, 44 % | 6, 178, 83 % | 23, 600, 26 % | 11, 600, 9 % |
+
+Beyond 16 tiles the brains almost never get back within the cap, and the only bin any of them can be
+read in (seed 1, 8–12, 32 onsets) has a median of 171 against a bar of 45. Most of their onsets are
+stale (knowledge 1,200–4,000 steps old) and in fog; the scripted flock's are fresh and at night, since
+it stays by the water and only its night rest takes it out of sight.
+
+**Decision under the rule of § 21.4.** Two seeds fail survival clearly and one sits on the line, so
+the pre-registered step applies: **the check is run once more at fog 0.75** (brains and scripted
+control, same evaluation). If all three brains then fail survival and the control passes it and M1, the
+learning stage runs at fog 0.75 (ramp 0 → 0.75 over iterations 200–1,400). If not, the decision returns
+to the owner. M1 is unaffected by this choice: it fails at every seed at 0.5 already.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

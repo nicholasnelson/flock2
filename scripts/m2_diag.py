@@ -340,7 +340,8 @@ def main():
     # D2_true: the true bearing of the nearest water tile in the field of view, by its true distance,
     # by day and by night, whether or not water pixels show (stage 1: the willows should carry it)
     res["D2_true"] = {}
-    for dn, dm in (("day", day_full), ("night", ~day_full)):
+    fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
+    for dn, dm in (("day", day_full), ("night", ~day_full), ("fog_day", day_full & fog_full), ("clear_day", day_full & ~fog_full)):
         for lo, hi in BINS[:-1]:
             m = alive & rec["found_v"] & (rec["wdist_v"] >= max(lo, NEAR)) & (rec["wdist_v"] < hi) & dm
             key = f"{dn}_{lo}-{hi}"
@@ -356,7 +357,6 @@ def main():
         # spec section 21.1 (amended after stage 2a seed 0): by day the willows stay in view when the water's
         # pixels do not, so the embedding alone decodes the "unseen" water's bearing; the memory reading is
         # the night split, where the willows are not readable either (D2_true night 8-16 = 0 at stage 1)
-        fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
         for nm, dm in (("day", day_full), ("night", ~day_full), ("fog_day", day_full & fog_full), ("clear_day", day_full & ~fog_full)):
             m = recent & dm
             res[f"D3_recent_{nm}"] = {"frames": int(m.sum()),
