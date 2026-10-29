@@ -309,9 +309,10 @@ def bank_map(water: jax.Array, bank: float | jax.Array) -> jax.Array:
     return jnp.where(bank > 0, jnp.clip(d / jnp.maximum(bank, 1e-6), 0.0, 1.0), 1.0)
 
 
-def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None, bank: float | jax.Array | None = None) -> State:
+def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None, bank: float | jax.Array | None = None, mud: bool = False) -> State:
     """The same state (or batch of states) with new terrain numbers. ``bank`` recomputes
-    ``regrow_map`` from the water (0: uniform)."""
+    ``regrow_map`` from the water (0: uniform); with ``mud`` the standing grass is scaled by the same
+    map as well (spec § 21, grid 4: nothing grows well on the muddy bank, from the start)."""
     m = state.meadow
     like = lambda v, old: jnp.broadcast_to(jnp.asarray(v, jnp.float32), old.shape)
     if regrow is not None:
@@ -322,6 +323,8 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
         b = like(bank, m.trample)
         fn = bank_map if m.water.ndim == 2 else jax.vmap(bank_map)
         m = m._replace(regrow_map=fn(m.water, b))
+        if mud:
+            m = m._replace(grass=m.grass * m.regrow_map)
     return state._replace(meadow=m)
 
 

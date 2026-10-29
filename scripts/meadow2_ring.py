@@ -70,6 +70,7 @@ def main():
     p.add_argument("--regrow", default="1,0.5,0.25,0.125", help="factors on REGROW")
     p.add_argument("--trample", default="0,0.005,0.02,0.05")
     p.add_argument("--bank", default="0", help="muddy-bank widths (tiles; 0 = uniform regrowth), grid 3")
+    p.add_argument("--mud", action="store_true", help="the bank map also scales the starting grass (grid 4)")
     p.add_argument("--willows", type=int, default=3)
     p.add_argument("--camp", action="store_true", help="the camping scripted flock (spec § 21, grid 2)")
     p.add_argument("--seed", type=int, default=0)
@@ -78,12 +79,12 @@ def main():
     keys = jax.random.split(jax.random.PRNGKey(80_000 + a.seed), a.meadows)
     base = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))(keys)
     runj = jax.jit(functools.partial(run, camp=a.camp), static_argnums=(2,))
-    res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "camp": a.camp, "bands": [list(b) for b in BANDS], "settings": []}
+    res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "camp": a.camp, "mud": a.mud, "bands": [list(b) for b in BANDS], "settings": []}
     t0 = time.time()
     grid = [(rf, tr, bk) for rf in (float(x) for x in a.regrow.split(",")) for tr in (float(x) for x in a.trample.split(",")) for bk in (float(x) for x in a.bank.split(","))]
     for rf, tr, bk in grid:
         if True:
-            states = with_terrain(base, regrow=REGROW * rf, trample=tr, bank=bk)
+            states = with_terrain(base, regrow=REGROW * rf, trample=tr, bank=bk, mud=a.mud)
             out = jax.tree.map(np.asarray, runj(states, jax.random.PRNGKey(a.seed), a.days * DAY))
             bands = out["bands"].mean(1)  # (days, bands)
             bare = []

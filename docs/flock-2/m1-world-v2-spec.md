@@ -1206,3 +1206,33 @@ about the sheep.
 0.15}, 8 days, both flocks. Same reading: usable if some setting bares the bank past 8 tiles within 3
 days of the camping flock's arrival while both scripted flocks still survive (≤ 2 % die), and those
 that die do so of thirst. The mildest such setting is the ramp's end point.
+
+### Ring-growth measurement, grid 3: result (2026-10-29)
+
+`meadow2-results/ring_grid3_{camp,wander}.json`: full regrowth, bank ∈ {4, 8, 12, 16} × trample
+∈ {0, 0.05, 0.15}, 8 days, both flocks.
+
+**Muddy banks keep everyone alive (0 deaths of 192 in all 24 runs) but still make no ring.** The bare
+radius never reached 2 tiles; at bank 16 with trample 0.15 the 0–2-tile band's mean density settled at
+0.71 (camping) / 0.81 (wandering) and the 2–4 band at about 1.0, still above the bite floor. The
+camping flock's bites moved out from 4.7 to 7–8 tiles, the wanderers' to 10–12. Part of this is the
+scripted flock's own rule (it grazes only patches of density ≥ 1.0 and walks to a richer one three
+tiles away, so it leaves about 1.0 where a learned sheep could bite down to 0.5). The rest is
+arithmetic *(estimate)*: 12 sheep eat about 100 bites each a day to cover their energy use, about 200
+biomass units for the flock, whatever their policy; the standing crop within 8 tiles of two ponds is
+about 1,600 cells × 2 ≈ 3,200 units, and at half regrowth it recovers about 375 units a day. The flock
+cannot carve an 8-tile ring out of standing grass in days; it would take weeks with no regrowth at all.
+
+**Reading:** depletion by this flock cannot *create* the ring; it can only *maintain* one. Two ways to
+get the ring, for the owner to choose between:
+- **A. Mud sets the starting grass too.** The same bank map scales the initial grass as well as the
+  regrowth (nothing grows well on the muddy bank, a world fact), so the ring is there from the start at
+  the width the dial sets; trampling and slow regrowth keep it bare and wear the paths. The ramp is the
+  bank width, as planned. The ring's creation is then designed, its maintenance emergent. No compute
+  cost. Grid 4 (pre-registered here) measures it: bank ∈ {8, 12, 16} × trample ∈ {0, 0.05}, both
+  flocks, 8 days; usable if the bare radius is ≥ 8 tiles from day 1 and holds, with ≤ 2 % scripted
+  deaths.
+- **B. A bigger flock.** Consumption scales with the flock: 40 sheep (the installation's "tens") would
+  eat about 700 units a day and could carve the ring in about a week at a 16-tile bank. The ring would
+  be fully emergent, but rendering cost per meadow triples, the fixed evaluation and every baseline
+  change, and it is a decision about the whole world, not one dial.
