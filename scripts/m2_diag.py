@@ -351,6 +351,13 @@ def main():
                       "noise_hzg": np.random.default_rng(1).normal(size=inputs["hzg"].shape).astype(np.float16)}
         res["D3_recent"] = {"frames": int(recent.sum()),
                             "sin_bearing": probe(recent, np.sin(rec["wbear"]), "recent sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "recent cos")}
+        # spec section 21.1 (amended after stage 2a seed 0): by day the willows stay in view when the water's
+        # pixels do not, so the embedding alone decodes the "unseen" water's bearing; the memory reading is
+        # the night split, where the willows are not readable either (D2_true night 8-16 = 0 at stage 1)
+        for nm, dm in (("day", day_full), ("night", ~day_full)):
+            m = recent & dm
+            res[f"D3_recent_{nm}"] = {"frames": int(m.sum()),
+                                      "sin_bearing": probe(m, np.sin(rec["wbear"]), f"recent {nm} sin"), "cos_bearing": probe(m, np.cos(rec["wbear"]), f"recent {nm} cos")}
     print(json.dumps({"D1": res.get("D1"), "D2_true": res["D2_true"]}, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

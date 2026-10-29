@@ -1658,6 +1658,49 @@ with the three seeds in one chain, each followed by the four evaluations. Smoke 
 regression test's zero-start checked numerically (the widened policy's logits equal stage 1's at
 iteration 0), then the chain.
 
+### 21.2 Stage 2a, seed 0, and an amendment to the memory probe (2026-10-29, 20:40; seeds 1 and 2 still running)
+
+**Training.** The ramp never hurt: reward 2.42 at mud 0 and 2.44 from 2 tiles to the 8-tile hold, training
+survival 98–99.6 %, grazing falling from 12 % to 8 % of steps as the bank bared. Peak GPU memory 6.0 GB.
+
+**Evaluations (seed 0):**
+
+| test | result | rule |
+| --- | --- | --- |
+| survival on the 8-tile mud, 5 days | **1.0 % dead** (2 of 192), reward 2.44, within-8 share 45 %, graze success 0.93, last-day gut 1.01 | ≤ 20 %: passes |
+| stage 1 still passes (no mud, 3 days) | 11.5 % dead (was 4.7 % before the stage), reward 2.26 | ≤ 20 %: passes, worse |
+| alone on the mud, 5 days, 64 meadows | 9.4 % dead | reported; passes alone |
+
+**The memory probe, as registered, is contaminated by the willows.** On the mud world's D3 frames (water's
+pixels not visible now, visible within the last 300 steps, water > 1.5 tiles away) the *embedding alone*
+decodes the water's bearing at 0.37 / 0.46 (sin / cos; 0.54 / 0.81 by day). The embedding is a function of
+the current frame only, so those frames are not "water out of view": the pond's pixels are gone but the
+willows stand in view, and the embedding reads them (that is what stage 1 taught it). D3 from h is
+0.48 / 0.49 and from [h, z] 0.46 / 0.49, barely above the embedding; from the column's state **g** it is
+**−0.01 / −0.07** (0.08 / 0.47 by day). The noise floors are fine (g: −0.04 / −0.06; [h, z, g]: −0.16 / −0.11).
+
+**Amendment (pre-registered here, before seeds 1 and 2 are read; the chain's probes pick it up as
+they run):** the memory reading is **D3 at night**, when the willows are not readable either (stage 1's
+probe read them at 0 at night, § 20.3). `m2_diag.py` now reports `D3_recent_day` and `D3_recent_night`
+beside `D3_recent`; the rule's "D3 from g ≥ 0.3" is read on the night split, from g and, reported, from
+h, z and the embedding (which must be ≈ 0 at night, as a check that the split is clean). Seed 0 at night
+(1,279 training and 929 test frames, so the ridge is noisy; the early-stopped MLP is the steadier
+number): embedding −0.00 / −0.99, h −0.31 / −1.54, g −17 / −7 (ridge) and −0.37 / −1.84 (MLP). **Nothing holds
+the water's bearing at night**, in the column or in the world model's state.
+
+**Reading so far (seed 0; three seeds decide).** Survival passes by route-around (i), as § 21.1 said it
+might: by day the brain grazes out on the ring with the willows in view (within-8 share 45 %, against
+the stage-1 brain's 95 % that starved there), and at night it does not need to find water, since a
+full sheep's hydration lasts about 1.8 days and the night is 0.4 of one. The column was given nothing
+to remember. If seeds 1 and 2 read the same, stage 2a fails on memory with survival passed, and the
+decision returns to the owner with the two pre-named next pressures and a third the result suggests:
+(a) a mud radius beyond the willows' readable range (12–16 tiles; the scripted gate must be re-tuned,
+since the scripted flock camps by design); (b) stage 3's hiding of the willows pulled forward (hills,
+or weather); (c) **a thirst that does not last the night**: faster hydration decay, so that a sheep
+grazing at 12 tiles at dusk must get back to water in the dark. (c) is the smallest change and the one
+that makes night the memory test the probe now reads; (a) and (b) change what can be seen by day.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
