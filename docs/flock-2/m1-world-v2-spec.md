@@ -2095,6 +2095,48 @@ them sheep that never found it), seeds 1 and 2 pass. One or two brains failing i
 drinks at dusk and rests out is urgent before the 960-step night ends). Run 10:20, same files tagged
 `thirst3`, same four readings.
 
+**Thirst ×3 demand check (10:14–10:24; files `*_thirst3_*`): the lever is exhausted.**
+
+| | dead at 5 days | thirsty share | within 8 tiles | steps beyond 12 tiles, fog / night | M1 (unsighted onsets; bins read) |
+| --- | --- | --- | --- | --- | --- |
+| scripted flock (64 meadows) | 16.0 % (again beside the water: 1.5–2.1 tiles, hydration 0; crowding) | 41 % | 63 % | 10.5 / 11.2 % | **passes**: 1,605 / 514 / 151 onsets, medians 13 / 29 / 45; 2,063 of 2,372 onsets at night |
+| s2f_s0 | **34.4 %** | 3.2 % | 45 % | 7.8 / 14.6 % | 57 onsets, 0 bins read (16–24: 24, median 313, 12 % resolved) |
+| s2f_s1 | 12.5 % | 1.7 % | 69 % | 2.9 / 6.0 % | 19 onsets |
+| s2f_s2 | **24.0 %** | 3.2 % | 64 % | 5.7 / 7.9 % | 42 onsets (8–12: 19, median 47 against 45) |
+
+Two brains fail survival and one passes, so reading (1) does not confirm, and M1 is unreadable at
+every seed, so reading (2) does not hold either. The ×3 run was the one repeat the rule allowed. What
+it shows is the mechanism: **the faster the thirst, the closer the brains stay** (steps beyond 12 tiles
+in fog 9–15 % → 3–8 %, at night 14–28 % → 6–15 %; within 8 tiles 31–54 % → 45–69 %), without any
+retraining, so the lever moves the sheep away from the test situation rather than into it. The deaths
+it does cause are the sheep that were already out of reach (20–27 tiles, 1,300 steps after their last
+water) and the day-1 sheep that never found the water. The control, meanwhile, shows the reader works
+when onsets exist: 2,063 night onsets, every bin passed. **Faster thirst is not the pressure for this
+brain, and the decision is the owner's**, as reading (4) says.
+
+**What the three checks together say about the pressure that is needed.** The sheep's escape from
+every memory test so far has the same shape: it keeps a cue in sight (the willows by day, the mud ring
+in fog) and keeps its reserve full, and when the world tightens the reserve it tightens its radius.
+A pressure that works has to make *grazing itself* happen out of sight of every cue, so that a sheep
+cannot eat without losing the water, and the fog is the setting where that is possible because it
+already hides everything but the ground. Candidates, in the coordinator's order (not pre-registered;
+for the owner to choose from or replace):
+
+1. **Thick fog that hides the ground too, with the grass moved past its reach.** `FOG_HAZE` ≈ 1.0
+   (contrast to a tenth at ~2.3 tiles) and mud 10 (full grass from 12): a sheep grazing in fog sees
+   neither willows nor the bank nor, mostly, its flock, so the three foggy days in four ask for path
+   integration or route memory outright. The cue's reach is re-read first with the mud-free / mud fog
+   probes of § 21.5 (the pre-stated bar: embedding below 0.3 at 12–16 on the mud fog world), then the
+   demand check as in § 21.4. This is the smallest change to the world that removes the escape.
+2. **Grass scarcity at the ring's edge** (the owner's trampling, unused so far, or slower regrowth), so
+   the flock eats the edge bare and must forage further out over the days. More organic, but it is an
+   ecology to tune, and the sheep may answer it by going hungry at the edge rather than far.
+3. **The owner's horizon compass / signposts** (§ 21.4 (iv), the parked mountain and sun): gives the
+   sheep an orientation reference and asks it to combine that with a remembered distance, a different
+   and more legible form of memory, but a built-in cue the sheep did not earn (see the project's rule).
+4. **Move on**: take stage 2a as "survival under mud and fog learned, memory not demonstrated", and let
+   world v3's terrain (§ 22) supply the occlusion naturally at stage 3.
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
