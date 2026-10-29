@@ -1362,3 +1362,47 @@ evaluation, forensics and the staged ladder's demand checks are all re-measured 
 Perception gets harder (a rolling horizon, hills that hide ponds), so stage 1's pass is re-checked on
 v3 with the willows. What the world demands changes: hills hide water, which raises the demand for
 memory and for telling, which is the point of doing it at stage 3.
+
+### 19.3 Stage 0: results (2026-10-29)
+
+`meadow2-results/eval/ppo_r*.json` (the ladder), `eval/*_forensics.json` and `deaths/*.json` (the
+forensics), `ppo/*_log.jsonl` (training logs). 16 meadows × 12 sheep, 3 days; "died" is the share of
+192.
+
+**The ladder** (three seeds each; `rinf` is `ppo_s0–s2`):
+
+| Arm | Range | Memory | Died, by seed | Mean | Reward / step | Deaths by day (seed 0) | Living steps within 8 tiles |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| rinf | ∞ | — | 0.0, 0.0, 0.5 % | **0.2 %** | 2.47 | 0, 0, 0 | 0.96 |
+| r16 | 16 | — | 1.6, 1.6, 0.5 % | **1.2 %** | 2.44 | 1, 2, 0 | 0.98–0.99 |
+| r8 | 8 | — | 12.5, 15.1, 20.8 % | **16.1 %** | 2.16 | 19, 2, 3 | 0.42–0.77 |
+| r4 | 4 | — | 33.9, 22.4, 24.0 % | **26.7 %** | 1.96 | 43, 17, 5 | 0.41–0.59 |
+| r8_rot30 | 8 | rot, 30 steps | 18.8, 16.1, 15.1 % | 16.7 % | 2.17 | 16, 12, 8 | 0.68–0.76 |
+| r8_place30 | 8 | place, 30 steps | 24.0, 20.3, 22.9 % | 22.4 % | 2.06 | 24, 20, 2 | 0.72–0.74 |
+| r8_place1000 | 8 | place, 1,000 steps | 12.5, 19.3, 17.7 % | 16.5 % | 2.13 | 17, 6, 1 | 0.69–0.83 |
+
+**By the rule: branch 1.** `r8` loses 16.1 % (one seed at 20.8, two under 16): **the meadow does
+not demand memory at the eyes' present range.** No memory arm rescues `r8`; none is better than `r8`
+itself (16.5–22.4 %), and the ideal 30-step rotated memory, the capacity the D3 probe measured for
+five arms, changes nothing (16.7 %). The deaths that remain at 8 tiles come on **day 1** (13–19 of
+each seed's 24–40), from the lowest hydration starts (0.2 = 750 steps) 6–14 tiles from a pond the
+sheep cannot see: a *search* problem in the first hour of life, not a memory problem. **Range is what
+the world pays for:** 4 → 8 → 16 tiles of sight takes deaths from 27 % to 16 % to 1 %, and 16 tiles
+is as good as seeing everything. So the willows must be readable from about 16 tiles by day, and a
+reactive sheep that reads them should survive. Stage 1 follows; stage 2a's pressure is being built
+(§ 21), as branch 1 requires.
+
+**The forensics** (every hybrid arm, re-evaluated with the trace; the embed arm's numbers are typical):
+- The dead died of **thirst with a full gut** (median hydration 0.0, energy 1.0–1.15 at death).
+- They died **far from water** (median 15–21 tiles) and **long after last seeing it**: the median death
+  came 840–2,300 steps after water was last within the 8-tile cone, 65–84 % of deaths more than 300
+  steps after, and 19–45 % of the dead never had water within 8 tiles at all. A 30-step memory could
+  not have saved most of them (§ 19.1's reading).
+- Deaths come on **every day**, day 1 the most (random low starts), then days 2 and 3 (the "lost the
+  pond" deaths).
+- The hybrids keep only 29–58 % of their living steps within 8 tiles of water; privileged PPO keeps 96 %
+  and the scripted flock 69 %. The sheep that survive are the ones that stay near water.
+- **The 16-tile proxies were generous** (the review's § 5.2): thirsty-sees-water is 0.08–0.18 with an
+  8-tile cone against 0.31–0.57 at 16; the information gap at 8 tiles is 0.13–0.28 (0.17–0.25 at 16);
+  for the scripted flock the gap at 8 is 0.32 (0.08 at 16), because what a flockmate "knows" is now
+  what it could actually have seen.

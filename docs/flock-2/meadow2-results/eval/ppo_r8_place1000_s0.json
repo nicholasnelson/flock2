@@ -1,0 +1,69 @@
+{
+ "policy": "ppo:/home/nnels/flock2_data/m2_ppo/r8_place1000_s0",
+ "meadows": 16,
+ "days": 3.0,
+ "willows": 0,
+ "reward": 2.2106409072875977,
+ "reward_se": 0.06384293735027313,
+ "drive": 0.07421280443668365,
+ "drive_se": 0.008816036395728588,
+ "death_share": 0.125,
+ "deaths_per_meadow_max": 5,
+ "days_survived_mean": 2.7333094618055553,
+ "last_day_levels": {
+  "energy": 1.114,
+  "hydration": 1.053,
+  "warmth": 1.083,
+  "interest": 1.138
+ },
+ "last_day_fat": 0.958,
+ "drink_success": 0.143251364444717,
+ "graze_success": 0.9637962790854864,
+ "bad_taste_per_step": 0.04480317330007169,
+ "huddled_share_of_night_rest": 0.10162491934064645,
+ "actions": {
+  "stop": 0.117,
+  "walk": 0.142,
+  "trot": 0.194,
+  "left": 0.141,
+  "right": 0.108,
+  "graze": 0.09,
+  "drink": 0.051,
+  "rest": 0.158
+ },
+ "nearest_neighbour_tiles": 3.511970043182373,
+ "others_in_view": 5.793871879577637,
+ "thirsty_share_of_living_steps": 0.04813463024083194,
+ "thirsty_sees_water": 0.39138323491571275,
+ "information_gap": 0.19856167320951407,
+ "thirsty_sees_water_8": 0.20568732886880217,
+ "information_gap_8": 0.14711509913238544,
+ "within_8_share_of_living_steps": 0.6913328924207767,
+ "forensics": {
+  "deaths_by_day": [
+   17,
+   6,
+   1
+  ],
+  "deaths": 24,
+  "water_dist_at_death_q": [
+   16.1,
+   21.5,
+   26.9
+  ],
+  "since_seen8_q": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "since_seen8_over_300": 0.0,
+  "never_seen8": 0.792,
+  "since_near8_q": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hydration_at_death_median": 0.0,
+  "energy_at_death_median": 0.756
+ }
+}
