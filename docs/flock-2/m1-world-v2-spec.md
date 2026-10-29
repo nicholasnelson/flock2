@@ -1316,3 +1316,46 @@ So the ramp's end point is **at least 8 tiles**, past the willows' sure daytime 
 measured. The water view at 4/8/12/16 tiles (`meadow2-results/water_samples.png`) shows why 8 tiles
 is "far" for the eyes though not for the legs: a pond is a flat surface seen from an eye 0.8 tiles
 high, a two-pixel sliver on the horizon at 8 tiles, gone at 12–16 and at night beyond 8.
+
+## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
+
+**When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
+that hide water from some sheep and not others are the pressure wanted). Both the lattice and the
+terrain machinery are built then, together, because they rewrite the same five functions; the height
+field may be left flat at first (`height` all zero) and switched on when stage 3 needs it. Not before
+stages 1 and 2 are passed on meadow v2: every baseline and demand check is a v2 number, and v3 restarts
+them.
+
+**Why it is cheap for the sheep.** Nothing a sheep sees or does touches the lattice: positions and
+headings are continuous, grass and water are smooth fields point-sampled at float positions, the
+renderer marches rays and draws a surface, objects stand at float positions. The lattice is an
+implementation detail of five functions in `world.py`: `cell_centres`, `grass_at`, `water_at`,
+`patch` and `dry_cells` (plus the generator's blobs and the tests). Nothing in `render.py`,
+`sim.py`'s movement, the drives, the learners or the evaluation changes for the lattice.
+
+**Hex lattice.** Cell centres on a triangular lattice stored as a rectangular array with offset rows
+(axial coordinates); reads by three-point barycentric interpolation (isotropic; simpler than
+bilinear); a bite's patch is the cells within `PATCH_RADIUS` of the mouth point, as now; the human
+display draws hexes if it draws cells at all. Benefits: isotropy for every distance-based rule
+(regrowth by moisture, trampling, the muddy bank) and a more organic top-down look. Cost: about a day,
+and the scripted checks re-run, expected unchanged within noise.
+
+**Terrain.** A height field at tile resolution (same lattice), water wherever the height is below a
+water level (lakes of any shape; shorelines from the field), the eye at the terrain height under the
+sheep plus `EYE`. The renderer's ground pass already marches `K` distances per column and takes a
+running maximum of elevation angle, which is the height-map algorithm: terrain adds the ground height
+to each sample's top, and hills occlude for free; the sky pass and the billboards take the ground
+height under each object. Movement: an uphill multiplier on energy use and a steepness limit in the
+blocked-move test (and in the scripted flock's look-ahead). Generation must still guarantee a flock
+start 6–14 tiles from water, reachable on foot. Expected rendering cost: unchanged (about 0.2 ms a
+view). **Grass stays a density grid** on the same lattice: terrain and grass are two fields over the
+same ground; grass sits on the height for rendering and the sim eats it without knowing the height.
+**Moisture replaces the mud map**: regrowth as a continuous function of height above the water level
+(or distance to water), so banks recover slowly and hills are dry by one rule of the terrain, and the
+stage-2a mud radius becomes a special case of it.
+
+**Costs that matter.** A new world (v3): scripted checks, the privileged upper bound, the fixed
+evaluation, forensics and the staged ladder's demand checks are all re-measured (about a week).
+Perception gets harder (a rolling horizon, hills that hide ponds), so stage 1's pass is re-checked on
+v3 with the willows. What the world demands changes: hills hide water, which raises the demand for
+memory and for telling, which is the point of doing it at stage 3.
