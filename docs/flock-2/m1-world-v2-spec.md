@@ -1902,6 +1902,22 @@ noted as a feature of the world (the memory test lives beyond ~15 tiles and at n
 above, the willows still read through the fog and `FOG_HAZE` drops to 2.0 before the learning stage,
 with the probes run again.
 
+**The re-check at fog 0.75 (03:46–03:56): the pressure is confirmed.**
+
+| brain | dead at 5 days, mud 8 + fog 0.75 | cause | water at death | M1 (unsighted; n, median, resolved) |
+| --- | --- | --- | --- | --- |
+| s2a_s0 | **66.7 %** | thirst (energy 1.0) | 18 / 23 / 28 tiles | 8–12: 28, 231, 68 %; 16–24: 43, 600, 2 %; 24+: 38, 600, 0 % |
+| s2a_s1 | **66.1 %** | thirst (energy 0.7) | 11 / 20 / 26 | 8–12: 42, 305, 50 %; 16–24: 24, 600, 25 %; 24+: 29, 600, 21 % |
+| s2a_s2 | **39.1 %** | thirst (energy 1.1) | 16 / 22 / 28 | 8–12: 42, 76, 81 %; 16–24: 33, 600, 15 %; 24+: 20, 600, 0 % |
+| scripted flock (64 meadows) | 0.0 % | | | **passes**: 8–12: 195, 13; 12–16: 39, 33; 16–24: 21, 52; all ≥ 99 % resolved |
+
+All three brains fail survival clearly, the control passes survival and M1, so under the rule of
+§ 21.4 **the learning stage runs at fog 0.75** (probability ramped 0 → 0.75 over iterations
+200–1,400; evaluations at 0.75; files tagged `fog075`), after the mud-edge diagnosis above settles the
+haze. Seed 2's 8–12 bin (42 onsets, median 76 against a bar of 45, 81 % resolved) is the mud edge at
+work: from just outside the ring the bare bank is in sight through the fog, and that brain follows it
+half the time. Beyond 16 tiles no brain gets back.
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
