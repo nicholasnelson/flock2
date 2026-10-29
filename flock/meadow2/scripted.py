@@ -31,9 +31,10 @@ import jax
 import jax.numpy as jnp
 
 from flock.meadow2 import drives as D, sim
-from flock.meadow2.world import HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, State, grass_at, water_at
+from flock.meadow2.world import HUT, N_TILES, RADIUS, SHEEP_RADIUS, TREE, State, cell_centres, grass_at, water_at
 
 THIRSTY, HUNGRY = 0.6, 0.3
+GOOD_GRASS = 1.5  # density of the grass the flock heads for when none lies within three tiles
 URGENT = 0.25
 FULL = 0.95
 TROT_FAR = 6.0
@@ -120,7 +121,15 @@ def policy(state: State, key: jax.Array, camp: bool = False) -> jax.Array:
     best = ring[jnp.arange(n), jnp.argmax(g_ring, -1)] - f.pos
     here = jnp.where(m_water, -1.0, m_grass)
     richer = jnp.max(g_ring, -1) > here + 1.0
-    food_act = jnp.where((here >= 1.0) & ~richer, sim.GRAZE, _steer(m, f, best, urgent_food & richer))
+    # when nothing worth eating lies within three tiles (the mud of stage 2a, spec § 21), head for the
+    # nearest good grass anywhere: the flock's grass sense is privileged, like its water sense
+    # (2026-10-29, after 32 of 768 starved on an 8-tile mud with grass a 70-step walk away)
+    cells = cell_centres().reshape(-1, 2)
+    d_g = jnp.where((m.grass.reshape(-1) >= GOOD_GRASS)[None, :], jnp.linalg.norm(cells[None, :, :] - f.pos[:, None, :], axis=-1), jnp.inf)
+    to_grass = cells[jnp.argmin(d_g, -1)] - f.pos
+    nothing_near = jnp.max(g_ring, -1) < 1.0
+    goal = jnp.where(nothing_near[:, None], to_grass, best)
+    food_act = jnp.where((here >= 1.0) & ~richer, sim.GRAZE, _steer(m, f, goal, urgent_food & (richer | nothing_near)))
 
     # wander, with cohesion toward the living flock
     alive_w = f.alive.astype(jnp.float32)[:, None]
