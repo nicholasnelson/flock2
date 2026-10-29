@@ -1310,10 +1310,13 @@ its water sense; on the base world this rarely triggers. Gate re-run (`checks_v4
 | --- | --- | --- | --- | --- |
 | 0 (base world) | 0 | 0 / 0 | 2.355 (2.373 before the change; trampling on) | pass |
 | 8 | 0 | 0 / 0 | 2.303 | **pass** |
+| 10 | 9 (1.2 %) | 9 / 0 | 2.285 | fail (two meadows lost 2) |
 | 12 | 17 (2.2 %) | 17 / 0 | 2.274 | fail, at the line |
 
-So the ramp's end point is **at least 8 tiles**, past the willows' sure daytime range; 10 is being
-measured. The water view at 4/8/12/16 tiles (`meadow2-results/water_samples.png`) shows why 8 tiles
+So the ramp's end point is **8 tiles**, past the willows' sure daytime range (10 passes the 2 % rule
+but not the one-per-meadow rule). The fixed flock's own baseline on the willow world (`m2_eval.py
+--policy scripted --willows 3`, `eval/scripted_v4_willows.json`): 2.357 per step, 0 deaths, 75 % of
+living steps within 8 tiles of water, thirsty-sees-water at 8 tiles 0.59, gap at 8 tiles 0.34. The water view at 4/8/12/16 tiles (`meadow2-results/water_samples.png`) shows why 8 tiles
 is "far" for the eyes though not for the legs: a pond is a flat surface seen from an eye 0.8 tiles
 high, a two-pixel sliver on the horizon at 8 tiles, gone at 12–16 and at night beyond 8.
 
