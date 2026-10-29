@@ -1573,7 +1573,7 @@ living steps within 8 tiles of water, thirsty-sees-water at 8 tiles 0.59, gap at
 is "far" for the eyes though not for the legs: a pond is a flat surface seen from an eye 0.8 tiles
 high, a two-pixel sliver on the horizon at 8 tiles, gone at 12–16 and at night beyond 8.
 
-### 21.1 The learning stage: pre-registration (2026-10-29 evening, draft for the owner's review before any run)
+### 21.1 The learning stage: pre-registration (2026-10-29 evening; approved by the owner as drafted, 2026-10-29 night, with the chain already running)
 
 **Where it starts.** From each of stage 1's three brains (A3 seeds 0, 1, 2: the embed hybrid with
 willows, § 20.3), each continued in its own run, so the stage has three seeds by construction. The demand
