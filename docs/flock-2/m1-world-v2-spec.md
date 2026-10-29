@@ -1109,6 +1109,70 @@ fix 2) or to PPO's budget, pre-registered first, and nothing about memory until 
 **If A2 passes too:** willows did not matter; the world model was the cost, and stage 2a's pressure
 must come with its own demand check against A2's brain.
 
+### 20.1 A1 at seed 0, and the search measurement (pre-registered 2026-10-29, after A1 s0, before any new training)
+
+**What A1 s0 did.** On the fixed evaluation: 29.7 % dead (max 10 in one meadow), reward 1.89, so it fails
+§ 20's rule at the first seed. Deaths by day 22 / 18 / 17; hydration 0 and energy 1.13 at death; 12 to 20
+tiles from water; a median 1,880 steps since water was last within 8 tiles, and 28 % of the dead *never*
+had water within 8 tiles in their lives. Living sheep spend 68 % of steps within 8 tiles (the oracle: 96 %).
+The D2_true probe decodes the true water bearing from the embedding only within 4 tiles by day (R² ≈ 0.5)
+and not at all beyond 4 tiles or at night: this sheep does not read the willows at distance. Training
+reward reached 2.3 with 85 % alive, but training windows are short and reset.
+
+**What the never-within-8 share says.** A day is 2,400 steps, a trot covers 0.35 tiles a step, the meadow
+is 48 tiles across with two ponds. A sheep that lives two or three days and never comes within 8 tiles of
+a pond has not searched and failed; it has not searched. The action mix agrees (graze 23 %, rest 19 %,
+stop 6 %): the dead ate where they stood until hydration hit zero. The other three quarters found water,
+left it to graze (right), and did not come back as thirst rose (the same missing behaviour). So the
+dominant failure is neither memory nor perception at the pond: a thirsty sheep with no water in view does
+nothing about it. The owner's reading, adopted here: A2 (no willows) will come out the same, since the
+willows were never the lever in this regime; the chain runs on for the record.
+
+**Two candidate causes, which the measurement separates.**
+
+- *Credit*: PPO with γ = 0.998 values about 500 steps ahead, a fifth of a day. If a searching sheep
+  takes longer than that to reach water, the drink never reaches the decision to search.
+- *Exploration*: PPO's entropy exploration is an uncorrelated walk (A1's mix: moving 28 % of steps, a
+  turn every ~5 steps), whose net drift over 500 steps is a few tiles. A sheep 12 tiles from water
+  then never samples "walk far, find water, drink", so there is nothing to reinforce even when the
+  horizon would cover it. The uniform-random sheep (§ 17's baseline) loses 86 % and lives 1.4 days.
+
+**The measurement** (`scripts/meadow2_search.py`, CPU). Sheep are placed at uniform random dry
+positions and headings in the willow world, levels at MAX_LEVEL so nobody dies inside the window, and
+run for one day (2,400 steps) under memoryless search rules; the time to first have water within 8 tiles
+inside the 300° field of view (§ 19's criterion, occlusion ignored) is recorded per sheep, binned by the
+start distance to water (4–8, 8–12, 12–16, 16–24, 24+ tiles), 32 meadows × 3 seeds × 12 sheep. Rules:
+
+- `uniform`: each action with probability 1/8 (PPO's exploration at the start).
+- `a1_mix`: A1 s0's evaluation action marginals drawn independently each step (its exploration as
+  trained, without its reactions).
+- `walk_p`: trot every step; with probability *p* per step turn one notch (π/8) in a random direction,
+  for *p* in {0.02, 0.05, 0.1, 0.25, 0.5}: the correlated walk, from near-straight to near-diffusive.
+  `_wall` variants also turn whenever a trot was blocked (the meadow's edge or an object).
+- `lazy_p0.05`: A1's movement budget (walk 12 %, trot 16 %, else stop) with a persistent heading
+  (*p* = 0.05): does persistence alone rescue a sheep that moves as little as A1 does?
+
+Reported per rule and bin: n, share found, median and 90th percentile steps, and the share found within
+500 steps (γ's horizon) and within 1,100 steps (the hydration a sheep at level 0.3 has left:
+HYDRATION_DECAY is 0.0008 / 3 per step, so full lasts ~4,300 steps and 0.3 lasts ~1,100).
+
+**Reading rule (pre-registered).** For starts 8–16 tiles from water:
+
+1. If a correlated walk's 90th percentile is ≤ 500 steps while `uniform` and `a1_mix` are mostly
+   censored or above 500: exploration is the bottleneck. The one change for the next A1 arm is
+   temporally correlated exploration during training (action persistence or correlated noise), γ
+   unchanged, pre-registered in § 20.2 before it runs; three seeds; § 20's pass rule unchanged.
+2. If the best correlated walk's 90th percentile is between 500 and 1,100 steps: the horizon is the
+   bottleneck. The one change is γ such that 1 / (1 − γ) ≥ 1.5 × that percentile (0.9995 covers 2,000),
+   with the rollout and value targets checked for variance on one seed before three.
+3. If above 1,100 steps even for the best correlated walk: the meadow cannot be searched by a
+   memoryless sheep in the time thirst allows, and the world is eased (more or larger ponds) as the
+   last resort, noting that stage 2a's mud ring will push the sheep back out to 8 tiles, so a world
+   eased here must still pass the gate of § 21 afterwards.
+
+Whatever the branch, the encoder is not changed in the same arm: the probe's 4-tile limit is real but
+a sheep that does not move toward anything would not be saved by seeing further.
+
 ## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
 
 **The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),
