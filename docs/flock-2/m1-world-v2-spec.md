@@ -1336,6 +1336,32 @@ written (§ 21's column, the ramp 0 → 8, D3 ≥ 0.3); if the scripted flock al
 end point moves in; if a seed stays under 40 % at 5 days with gut and fat still falling, the window,
 not the world, is reported and the owner decides. Nothing about the window is changed after this run.
 
+**Result at 5 days (18:38; `meadow2-results/eval/*_mud8_d5.json`):**
+
+| flock | dead | max / meadow | reward | within 8 | graze success | last-day gut / fat | deaths by day | cause | water at death |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| scripted | 0 of 960 | 0 | 2.32 | 46 % | 0.92 | 0.85 / 0.70 | 0 / 0 / 0 / 0 / 0 | — | — |
+| A3 seed 0 | **69.3 %** | 11 | 1.59 | 96 % | 0.04 | 0.17 / 0.12 | 5 / 5 / 20 / 48 / 55 | 126 starved, 7 thirst | 0.8 / 1.1 / 1.6 |
+| A3 seed 1 | **67.7 %** | 12 | 1.60 | 93 % | 0.13 | 0.19 / 0.12 | 10 / 3 / 26 / 41 / 50 | 118 starved, 12 thirst | 0.7 / 1.0 / 1.7 |
+| A3 seed 2 | **41.7 %** | 11 | 1.76 | 48 % | 0.48 | 0.81 / 0.67 | 29 / 7 / 21 / 14 / 9 | 78 thirst, 2 starved | 10 / 15 / 19 |
+
+**The mud is a pressure: every seed loses ≥ 40 % at 5 days, and the scripted flock loses nobody.**
+Seeds 0 and 1 die as predicted, camped at the pond on bare ground, 48 to 55 deaths on each of days 4 and
+5 with the survivors' gut at 0.17 and fat at 0.12. Seed 2 clears the line narrowly (41.7 %) by the other
+route, thirst beyond the mud, and its deaths are front-loaded (29 on day 1) rather than climbing, so it
+is the seed least pressed: it keeps itself fed (gut 0.81) and loses the sheep that do not get back.
+The stage-1 brain cannot live on this world without something it does not have; what the mud asks
+for is to leave sight of water to eat and come back, which is stage 2a's memory. The demand check
+passes, and § 21's learning stage can be pre-registered against this brain, the 8-tile end point,
+and the 5-day window.
+
+**Two notes for the stage 2a design.** (i) The two failure styles are the two things the column must
+beat: a brain that will not leave the water (seeds 0, 1) and a brain that leaves and cannot return
+(seed 2). The ramp 0 → 8 is meant to carry the first kind out gradually; the D3 probe and the
+route-around list catch whether the second kind is solved by memory or by wall-following and
+path-following. (ii) The 3-day evaluation stays the stage's pass window (§ 20's rule) but the mud
+world is judged at 5 days, since its deaths arrive on days 3–5.
+
 ## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
 
 **The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),
