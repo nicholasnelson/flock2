@@ -2076,6 +2076,25 @@ owner's (the horizon compass of § 21.4 (iv) and the parked signposts are the al
 learning stage that would follow a confirmation (continue the `s2f` brains with the decay ramped
 1 → 2 over iterations 200–1,400, fog held at 0.75) is **not** started without the owner's word.
 
+**Thirst ×2 demand check (10:03–10:13; files `*_mud8_fog075_thirst2_d5*`).**
+
+| | dead at 5 days | thirsty share of living steps | within 8 tiles | M1 (unsighted onsets; bins read) |
+| --- | --- | --- | --- | --- |
+| scripted flock (64 meadows) | 3.0 % (its dead die beside the water, 1.7–2.5 tiles from it, hydration 0, energy 0.67: crowding at the pond, not loss) | 32 % | 57 % | **passes**: 692 / 199 / 83 onsets at 8–12 / 12–16 / 16–24, medians 13 / 31 / 47 against bars 45 / 127 / 122; 843 of 1,045 onsets at night |
+| s2f_s0 | **21.9 %** | 2.7 % | 39 % | 39 onsets, 0 bins read (16–24: 20 onsets, median 469, 15 % resolved) |
+| s2f_s1 | 9.4 % | 1.6 % | 64 % | 7 onsets |
+| s2f_s2 | 11.5 % | 2.0 % | 57 % | 16 onsets |
+
+The control does what the lever was meant to do: the scripted flock, resting out at night until it
+is urgent, now produces 843 night onsets and passes M1 from every bin. The brains do not: **without
+any retraining they drink twice as often** (within 8 tiles 39–64 % of steps, from 31–54 %; hydration
+at the end of day 5 still 1.0) and stay as un-thirsty as before (1.6–2.7 % of steps). Seed 0 fails
+survival (its dead are thirst deaths 20–27 tiles out, 2,000 steps after their last water, a quarter of
+them sheep that never found it), seeds 1 and 2 pass. One or two brains failing is reading (3): **thirst
+×3 once** (reserve ≈ 1,250 steps ≈ 0.5 day, urgent about 940 steps after a full drink, so a sheep that
+drinks at dusk and rests out is urgent before the 960-step night ends). Run 10:20, same files tagged
+`thirst3`, same four readings.
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
