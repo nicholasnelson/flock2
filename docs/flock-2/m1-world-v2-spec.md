@@ -1241,6 +1241,22 @@ So:
 
 Chain order (owner's approval, 2026-10-29 15:10): after A1 s1 finishes, the first chain is stopped before A1 s2 and `runs/m2_stage1b_chain.sh` runs A3 s1, A3 s2, then A1 s2 for the record.
 
+**Queued after it (`runs/m2_stage1_demand.sh`, pre-registered 2026-10-29 15:30, before any run):**
+
+- *Stage 2a's demand check*: each A3 seed on the 8-tile mud world (`m2_eval.py --inner 8`, the § 21
+  gate's terrain: no grass or regrowth within 8 tiles of water, regrowth ramping to full over 2 more),
+  16 meadows, 3 days. The mud is a pressure if the stage-1 brain loses ≥ 40 % of its sheep there, as
+  § 20 set; the scripted flock runs on the same world through the same script for the comparison (it lost
+  0 of 768 in the § 21 gate). Below 40 %, the brain already copes without memory (the probes say it has
+  none: A3's D3_recent is negative) and the ramp's end point must move out before stage 2a's column is
+  built. Expected: the deaths rise at night, when the willows cannot be seen.
+- *Lone-sheep evaluation*: each A3 seed with one sheep per meadow, 64 meadows, 3 days, the willow world.
+  If the lone death share exceeds 20 % while the flock's is under 5 %, following carries survival, and
+  stage 2a's demand check and pass rule are read on the lone evaluation as well as the flock's.
+- A3's probes so far (seed 0): D1 water-pixel recall 0.92 / 0.73 / 0.09 by band (0–4 / 4–8 / 8–16 tiles)
+  by day, so the pond itself is still not segmented beyond 8 tiles; the bearing at 8–16 is read from the
+  willows. D3_recent (bearing of water seen in the last 300 steps, now out of view): negative, no memory.
+
 ## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
 
 **The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),

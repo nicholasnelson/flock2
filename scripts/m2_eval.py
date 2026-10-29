@@ -46,7 +46,7 @@ import numpy as np
 
 from flock import wm
 from flock.meadow2 import drives as D, privileged as P, scripted, sim
-from flock.meadow2.world import DAY, random_start
+from flock.meadow2.world import DAY, random_start, with_terrain
 
 
 def policy_fn(name, agent):
@@ -109,9 +109,15 @@ def sees_water(st, rng=SEE_RANGE):
     return jnp.any(wet[None] & (d <= rng) & (jnp.abs(alpha) < sim.FOV / 2), -1)
 
 
-def run(policy, n_meadows, steps, seed=0, willows=0):
+def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0):
+    """``n_sheep`` (default the world's 12) for lone-sheep evaluations; ``inner`` > 0 puts stage 2a's mud
+    on the banks (no grass or regrowth within ``inner`` tiles of water, regrowth ramping to full over
+    ``edge`` more), ``trample`` the biomass lost under a moving sheep (spec § 21)."""
     init, act = policy
-    states = jax.vmap(functools.partial(random_start, willows=willows))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
+    kw = {"willows": willows} | ({} if n_sheep is None else {"n_sheep": n_sheep})
+    states = jax.vmap(functools.partial(random_start, **kw))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
+    if inner > 0 or trample > 0:
+        states = with_terrain(states, trample=trample, bank=(inner + edge) if inner > 0 else None, mud=inner > 0, inner=inner)
 
     def body(carry, k):
         (st, mem), (last_seen, last_seen8, last_near8, t) = carry[:2], carry[2:]
@@ -244,6 +250,10 @@ def main():
     p.add_argument("--days", type=float, default=3.0)
     p.add_argument("--out", default=None)
     p.add_argument("--deaths", default=None, help="write every death's record here (spec § 19.1)")
+    p.add_argument("--sheep", type=int, default=None, help="sheep per meadow (default 12); 1 for a lone-sheep evaluation")
+    p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius in tiles (0: none)")
+    p.add_argument("--edge", type=float, default=2.0, help="tiles over which regrowth ramps back to full outside the mud")
+    p.add_argument("--trample", type=float, default=0.0, help="biomass lost per step under a moving sheep")
     a = p.parse_args()
     agent = None
     willows = a.willows or 0
@@ -286,8 +296,9 @@ def main():
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
         agent = (world, policy, hy, use_embed)
-    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows)
-    res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows, **summarise(rec)}
+    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample)
+    res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
+           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
