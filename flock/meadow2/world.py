@@ -302,14 +302,14 @@ def cell_water_distance(water: jax.Array) -> jax.Array:
     return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1).reshape(N_CELLS, N_CELLS)
 
 
-def bank_map(water: jax.Array, bank: float | jax.Array) -> jax.Array:
-    """(N_CELLS, N_CELLS) regrowth factor: distance from water over ``bank`` tiles, clipped to [0, 1];
-    all ones when ``bank`` is 0."""
+def bank_map(water: jax.Array, bank: float | jax.Array, inner: float | jax.Array = 0.0) -> jax.Array:
+    """(N_CELLS, N_CELLS) regrowth factor: 0 within ``inner`` tiles of water, rising to 1 at ``bank``
+    tiles (a linear ramp from the water's edge when ``inner`` is 0); all ones when ``bank`` is 0."""
     d = cell_water_distance(water)
-    return jnp.where(bank > 0, jnp.clip(d / jnp.maximum(bank, 1e-6), 0.0, 1.0), 1.0)
+    return jnp.where(bank > 0, jnp.clip((d - inner) / jnp.maximum(bank - inner, 1e-6), 0.0, 1.0), 1.0)
 
 
-def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None, bank: float | jax.Array | None = None, mud: bool = False) -> State:
+def with_terrain(state: State, regrow: float | jax.Array | None = None, trample: float | jax.Array | None = None, bank: float | jax.Array | None = None, mud: bool = False, inner: float | jax.Array = 0.0) -> State:
     """The same state (or batch of states) with new terrain numbers. ``bank`` recomputes
     ``regrow_map`` from the water (0: uniform); with ``mud`` the standing grass is scaled by the same
     map as well (spec § 21, grid 4: nothing grows well on the muddy bank, from the start)."""
@@ -320,9 +320,9 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
     if trample is not None:
         m = m._replace(trample=like(trample, m.trample))
     if bank is not None:
-        b = like(bank, m.trample)
+        b, i = like(bank, m.trample), like(inner, m.trample)
         fn = bank_map if m.water.ndim == 2 else jax.vmap(bank_map)
-        m = m._replace(regrow_map=fn(m.water, b))
+        m = m._replace(regrow_map=fn(m.water, b, i))
         if mud:
             m = m._replace(grass=m.grass * m.regrow_map)
     return state._replace(meadow=m)

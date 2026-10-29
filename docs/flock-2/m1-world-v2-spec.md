@@ -1236,3 +1236,25 @@ get the ring, for the owner to choose between:
   eat about 700 units a day and could carve the ring in about a week at a 16-tile bank. The ring would
   be fully emergent, but rendering cost per meadow triples, the fixed evaluation and every baseline
   change, and it is a decision about the whole world, not one dial.
+
+### Ring-growth measurement, grid 4: result (2026-10-29)
+
+`meadow2-results/ring_grid4_{camp,wander}.json`: mud sets the starting grass too, bank ∈ {8, 12, 16}
+× trample ∈ {0, 0.05}, 8 days, both flocks. Nobody died in any run.
+
+**The linear ramp cannot hold a ring either.** The bare radius starts at 2 tiles (bank 8) to 4 tiles
+(bank 16) and then *shrinks*: at 4 tiles from water a 16-tile ramp still regrows at a quarter rate,
+more than the flock eats, so by day 6–8 the ring is 0–2 tiles with no trampling and 2 tiles with it.
+Bites moved out to 7–10 tiles (camping) and 9–11 (wandering) on day 1 and drifted back in. The ring
+never reached 8 tiles.
+
+**Reading.** With 12 sheep, a ring at the willows' range needs terrain with essentially no grass and
+no regrowth out to that radius and a short edge: the review's fixed bare bank, with mud as its
+mechanism. The owner's trampling and slow regrowth remain as the ring's *maintenance* and as the
+source of paths; its *creation* is a terrain fact set by one dial, the mud radius. **Grid 5
+(pre-registered here):** `bank_map(water, bank, inner)`: zero within `inner` tiles of water, ramping to
+1 at `bank` = `inner` + 2; mud sets the starting grass; `inner` ∈ {6, 8, 12} × trample ∈ {0, 0.05},
+8 days, both flocks. Usable if the bare radius holds ≥ `inner` for 8 days with ≤ 2 % scripted deaths.
+Since at `inner` 16 two ponds would leave only about a third of the meadow grassed, 12 is the largest
+radius measured; if 12 passes, the ramp for stage 2a runs from 0 to 12 and the demand check decides
+where on it the stage-1 brain fails.

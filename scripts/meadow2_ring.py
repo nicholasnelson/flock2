@@ -71,6 +71,8 @@ def main():
     p.add_argument("--trample", default="0,0.005,0.02,0.05")
     p.add_argument("--bank", default="0", help="muddy-bank widths (tiles; 0 = uniform regrowth), grid 3")
     p.add_argument("--mud", action="store_true", help="the bank map also scales the starting grass (grid 4)")
+    p.add_argument("--inner", default="0", help="mud radii (tiles, no grass or regrowth within; bank = inner + edge), grid 5")
+    p.add_argument("--edge", type=float, default=2.0, help="width of the mud's edge when --inner is set")
     p.add_argument("--willows", type=int, default=3)
     p.add_argument("--camp", action="store_true", help="the camping scripted flock (spec § 21, grid 2)")
     p.add_argument("--seed", type=int, default=0)
@@ -81,10 +83,12 @@ def main():
     runj = jax.jit(functools.partial(run, camp=a.camp), static_argnums=(2,))
     res = {"meadows": a.meadows, "days": a.days, "willows": a.willows, "camp": a.camp, "mud": a.mud, "bands": [list(b) for b in BANDS], "settings": []}
     t0 = time.time()
-    grid = [(rf, tr, bk) for rf in (float(x) for x in a.regrow.split(",")) for tr in (float(x) for x in a.trample.split(",")) for bk in (float(x) for x in a.bank.split(","))]
-    for rf, tr, bk in grid:
+    inners = [float(x) for x in a.inner.split(",")]
+    banks = [float(x) for x in a.bank.split(",")] if inners == [0.0] else [i + a.edge for i in inners]
+    grid = [(rf, tr, bk, inn) for rf in (float(x) for x in a.regrow.split(",")) for tr in (float(x) for x in a.trample.split(",")) for bk, inn in zip(banks, inners if inners != [0.0] else [0.0] * len(banks))]
+    for rf, tr, bk, inn in grid:
         if True:
-            states = with_terrain(base, regrow=REGROW * rf, trample=tr, bank=bk, mud=a.mud)
+            states = with_terrain(base, regrow=REGROW * rf, trample=tr, bank=bk, mud=a.mud, inner=inn)
             out = jax.tree.map(np.asarray, runj(states, jax.random.PRNGKey(a.seed), a.days * DAY))
             bands = out["bands"].mean(1)  # (days, bands)
             bare = []
@@ -97,7 +101,7 @@ def main():
                         break
                 bare.append(r)
             row = {
-                "regrow_factor": rf, "trample": tr, "bank": bk,
+                "regrow_factor": rf, "trample": tr, "bank": bk, "inner": inn,
                 "band_density_by_day": np.round(bands, 2).tolist(),
                 "bare_radius_by_day": bare,
                 "bite_distance_by_day": np.round(out["bite_dist"].sum(1) / np.maximum(out["bites"].sum(1), 1), 2).tolist(),
@@ -107,7 +111,7 @@ def main():
                 "far_bare_by_day": np.round(out["far_bare"].mean(1), 3).tolist(),
             }
             res["settings"].append(row)
-            print(json.dumps({k: row[k] for k in ("regrow_factor", "trample", "bank", "bare_radius_by_day", "bite_distance_by_day", "alive_end_by_day", "died_thirst", "died_hunger", "far_bare_by_day")}), f"{time.time() - t0:.0f}s", flush=True)
+            print(json.dumps({k: row[k] for k in ("regrow_factor", "trample", "bank", "inner", "bare_radius_by_day", "bite_distance_by_day", "alive_end_by_day", "died_thirst", "died_hunger", "far_bare_by_day")}), f"{time.time() - t0:.0f}s", flush=True)
             os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
             json.dump(res, open(a.out, "w"), indent=1)
 
