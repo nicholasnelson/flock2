@@ -1934,6 +1934,85 @@ The memory test M1 reads all of it; the brains fail it from 12 tiles out and die
 on 64 meadows, the zeroed-column ablation) and the probes (mud 8 clear, and every day foggy).
 
 
+### 21.6 The fog learning stage: survival passed, the memory rule unread (2026-10-30, 04:15–09:35)
+
+Three seeds continued from the stage-2a brains (`s2f_s{0,1,2}`), mud held at 8, fog ramped 0 → 0.75
+over iterations 200–1,400 of 2,000 (`runs/m2_stage2a_fog.sh chain`; ~95 minutes a seed). Training
+episodes are 4,864 steps (two days), and the training curves barely move: alive share 0.93–1.00
+throughout the ramp, hydration ~0.95, so the fog cost almost nothing in training, yet the 5-day
+evaluation changed completely.
+
+| brain | dead at 5 days, mud 8 + fog 0.75 (before → after) | plain world, 3 days | alone, 64 meadows | zeroed column | M1 onsets (unsighted) | thirsty share of living steps | within 8 tiles |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| s2f_s0 | 66.7 % → **5.2 %** | 13.0 % | 9.4 % | 8.3 % | 5 | 1.4 % (was 22 %) | 31 % |
+| s2f_s1 | 66.1 % → **3.6 %** | 5.7 % | 4.7 % | 7.3 % | 8 | 2.0 % (was 19 %) | 54 % |
+| s2f_s2 | 39.1 % → **6.2 %** | 0.5 % | 4.7 % | 5.2 % | 5 | 1.7 % (was 14 %) | 45 % |
+| scripted (64 meadows) | 0.0 % | | | | passes (195 / 39 onsets) | 21 % | 43 % |
+
+**Survival passes at every seed, stage 1 holds, the pass is not social** (alone within a few points of
+the flock), **and the column is still almost unused** (zeroing it costs 3 / 4 / −1 points). The dead
+are mostly day-1 and day-2 sheep that never came within 8 tiles of water (70 / 57 / 83 % of the dead;
+spawned far out and never found it), the last-day levels are full (hydration 1.0, fat 1.0).
+
+**M1 cannot be read: 5 / 8 / 5 unsighted onsets against the 30 a bin needs.** The rule's onset is a
+sheep below the urgency line (hydration 0.25) out of sight of water it knew; the trained sheep are
+almost never below 0.5 anywhere (1.4–2.0 % of living steps, from 14–22 %), so they are never in the
+test situation. Under the rule as written **the stage does not pass**: survival yes, M1 not readable,
+and a rule that cannot be read is not passed. The sheep have routed around the test by drinking early
+and often, which was not among the four route-arounds foreseen in § 21.4 (and is itself a sensible
+thing to learn: a sheep that tops up before leaving never needs to remember under pressure). The
+question the stage was built to ask — can the sheep find its way back without seeing the water — is
+still open: a sheep that spends 46–69 % of its steps more than 8 tiles out, on a world where three days
+in four are foggy, and comes back before it is thirsty, is coming back *somehow*.
+
+**The probes (D2_true / D3 on the clear and the all-fog mud worlds, mean of the sine and cosine ridge
+scores):** nothing new. At night no part of the brain decodes the bearing of water 8–16 tiles away
+(embedding 0.13 / 0.14 / 0.07 at 8–12, negative at 12–16; h, g all negative), exactly as before. In fog
+the embedding reads 0.83 / 0.82 / 0.85 at 8–12 (the mud ring, § 21.5) and 0.62 / 0.61 / 0.61 at 12–16
+(was 0.57 / 0.65 / 0.67 for the three stage-2a brains in all-fog), the column g 0.22 / 0.23 / 0.14 at
+12–16 (was 0.03 / 0.44 / 0.51: no gain), D3 fog-day 0.55 / 0.49 / 0.46 from the embedding (was
+0.40 / 0.44 / 0.41) with g at −0.21 / 0.27 / 0.10. The fog learning did not grow a decodable memory of
+the bearing; whatever brings the sheep back is behavioural or lives in the ground cue.
+
+**Pre-stated diagnostic R1, "how do they come back?" (written before it runs; a reading, not a pass
+rule; `m2_eval.py` gains the fields below and the trained brains, the stage-2a brains and the scripted
+control are re-run on the fog world to new files `*_r1.json`):**
+
+- *Where they graze:* the share of living steps at 0–8 / 8–12 / 12–16 / 16–24 / 24+ tiles from water,
+  split by clear day / fog day / night (`wdist_share`). The mud ring is visible in fog only to about 4
+  tiles outside its edge (§ 21.5), so steps beyond 12 tiles on fog days are steps out of sight of
+  every cue.
+- *Excursions* (`excursions`): every spell more than 8 tiles from water by a sheep that had been within
+  8 before; its farthest point d_max and the conditions there (fog day / night / clear day), and the
+  time from the farthest point back to within 8 tiles (censored at 600, by death or the end of the run),
+  per bin of d_max (8–12, 12–16, 16–24, 24+): count, median return time, resolved share, median steps
+  per tile of ground to cover (straight back at a walk is 8.3 steps a tile, at a trot 2.9; the
+  memoryless walker of § 20.1 needs 254 steps for the 6 tiles from 14, about 42 a tile, though its
+  turning point is not defined the same way, so the comparison is between policies under one
+  statistic: the trained brains, the stage-2a brains before fog learning, and the scripted flock that
+  knows where the water is), and the sheep's hydration at the farthest point and at re-entry.
+- *M1 at the thirsty line* (`M1_at_thirsty`): the same reader with the onset at hydration 0.5 instead
+  of 0.25, labelled a diagnostic. It is **not** the registered rule and does not decide the stage; it
+  is read because the trained sheep turn back above 0.5, and it says whether, from the moment they are
+  thirsty out of sight, they come back faster than search.
+
+**What the reading means (stated before it is read).** (a) If on fog days the trained sheep keep to
+within 12 tiles (share of fog-day steps beyond 12 tiles below 10 %) the ground cue carries them and
+the fog asks nothing of memory at this mud radius: the route-around is "graze at the mud's edge", and
+the pressure has to move the grass out of the cue's reach (a wider mud, with the cue's reach re-read,
+or the faster thirst of § 21.3 (c) so that a day's grazing cannot be done inside 12 tiles). (b) If
+they graze beyond 12 tiles in fog or at night and return from there at a median of ≤ 0.5 × the
+§ 20.1 baseline for the bin (127 steps from 12–16, 122 from 16–24) while the stage-2a brains under the
+same statistic do not, something carries the bearing out of sight that the probes do not decode, and
+the right next step is to make M1 readable where the sheep actually turn back: an amendment to M1's
+onset (to the thirsty line, 0.5), pre-registered with the scripted flock re-run as the control,
+before any further training. (c) If they graze beyond 12 in fog and return no faster than the stage-2a
+brains, the survival is early drinking plus luck and the full 1.6-day reserve, and the pressure is too
+light: the demand must be raised (the faster thirst) so a day out cannot be survived without a
+return. The reading is taken at all three seeds; the case is decided by the majority, and a split is
+reported as such and taken to the owner.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

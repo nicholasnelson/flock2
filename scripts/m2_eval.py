@@ -222,10 +222,11 @@ M1_BASELINE_MEDIAN = {"8-12": 90.0, "12-16": 254.0, "16-24": 244.0, "24-inf": 32
 M1_FACTOR, M1_MIN_ONSETS = 0.5, 30
 
 
-def memory_return(rec):
+def memory_return(rec, thirst=M1_THIRST):
+    """Spec § 21.4's M1. ``thirst`` other than the registered urgency line is a diagnostic reading (§ 21.6)."""
     T, B, S = rec["alive_now"].shape
     al, sees8, wdist, near8, fog, night = (rec[k] for k in ("alive_now", "sees8", "wdist", "last_near8", "fog", "night"))
-    urgent = rec["levels_before"][..., D.HYDRATION] < M1_THIRST
+    urgent = rec["levels_before"][..., D.HYDRATION] < thirst
     night = np.broadcast_to(night[..., None], al.shape)
     t_idx = np.arange(T)[:, None, None]
     knows = (t_idx - near8 <= RECENT) & (near8 != NEVER)
@@ -253,7 +254,7 @@ def memory_return(rec):
         t0[start], d0[start], f0[start], n0[start], a0[start] = t, wdist[t][start], fog[t][start], night[t][start], (t - near8[t])[start]
     close(active, T, False)
     arr = np.array(onsets, dtype=float).reshape(-1, 6)
-    out = {"onsets": int(len(arr)), "recent": RECENT, "cap": M1_CAP, "thirst": float(M1_THIRST), "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec § 20.1)"}
+    out = {"onsets": int(len(arr)), "recent": RECENT, "cap": M1_CAP, "thirst": float(thirst), "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec § 20.1)"}
     unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
     splits = {"all": np.ones(len(arr), bool), "unsighted": unsighted, "clear_day": (arr[:, 3] == 0) & (arr[:, 4] == 0),
               "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0,
@@ -277,6 +278,83 @@ def memory_return(rec):
         out[name] = bins
     out["pass"] = bool(passes) and all(passes)
     out["bins_read"] = len(passes)
+    return out
+
+
+R1_CAP = 600
+R1_BINS = ((0, 8), (8, 12), (12, 16), (16, 24), (24, 1e9))
+
+
+def _bin_key(lo, hi):
+    return f"{lo}-{hi if hi < 1e8 else 'inf'}"
+
+
+def _conditions(rec):
+    al, fog = rec["alive_now"], rec["fog"]
+    night = np.broadcast_to(rec["night"][..., None], al.shape)
+    return {"all": np.ones_like(al), "clear_day": ~fog & ~night, "fog_day": fog & ~night, "night": night, "unsighted": fog | night}
+
+
+def wdist_share(rec):
+    """Spec § 21.6's R1: the share of living steps per distance-from-water bin, by clear day / fog day / night."""
+    al, wdist = rec["alive_now"], rec["wdist"]
+    out = {}
+    for name, c in _conditions(rec).items():
+        m = al & c
+        n = int(m.sum())
+        out[name] = {"steps": n} | {_bin_key(lo, hi): round(float(((wdist >= lo) & (wdist < hi) & m).sum() / max(1, n)), 3) for lo, hi in R1_BINS}
+    return out
+
+
+def excursions(rec):
+    """Spec § 21.6's R1: every spell more than 8 tiles from water by a sheep that had been within 8 before: its
+    farthest point and the conditions there, and the time from the farthest point back to within 8 tiles
+    (censored at R1_CAP, by death or the end of the run), per bin of the farthest distance."""
+    T, B, S = rec["alive_now"].shape
+    al, wdist, near8, fog = (rec[k] for k in ("alive_now", "wdist", "last_near8", "fog"))
+    hyd = rec["levels_before"][..., D.HYDRATION]
+    night = np.broadcast_to(rec["night"][..., None], al.shape)
+    out_now = al & (wdist > NEAR_RANGE) & (near8 != NEVER)
+    active = np.zeros((B, S), bool)
+    dmax, hmax = np.zeros((B, S)), np.zeros((B, S))
+    tmax = np.zeros((B, S), int)
+    fmax, nmax = np.zeros((B, S), bool), np.zeros((B, S), bool)
+    rows = []  # (d_max, return steps, resolved, fog, night, hydration at the farthest point, hydration at re-entry)
+
+    def close(mask, t, resolved):
+        for b, s in zip(*np.nonzero(mask)):
+            dur = t - tmax[b, s]
+            rows.append((dmax[b, s], min(dur, R1_CAP), bool(resolved and dur <= R1_CAP), bool(fmax[b, s]), bool(nmax[b, s]),
+                         hmax[b, s], hyd[t, b, s] if resolved else np.nan))
+        active[mask] = False
+
+    for t in range(T):
+        close(active & al[t] & (wdist[t] <= NEAR_RANGE), t, True)
+        close(active & ~al[t], t, False)
+        start = out_now[t] & ~active
+        active |= start
+        dmax[start] = 0.0
+        further = active & (wdist[t] > dmax)
+        dmax[further], tmax[further], fmax[further], nmax[further], hmax[further] = wdist[t][further], t, fog[t][further], night[t][further], hyd[t][further]
+    close(active, T - 1, False)
+    arr = np.array(rows, dtype=float).reshape(-1, 7)
+    out = {"excursions": int(len(arr)), "cap": R1_CAP, "straight_steps_per_tile": {"walk": round(1 / sim.WALK_SPEED, 1), "trot": round(1 / sim.TROT_SPEED, 1)}}
+    unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
+    splits = {"all": np.ones(len(arr), bool), "clear_day": ~unsighted, "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0, "unsighted": unsighted}
+    med = lambda x: float(np.median(x)) if len(x) else None
+    for name, sm in splits.items():
+        bins = {}
+        for lo, hi in R1_BINS[1:]:
+            m = sm & (arr[:, 0] >= lo) & (arr[:, 0] < hi)
+            n = int(m.sum())
+            row = {"n": n}
+            if n:
+                dur, res = arr[m, 1], arr[m, 2] > 0
+                row.update(median_return=med(dur), resolved_share=float(res.mean()), resolved_median=med(dur[res]),
+                           steps_per_tile_median=med(dur / np.maximum(arr[m, 0] - NEAR_RANGE, 0.5)),
+                           hydration_at_farthest_median=med(arr[m, 5]), hydration_at_reentry_median=med(arr[m, 6][res]))
+            bins[_bin_key(lo, hi)] = row
+        out[name] = bins
     return out
 
 
@@ -319,6 +397,10 @@ def summarise(rec):
         "within_8_share_of_living_steps": float(((rec["wdist"] <= NEAR_RANGE) & rec["alive_now"]).sum() / max(1, rec["alive_now"].sum())),
         "forensics": forensics(deaths(rec), T),
         "M1": memory_return(rec),
+        # spec § 21.6's diagnostic R1 (readings, not pass rules)
+        "wdist_share": wdist_share(rec),
+        "excursions": excursions(rec),
+        "M1_at_thirsty": memory_return(rec, THIRSTY),
     }
 
 

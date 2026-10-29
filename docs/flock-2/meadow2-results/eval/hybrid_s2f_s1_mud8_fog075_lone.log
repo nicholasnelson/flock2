@@ -1,0 +1,232 @@
+/mnt/c/Users/nnels/Documents/projects/flock2/scripts/m2_eval.py:312: RuntimeWarning: Mean of empty slice
+  "nearest_neighbour_tiles": float(np.nanmean(np.where(np.isfinite(rec["nn"]) & rec["alive_now"], rec["nn"], np.nan)[rec["alive_now"]])) if rec["alive_now"].any() else None,
+{
+ "policy": "hybrid:/home/nnels/flock2_data/m2_hybrid/s2f_s1",
+ "meadows": 64,
+ "days": 5.0,
+ "willows": 3,
+ "sheep": 1,
+ "inner": 8.0,
+ "edge": 2.0,
+ "trample": 0.0,
+ "fog": 0.75,
+ "zero_column": false,
+ "reward": 2.3517847061157227,
+ "reward_se": 0.05627681314945221,
+ "drive": 0.07840041816234589,
+ "drive_se": 0.018111154437065125,
+ "death_share": 0.046875,
+ "deaths_per_meadow_max": 1,
+ "days_survived_mean": 4.808216145833334,
+ "last_day_levels": {
+  "energy": 0.974,
+  "hydration": 1.019,
+  "warmth": 0.99,
+  "interest": 1.13
+ },
+ "last_day_fat": 0.976,
+ "drink_success": 0.7435521235521235,
+ "graze_success": 0.7953965209339242,
+ "bad_taste_per_step": 0.025439311508350236,
+ "huddled_share_of_night_rest": 0.0,
+ "actions": {
+  "stop": 0.135,
+  "walk": 0.115,
+  "trot": 0.142,
+  "left": 0.101,
+  "right": 0.158,
+  "graze": 0.102,
+  "drink": 0.018,
+  "rest": 0.228
+ },
+ "nearest_neighbour_tiles": NaN,
+ "others_in_view": 0.0,
+ "thirsty_share_of_living_steps": 0.016336240863755888,
+ "thirsty_sees_water": 0.18466639038541235,
+ "information_gap": 0.0,
+ "thirsty_sees_water_8": 0.09249896394529632,
+ "information_gap_8": 0.0,
+ "within_8_share_of_living_steps": 0.6319180222654907,
+ "forensics": {
+  "deaths_by_day": [
+   2,
+   1,
+   0,
+   0,
+   0
+  ],
+  "deaths": 3,
+  "water_dist_at_death_q": [
+   30.1,
+   33.5,
+   33.6
+  ],
+  "since_seen8_q": [
+   4288.0,
+   4288.0,
+   4288.0
+  ],
+  "since_seen8_over_300": 1.0,
+  "never_seen8": 0.667,
+  "since_near8_q": [
+   4286.0,
+   4286.0,
+   4286.0
+  ],
+  "hydration_at_death_median": 0.0,
+  "energy_at_death_median": 0.81
+ },
+ "M1": {
+  "onsets": 4,
+  "recent": 4000,
+  "cap": 600,
+  "thirst": 0.25,
+  "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec \u00a7 20.1)",
+  "all": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 4,
+    "baseline_median": 321.5,
+    "median_censored": 468.5,
+    "resolved_share": 0.5,
+    "resolved_median": 437.0
+   }
+  },
+  "unsighted": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 3,
+    "baseline_median": 321.5,
+    "median_censored": 498.0,
+    "resolved_share": 0.6666666666666666,
+    "resolved_median": 437.0
+   }
+  },
+  "clear_day": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 1,
+    "baseline_median": 321.5,
+    "median_censored": 439.0,
+    "resolved_share": 0.0,
+    "resolved_median": null
+   }
+  },
+  "fog_day": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 1,
+    "baseline_median": 321.5,
+    "median_censored": 376.0,
+    "resolved_share": 1.0,
+    "resolved_median": 376.0
+   }
+  },
+  "night": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 2,
+    "baseline_median": 321.5,
+    "median_censored": 549.0,
+    "resolved_share": 0.5,
+    "resolved_median": 498.0
+   }
+  },
+  "unsighted_fresh": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted_stale": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 3,
+    "baseline_median": 321.5,
+    "median_censored": 498.0,
+    "resolved_share": 0.6666666666666666,
+    "resolved_median": 437.0
+   }
+  },
+  "pass": false,
+  "bins_read": 0
+ }
+}
