@@ -1282,3 +1282,16 @@ largest radius ≤ 8 that passes it. Trampling 0.05 comes with it for the paths.
 sheep grazing at 10–11 tiles may still see the willows (readable to 8–16), so the demand is expected
 to come at night, when the eyes reach 4–5 tiles; if the stage-1 brain survives the 8-tile mud, the
 pressure needs night (willows unlit) or a bigger flock, decided then with the owner.
+
+### The full scripted gate on the mud (2026-10-29)
+
+`meadow2_checks.py --willows 3 --trample 0.05 --inner R` (64 meadows, 5 days; `meadow2-results/checks_mud{6,8}.json`):
+
+| Mud radius R | Died of 768 | Of hunger / thirst | Worst meadow | Needs met | Gate |
+| --- | --- | --- | --- | --- | --- |
+| 6 | 4 (0.5 %) | 3 / 1 | 1 | yes | **pass** |
+| 8 | 32 (4.2 %) | 32 / 0 | 7 | yes (energy after day 1: 0.72) | **fail** |
+
+So the ramp's end point is **6 tiles** (7 is being measured; 8 fails on the full gate, where the
+16-meadow grid had it at the line). At 6 tiles the camping scripted flock bites 8–9 tiles from water,
+at the edge of the willows' sure daytime range; the demand is expected to come at night.

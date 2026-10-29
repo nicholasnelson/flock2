@@ -1,0 +1,85 @@
+{
+ "meadows": 64,
+ "willows": 3,
+ "inner": 8.0,
+ "trample": 0.05,
+ "sheep_per_meadow": 12,
+ "steps": 12000,
+ "1_survival": {
+  "death_share": 0.041666666666666664,
+  "max_deaths_in_a_meadow": 7,
+  "deaths_of_thirst": 0,
+  "deaths_of_hunger": 32,
+  "pass": false
+ },
+ "2_needs_met": {
+  "energy_after_day1_mean": 0.719683825969696,
+  "energy_after_day1_min_meadow_step": 0.34219563007354736,
+  "hydration_after_day1_mean": 0.6677426099777222,
+  "hydration_after_day1_min_meadow_step": 0.3369385898113251,
+  "pass": true
+ },
+ "3_grass_lasts": {
+  "dry_biomass_start": 1.0903916018194153,
+  "dry_biomass_end": 1.845051993187577,
+  "ratio": 1.6921003335947782,
+  "pass": true
+ },
+ "4_water_near": {
+  "start_to_water_median": 10.163769721984863,
+  "start_to_water_p90": 13.206238746643066,
+  "pass": true
+ },
+ "reported": {
+  "random_turn_wanderer_reaches_water_within_500_steps": 0.14192708333333334,
+  "random_turn_wanderer_flag_below_30pct": true,
+  "walker_first_water_median_steps": 1504.0,
+  "walker_never_within_4000": 0.17317708333333334,
+  "naive_explorer_finds_water_before_death": {
+   "need_scale_1": 0.2994791666666667,
+   "need_scale_2": 0.4947916666666667,
+   "need_scale_3": 0.6328125,
+   "need_scale_4": 0.7005208333333334,
+   "need_scale_6": 0.7669270833333334
+  },
+  "naive_explorer_rule_pass_at_current_need_scale": true,
+  "warmth_after_day1_mean": 1.085520625114441,
+  "fat_start_mean": 0.5027849674224854,
+  "fat_end_mean": 0.49309659004211426,
+  "reward_per_step_mean": 2.2666268348693848,
+  "bad_taste_per_step": 0.010525943711400032,
+  "action_mix": {
+   "stop": 0.023,
+   "walk": 0.384,
+   "trot": 0.008,
+   "left": 0.108,
+   "right": 0.085,
+   "graze": 0.029,
+   "drink": 0.013,
+   "rest": 0.35
+  },
+  "energy_by_day": [
+   0.726,
+   0.72,
+   0.714,
+   0.715,
+   0.73
+  ],
+  "hydration_by_day": [
+   0.656,
+   0.665,
+   0.668,
+   0.667,
+   0.67
+  ],
+  "alive_by_day": [
+   768,
+   767,
+   757,
+   745,
+   736
+  ],
+  "seen_mean": 7.852036952972412,
+  "huddling_share_at_night": 0.4768487513065338
+ }
+}
