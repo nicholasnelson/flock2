@@ -71,14 +71,14 @@ def policy_fn(name, agent):
 
         return init, act
     if name == "hybrid":
-        world, policy, hy, use_embed = agent
+        world, policy, hy, use_embed, column = agent
 
         def init(st):
             B, S = st.flock.alive.shape
-            return hy.zero_mems(world, B, S)
+            return hy.zero_mems(world, B, S, column.size if column is not None else 0)
 
         def act(st, mem, k):
-            new, mem, rec = hy.sheep_step(world, policy, st, mem, k, use_embed)
+            new, mem, rec = hy.sheep_step(world, policy, st, mem, k, use_embed, column)
             return rec["act"], mem
 
         return init, act
@@ -292,10 +292,14 @@ def main():
         cfg = json.load(open(os.path.join(d, "config.json")))
         world = hy.make_world(0, cfg.get("model", "vector"))
         use_embed = cfg.get("policy_input", "state") == "state_embed"
-        policy = hy.make_policy(0, cfg.get("hidden", 256), hy.n_policy_in(world, use_embed))
+        col = int(cfg.get("column", 0))
+        policy = hy.make_policy(0, cfg.get("hidden", 256), hy.n_policy_in(world, use_embed, col))
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
         wm.load_into(policy, pickle.load(open(os.path.join(d, "policy.pkl"), "rb")))
-        agent = (world, policy, hy, use_embed)
+        column = hy.make_column(0, world, col)
+        if column is not None:
+            wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
+        agent = (world, policy, hy, use_embed, column)
     rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample)
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
            "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, **summarise(rec)}

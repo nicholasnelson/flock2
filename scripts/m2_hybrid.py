@@ -25,6 +25,16 @@ Checkpoints ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m2_eval.
 embedding as well as (h, z), with the gradient stopped, so PPO does not train the encoder. The
 embedding is the sheep's own eyes, not privileged information.
 
+**Stage 2a (spec § 21.1): ``--column G``** adds a reward-trained recurrent column beside the stage-1
+brain: a GRU of ``G`` units (``flock.wm.GRU``) whose input each step is the view's embedding (gradient
+stopped), the felt numbers and the one-hot previous action, and whose state ``g`` is appended to the
+policy's input. ``--continue_from DIR`` loads a stage-1 checkpoint: the world model as is, the policy
+with its first layers widened by zero-initialised columns for ``g`` (so iteration 0 is stage 1 exactly),
+the column fresh. PPO's update then runs the column forward over each sheep's whole rollout from its
+stored starting state, so gradients flow through time (``update_recurrent``). ``--mud_ramp A,B,R`` puts
+stage 2a's mud on freshly made meadows: radius 0 up to iteration A, linear to R tiles at iteration B,
+held after; ``--edge`` tiles of regrowth ramp outside it. Checkpoint ``column.pkl`` joins the others.
+
 ``--kl_dyn`` and ``--ms_weight`` set the world model's loss (``flock.wm.Config``); ``--add_frac`` adds
 only a random share of each iteration's sequences to the replay, so a replay of a given size covers
 a longer history.
@@ -54,7 +64,7 @@ from flax import nnx
 
 from flock import ac, wm, wm_spatial
 from flock.meadow2 import drives as D, render as R, sim
-from flock.meadow2.world import DAY, random_start
+from flock.meadow2.world import DAY, random_start, with_terrain
 
 
 def _load(name):
@@ -86,27 +96,94 @@ def make_policy(seed, hidden=256, n_in=CFG.feat):
     return _ppo1.Policy(nnx.Rngs(seed), hidden=hidden, n_in=n_in, n_out=sim.N_ACTIONS)
 
 
-def zero_mems(world, B, S):
+def zero_mems(world, B, S, column=0):
+    """(h, z, previous action, g): g is the stage-2a column's state, zero-width without a column."""
     c = world.cfg
-    return jnp.zeros((B, S, getattr(c, "state", c.deter))), jnp.zeros((B, S, c.stoch * c.classes)), jnp.zeros((B, S), jnp.int32)
+    g = column.size if isinstance(column, Column) else int(column)
+    return jnp.zeros((B, S, getattr(c, "state", c.deter))), jnp.zeros((B, S, c.stoch * c.classes)), jnp.zeros((B, S), jnp.int32), jnp.zeros((B, S, g))
+
+
+class Column(nnx.Module):
+    """Stage 2a's recurrent column (spec § 21.1): a layer-normalised GRU on [embedding, felt numbers,
+    one-hot previous action], trained by PPO's reward through time."""
+
+    def __init__(self, rngs: nnx.Rngs, n_in: int, size: int):
+        self.size = size
+        self.inp = nnx.Linear(n_in, size, rngs=rngs)
+        self.gru = wm.GRU(size, size, rngs)
+
+    def __call__(self, g, x):
+        return self.gru(jax.nn.silu(self.inp(x)), g)
+
+
+def column_in(world):
+    return world.cfg.embed + D.N_FELT + world.cfg.n_actions
+
+
+def make_column(seed, world, size):
+    return Column(nnx.Rngs(seed), column_in(world), size) if size else None
+
+
+def column_input(embed, feel, a_prev, n_actions):
+    return jnp.concatenate([jax.lax.stop_gradient(embed), feel, jax.nn.one_hot(a_prev, n_actions)], -1)
+
+
+class Brain(nnx.Module):
+    """The policy and the column together, so one optimizer trains both."""
+
+    def __init__(self, policy, column):
+        self.policy = policy
+        self.column = column
+
+
+def load_widened(policy, pure):
+    """Load a policy checkpoint whose input was narrower: every parameter whose first axis is shorter
+    than the target's is padded with zeros along that axis (the new input columns start at zero, so the
+    widened policy computes exactly what the old one did)."""
+    state = nnx.state(policy)
+    flat = dict(nnx.to_flat_state(state))
+    src = {k: v for k, v in wm._flatten(pure)}
+    for path in flat:
+        key = tuple(str(p) for p in path)
+        if key not in src:
+            continue
+        v, tgt = jnp.asarray(src[key]), flat[path].get_value() if hasattr(flat[path], 'get_value') else flat[path].value
+        if v.shape != tgt.shape:
+            assert v.ndim == tgt.ndim and v.shape[1:] == tgt.shape[1:] and v.shape[0] < tgt.shape[0], (key, v.shape, tgt.shape)
+            v = jnp.concatenate([v, jnp.zeros((tgt.shape[0] - v.shape[0],) + v.shape[1:], v.dtype)], 0)
+        flat[path] = flat[path].replace(v)
+    nnx.update(policy, nnx.from_flat_state(flat))
+
+
+def mud_radius(it, ramp):
+    """The mud radius at iteration ``it`` for ``ramp`` = (A, B, R): 0 up to A, linear to R at B, held."""
+    if ramp is None:
+        return 0.0
+    a, b, r = ramp
+    if it <= a:
+        return 0.0
+    return float(r) if it >= b else float(r) * (it - a) / (b - a)
 
 
 def to_bytes(rgb):
     return jnp.round(rgb * 255.0).astype(jnp.uint8)
 
 
-def policy_feat(h, z, embed, use_embed):
+def policy_feat(h, z, embed, use_embed, g=None):
+    """The policy's input: (h, z), the embedding if ``use_embed``, and the column's state ``g`` if given
+    (gradient stopped on everything but g, which PPO trains through the column)."""
     f = ac.feat_of(h, z)
-    return jax.lax.stop_gradient(jnp.concatenate([f, embed], -1) if use_embed else f)
+    f = jax.lax.stop_gradient(jnp.concatenate([f, embed], -1) if use_embed else f)
+    return f if g is None or g.shape[-1] == 0 else jnp.concatenate([f, g], -1)
 
 
-def n_policy_in(world, use_embed):
-    return world.cfg.feat + (world.cfg.embed if use_embed else 0)
+def n_policy_in(world, use_embed, column=0):
+    return world.cfg.feat + (world.cfg.embed if use_embed else 0) + int(column)
 
 
-def sheep_step(world, policy, states, mems, key, use_embed=False):
-    """Every sheep in a batch of meadows sees, updates its model state, and acts."""
-    h, z, a_prev = mems  # (B, S, ...)
+def sheep_step(world, policy, states, mems, key, use_embed=False, column=None):
+    """Every sheep in a batch of meadows sees, updates its model state (and the column's), and acts."""
+    h, z, a_prev, g = mems  # (B, S, ...)
     k1, k2 = jax.random.split(key)
     views = to_bytes(R.render_meadows(states))  # (B, S, H, W, 3) uint8
     f = states.flock
@@ -114,36 +191,44 @@ def sheep_step(world, policy, states, mems, key, use_embed=False):
     embed = world.embed_obs(views, feel)
     h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z = wm._sample(world.posterior(h, embed), k1)
-    feat = policy_feat(h, z, embed, use_embed)
-    logits, value = policy(feat)
+    x = column_input(embed, feel, a_prev, world.cfg.n_actions)
+    if column is not None:
+        g = column(g, x)
+    feat = policy_feat(h, z, embed, use_embed)  # without g: the update recomputes g through time
+    logits, value = policy(policy_feat(h, z, embed, use_embed, g))
     a = jax.random.categorical(k2, logits, -1)
     a = jnp.where(f.alive, a, sim.STOP)
     logp = jnp.take_along_axis(jax.nn.log_softmax(logits), a[..., None], -1)[..., 0]
     new = jax.vmap(sim.step)(states, a)
-    return new, (h, z, a), dict(views=views, feel=feel, feat=feat, act=a, logp=logp, value=value, reward=new.flock.reward,
-                                alive_before=f.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
+    rec = dict(views=views, feel=feel, feat=feat, act=a, logp=logp, value=value, reward=new.flock.reward,
+               alive_before=f.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
+    if column is not None:
+        rec["col_in"], rec["g"] = x, g
+    return new, (h, z, a, g), rec
 
 
 @nnx.jit(static_argnums=(5, 6, 7, 8))
-def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embed=False):
+def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embed=False, column=None):
     gamma, lam = gamma_lam
 
     def one(carry, k):
         st, mm = carry
-        st, mm, rec = sheep_step(world, policy, st, mm, k, use_embed)
+        st, mm, rec = sheep_step(world, policy, st, mm, k, use_embed, column)
         rec["views"] = rec["views"][:, :record]  # only the recorded sheep's views are kept
         return (st, mm), rec
 
     (states, mems), tr = jax.lax.scan(one, (states, mems), jax.random.split(key, steps))  # (T, B, S, ...)
     # the value of the state after the last step, for GAE's bootstrap
-    h, z, a_prev = mems
+    h, z, a_prev, g = mems
     k = jax.random.fold_in(key, 7)
     views = to_bytes(R.render_meadows(states))
     f = states.flock
-    embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
+    feel = D.felt(f.levels, f.fat, f.taste)
+    embed = world.embed_obs(views, feel)
     h2 = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
     z2 = wm._sample(world.posterior(h2, embed), k)
-    _, last_v = policy(policy_feat(h2, z2, embed, use_embed))
+    g2 = column(g, column_input(embed, feel, a_prev, world.cfg.n_actions)) if column is not None else g
+    _, last_v = policy(policy_feat(h2, z2, embed, use_embed, g2))
     r = tr["reward"] * (1 - gamma)
     cont = tr["alive_after"].astype(jnp.float32)
 
@@ -158,6 +243,37 @@ def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embe
     tr["adv"] = adv
     tr["ret"] = adv + tr["value"]
     return states, mems, tr
+
+
+@nnx.jit
+def update_recurrent(brain, opt, feat, x, g0, act_, logp_old, adv, ret, wgt, clip, ent_coef):
+    """The clipped PPO update through the column (spec § 21.1): ``feat`` (T, N, F) the policy's
+    stage-1 input, ``x`` (T, N, X) the column's input, ``g0`` (N, G) the column's state before step 0 of
+    each of the N sequences; the column is run forward over the T steps with the current parameters
+    and the policy scored on [feat, g]; samples weighted by ``wgt`` (0 while dead)."""
+
+    def loss_fn(b):
+        def one(g, xt):
+            g = b.column(g, xt)
+            return g, g
+
+        _, gs = jax.lax.scan(one, g0, x)  # (T, N, G)
+        logits, v = b.policy(jnp.concatenate([feat, gs], -1))
+        logp_all = jax.nn.log_softmax(logits)
+        logp = jnp.take_along_axis(logp_all, act_[..., None], -1)[..., 0]
+        ratio = jnp.exp(logp - logp_old)
+        n = jnp.maximum(wgt.sum(), 1.0)
+        mean = lambda y: jnp.sum(y * wgt) / n
+        mu = mean(adv)
+        a = (adv - mu) / (jnp.sqrt(mean((adv - mu) ** 2)) + 1e-8)
+        pg = -mean(jnp.minimum(ratio * a, jnp.clip(ratio, 1 - clip, 1 + clip) * a))
+        vf = 0.5 * mean((v - ret) ** 2)
+        ent = mean(-jnp.sum(jnp.exp(logp_all) * logp_all, -1))
+        return pg + 0.5 * vf - ent_coef * ent, {"pg": pg, "vf": vf, "entropy": ent, "approx_kl": mean(logp_old - logp)}
+
+    (loss, aux), grads = nnx.value_and_grad(loss_fn, has_aux=True)(brain)
+    opt.update(brain, grads)
+    return aux
 
 
 @nnx.jit
@@ -223,6 +339,10 @@ def main():
     p.add_argument("--ms_stride", type=int, default=8, help="steps between prediction starts")
     p.add_argument("--add_frac", type=float, default=1.0, help="share of each iteration's sequences added to the replay")
     p.add_argument("--willows", type=int, default=0, help="willows per pond bank (stage 1's world change; 0 = none)")
+    p.add_argument("--column", type=int, default=0, help="stage 2a: width of the reward-trained recurrent column (0 = none)")
+    p.add_argument("--continue_from", default=None, help="stage 2a: a stage-1 checkpoint directory to continue from")
+    p.add_argument("--mud_ramp", default=None, help="stage 2a: A,B,R: mud radius 0 to iteration A, linear to R tiles at B, held")
+    p.add_argument("--edge", type=float, default=2.0, help="tiles of regrowth ramp outside the mud")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
@@ -234,16 +354,31 @@ def main():
     world = make_world(a.seed, a.model, a.kl_dyn, a.ms_weight, horizons, a.ms_stride)
     wm_opt = nnx.Optimizer(world, optax.chain(optax.clip_by_global_norm(1000.0), optax.adam(1e-4, eps=1e-8)), wrt=nnx.Param)
     use_embed = a.policy_input == "state_embed"
-    policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed))
-    opt = nnx.Optimizer(policy, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
+    policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed, a.column))
+    column = make_column(a.seed + 2, world, a.column)
+    ramp = tuple(float(x) for x in a.mud_ramp.split(",")) if a.mud_ramp else None
+    if a.continue_from:
+        src = os.path.expanduser(a.continue_from)
+        wm.load_into(world, pickle.load(open(os.path.join(src, "wm.pkl"), "rb")))
+        load_widened(policy, pickle.load(open(os.path.join(src, "policy.pkl"), "rb")))
+        print("continued from", src, flush=True)
+    brain = Brain(policy, column)
+    trained = brain if column is not None else policy
+    opt = nnx.Optimizer(trained, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
-    fresh = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))
+    fresh_plain = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))
+    mud = 0.0
+
+    def fresh(keys):
+        nw = fresh_plain(keys)
+        return with_terrain(nw, bank=mud + a.edge, mud=True, inner=mud) if mud > 0 else nw
+
     key, k = jax.random.split(key)
     states = fresh(jax.random.split(k, a.meadows))
     S = states.flock.pos.shape[1]
-    zero = lambda: zero_mems(world, a.meadows, S)
+    zero = lambda: zero_mems(world, a.meadows, S, a.column)
     mems = zero()
     age = (np.arange(a.meadows) % (a.reset_every // a.steps)) * a.steps
     log = open(os.path.join(a.out, "log.jsonl"), "a")
@@ -251,7 +386,9 @@ def main():
     for it in range(1, a.iters + 1):
         t_a = time.time()
         key, k = jax.random.split(key)
-        states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed)
+        mud = mud_radius(it, ramp)
+        g0 = mems[3]
+        states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed, column)
         tr = jax.tree.map(np.asarray, tr)
         t_collect = time.time() - t_a
         # world-model replay: recorded sheep, cut into sequences, kept if alive throughout
@@ -267,7 +404,18 @@ def main():
             key, k = jax.random.split(key)
             wm_aux = {k2: float(np.mean(np.asarray(v))) for k2, v in wm_burst(world, wm_opt, V, A, F, Rw, jax.random.split(k, a.wm_steps)).items()}
         ppo_aux = {}
-        if it > a.ppo_start:
+        if it > a.ppo_start and column is not None:
+            # sequences: one per sheep (N = meadows x sheep), the column run from its stored start
+            seq = lambda x: x.reshape((x.shape[0], -1) + x.shape[3:])  # (T, N, ...)
+            feat, x, act, lp, ad, rt, w = (seq(tr[k2]) for k2 in ("feat", "col_in", "act", "logp", "adv", "ret", "alive_before"))
+            g0s = np.asarray(g0).reshape((-1, a.column))
+            w = w.astype(np.float32)
+            auxes = []
+            for _ in range(a.epochs):
+                for mb in np.array_split(rng.permutation(act.shape[1]), a.minibatches):
+                    auxes.append(update_recurrent(brain, opt, feat[:, mb], x[:, mb], g0s[mb], act[:, mb], lp[:, mb], ad[:, mb], rt[:, mb], w[:, mb], a.clip, a.ent))
+            ppo_aux = {k2: float(np.mean([float(v) for v in [x_[k2] for x_ in auxes]])) for k2 in auxes[0]}
+        elif it > a.ppo_start:
             flat = lambda x: x.reshape((-1,) + x.shape[3:])
             obs, act, lp, ad, rt, w = (flat(tr[k2]) for k2 in ("feat", "act", "logp", "adv", "ret", "alive_before"))
             w = w.astype(np.float32)
@@ -301,6 +449,7 @@ def main():
             "bad_taste": float((tr["bad"] & alive).sum() / n_al),
             "actions": {sim.ACTION_NAMES[i]: round(float((acts == i).mean()), 3) for i in range(sim.N_ACTIONS)},
             "replay": int(replay.n),
+            "mud": round(mud, 3),
             "t_collect": t_collect,
             "t_train": t_train,
             **{f"wm_{k2}": v for k2, v in wm_aux.items()},
@@ -313,6 +462,8 @@ def main():
         if it % 25 == 0 or it == a.iters:
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(world))), open(os.path.join(a.out, "wm.pkl"), "wb"))
             pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(policy))), open(os.path.join(a.out, "policy.pkl"), "wb"))
+            if column is not None:
+                pickle.dump(jax.tree.map(np.asarray, nnx.to_pure_dict(nnx.state(column))), open(os.path.join(a.out, "column.pkl"), "wb"))
 
 
 if __name__ == "__main__":

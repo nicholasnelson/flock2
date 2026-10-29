@@ -120,21 +120,27 @@ def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
     return {k: np.asarray(v[warm:]) for k, v in out.items()}
 
 
-def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0):
+def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0):
     states = _starts(n_meadows, willows)
+    if inner > 0:  # stage 2a's mud (spec section 21.1): the memory probe on the world that demands memory
+        from flock.meadow2.world import with_terrain
+        states = with_terrain(states, bank=inner + 2.0, mud=True, inner=inner)
     S = states.flock.pos.shape[1]
-    mems = hy.zero_mems(world, n_meadows, S)
+    mems = hy.zero_mems(world, n_meadows, S, column.size if column is not None else 0)
 
     def body(carry, xs):
-        st, (h, z, a_prev) = carry
+        st, (h, z, a_prev, g) = carry
         k, t = xs
         k1, k2 = jax.random.split(k)
         rgb, water, depth = render_all(st, R.render_aux)
         views = hy.to_bytes(rgb)
         f = st.flock
-        embed = world.embed_obs(views, D.felt(f.levels, f.fat, f.taste))
+        feel = D.felt(f.levels, f.fat, f.taste)
+        embed = world.embed_obs(views, feel)
         h = world.transition(h, z, jax.nn.one_hot(a_prev, world.cfg.n_actions))
         z = wm._sample(world.posterior(h, embed), k1)
+        if column is not None:  # stage 2a's column, driven by the same scripted actions as h
+            g = column(g, hy.column_input(embed, feel, a_prev, world.cfg.n_actions))
         def d1(_):
             dec = world.decode(wm.Step(h, z, None, None)) + 0.5  # (B, S, H, W, 3)
             dry = st._replace(meadow=st.meadow._replace(water=jnp.zeros_like(st.meadow.water)))
@@ -150,7 +156,9 @@ def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0):
         a = jax.vmap(scripted.policy)(st, jax.random.split(k2, n_meadows))
         st2 = jax.vmap(sim.step)(st, a)
         out = dict(embed=embed.astype(jnp.float16), h=h.astype(jnp.float16), z=z.astype(jnp.float16), d1=rec_d1, **_targets(st, water, depth))
-        return (st2, (h, z, a)), out
+        if column is not None:
+            out["g"] = g.astype(jnp.float16)
+        return (st2, (h, z, a, g)), out
 
     T = warm + steps
     run = jax.jit(lambda s, m, k: jax.lax.scan(body, (s, m), (jax.random.split(k, T), jnp.arange(T)))[1])
@@ -215,6 +223,7 @@ def main():
     p.add_argument("--meadows", type=int, default=32)
     p.add_argument("--warm", type=int, default=150)
     p.add_argument("--steps", type=int, default=300)
+    p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius on the probe's meadows (0: none)")
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_mlp", action="store_true")
@@ -235,8 +244,11 @@ def main():
         hy = _load("m2_hybrid")
         world = hy.make_world(0, cfg.get("model", "vector"))
         wm.load_into(world, pickle.load(open(os.path.join(d, "wm.pkl"), "rb")))
-        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows}
+        column = hy.make_column(0, world, int(cfg.get("column", 0)))
+        if column is not None:
+            wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
+        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner)
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner}
 
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
     if not reactive:
@@ -267,6 +279,9 @@ def main():
         inputs.update({"h": rec["h"], "z": rec["z"], "hz": np.concatenate([rec["h"], rec["z"]], -1)})
     if world is not None and world.cfg.rot_bins:  # rung 4: the ring and the GRU state, probed apart as well
         inputs["ring"], inputs["gru"] = rec["h"][..., world.cfg.deter :], rec["h"][..., : world.cfg.deter]
+    if "g" in rec:  # stage 2a: the column's state, alone and with the world model's
+        inputs["g"] = rec["g"]
+        inputs["hzg"] = np.concatenate([inputs["hz"], rec["g"]], -1)
     day_full = rec["light"] >= 0.5
 
     def probe(mask, target, label):
@@ -331,6 +346,9 @@ def main():
     if not reactive:
         if world.cfg.rot_bins:  # spec § 18: noise as wide as h and z, as the D3 floor
             inputs = {**inputs, "noise_wide": np.random.default_rng(0).normal(size=inputs["hz"].shape).astype(np.float16)}
+        if "g" in rec:  # spec § 21.1: noise as wide as g (and as h, z, g), as the D3 floor
+            inputs = {**inputs, "noise_g": np.random.default_rng(0).normal(size=rec["g"].shape).astype(np.float16),
+                      "noise_hzg": np.random.default_rng(1).normal(size=inputs["hzg"].shape).astype(np.float16)}
         res["D3_recent"] = {"frames": int(recent.sum()),
                             "sin_bearing": probe(recent, np.sin(rec["wbear"]), "recent sin"), "cos_bearing": probe(recent, np.cos(rec["wbear"]), "recent cos")}
     print(json.dumps({"D1": res.get("D1"), "D2_true": res["D2_true"]}, indent=1))

@@ -1651,7 +1651,7 @@ before the renderer's march; the sun and moon stay scenery until the fixed peaks
 with a heading probe (allocentric heading from one frame's embedding). (4) D3 ≥ 0.3 but survival fails:
 the memory is there and the policy cannot use it; PPO budget doubled once.
 
-**Code to build (after the owner's review):** `m2_hybrid.py --column 256 --continue_from <stage-1 dir>
+**Code (built and smoke-tested 2026-10-29 evening, before any run; `tests/test_column.py` checks the zero start numerically, the ramp and the update through the column; a 5-iteration GPU run at full width peaked at 4.4 GB):** `m2_hybrid.py --column 256 --continue_from <stage-1 dir>
 --mud_ramp 200,1400,8 --steps 128` with the recurrent PPO update; `m2_eval.py` and `m2_diag.py` carry g
 for a `column` config and probe it (D3, D2_true, the noise floor at g's width); `runs/m2_stage2a.sh`
 with the three seeds in one chain, each followed by the four evaluations. Smoke test on CPU, the
