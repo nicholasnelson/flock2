@@ -342,7 +342,7 @@ def main():
     res["D2_true"] = {}
     fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
     for dn, dm in (("day", day_full), ("night", ~day_full), ("fog_day", day_full & fog_full), ("clear_day", day_full & ~fog_full)):
-        for lo, hi in BINS[:-1]:
+        for lo, hi in tuple(BINS[:-1]) + ((8, 12), (12, 16)):  # spec section 21.5: 8-16 split, to tell the mud edge from the willows in fog
             m = alive & rec["found_v"] & (rec["wdist_v"] >= max(lo, NEAR)) & (rec["wdist_v"] < hi) & dm
             key = f"{dn}_{lo}-{hi}"
             res["D2_true"][key] = {"frames": int(m.sum()), "sin": probe(m, np.sin(rec["wbear_v"]), f"true sin {key}"), "cos": probe(m, np.cos(rec["wbear_v"]), f"true cos {key}")}

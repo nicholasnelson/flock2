@@ -1883,6 +1883,25 @@ control, same evaluation). If all three brains then fail survival and the contro
 learning stage runs at fog 0.75 (ramp 0 → 0.75 over iterations 200–1,400). If not, the decision returns
 to the owner. M1 is unaffected by this choice: it fails at every seed at 0.5 already.
 
+**The fog-strength check (all-fog probes, 03:25–03:46), and a diagnosis before acting on it.** With
+every day foggy, the embedding alone still decodes the bearing of water 8–16 tiles away in view at
+**0.65 / 0.57 / 0.60** (ridge, cos; 0.73 / 0.69 / 0.72 on the clear mud world), and on the D3 frames
+(water's pixels gone, seen within 300 steps) at 0.54 / 0.58 / 0.56 (clear: 0.81 / 0.80 / 0.82). That is
+above the 0.3 the rule set for "the willows are hidden", so read literally the rule says `FOG_HAZE`
+drops to 2.0. But the rule's condition was that *the willows* are readable, and there is another cue in
+this world that the fog does not hide at 8–16 tiles: the **bare mud ring** itself, 8 tiles of grassless
+bank around each pond, whose edge a sheep at 10–14 tiles sees on the ground 2–6 tiles away, well
+within the fog's 7 tiles. The ground's colour pointing to water is a landmark the sheep is entitled to
+use, and lowering the haze would not remove it. The brains' deaths are at 17–27 tiles, beyond where
+that edge can be seen in fog, which fits. So before changing the fog: **one diagnostic run,
+pre-stated here** (`runs/m2_stage2a_fog_cue.sh`, queued behind the 0.75 re-check): the same probe on
+a **mud-free** fog world (willows, no mud) and the mud fog world with the 8–16 bin split into 8–12 and
+12–16. Decision: if the mud-free fog reading at 8–16 is **below 0.3**, the fog hides the willows as
+intended and the cue on the mud world is the mud edge, so `FOG_HAZE` stays 3.0 and the result is
+noted as a feature of the world (the memory test lives beyond ~15 tiles and at night); if it is 0.3 or
+above, the willows still read through the fog and `FOG_HAZE` drops to 2.0 before the learning stage,
+with the probes run again.
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
