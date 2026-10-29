@@ -1918,6 +1918,21 @@ haze. Seed 2's 8–12 bin (42 onsets, median 76 against a bar of 45, 81 % resolv
 work: from just outside the ring the bare bank is in sight through the fog, and that brain follows it
 half the time. Beyond 16 tiles no brain gets back.
 
+**The mud-edge diagnosis (03:56–04:13): the fog hides the willows; the cue is the mud ring.** On the
+mud-free fog world (willows, no mud, every day foggy) the embedding reads the bearing of water 8–16
+tiles away in view at **−0.15** (8–12: −0.39; the D3 frames −0.34), against 0.36 on the same world on a
+clear day: in fog the willows are gone. On the mud fog world the same reading is 0.83 at 8–12 tiles
+and 0.48 at 12–16 (clear day: 0.73 over 8–16): the bare bank, seen on the ground through the fog,
+points at the water, and the cue fades as the edge recedes. Under the rule stated above `FOG_HAZE`
+**stays 3.0**, and the structure of the fog world is noted as a feature: in fog a sheep within about
+4 tiles of the mud's edge can see its way back, one further out cannot, and at night nothing reads.
+The memory test M1 reads all of it; the brains fail it from 12 tiles out and die beyond 16.
+
+**The learning stage started 04:15** (`FOG=0.75 runs/m2_stage2a_fog.sh chain`): seeds 0–2, brains
+`s2f_s{0,1,2}`, continued from `s2a_s{0,1,2}`, mud held at 8, fog 0 → 0.75 over iterations 200–1,400 of
+2,000; then the evaluations of § 21.4 at fog 0.75 (survival at 5 days, stage 1 on the plain world, alone
+on 64 meadows, the zeroed-column ablation) and the probes (mud 8 clear, and every day foggy).
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
