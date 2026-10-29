@@ -35,7 +35,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import drives as D, scripted, sim
-from flock.meadow2.world import DAY, dry_cells, random_start, start_distance
+from flock.meadow2.world import DAY, dry_cells, random_start, start_distance, with_terrain
 
 
 def run_scripted(states, key, steps):
@@ -95,10 +95,15 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", default="runs/meadow2/checks.json")
     p.add_argument("--willows", type=int, default=0, help="willows per pond bank (stage 1)")
+    p.add_argument("--inner", type=float, default=0.0, help="mud radius: no grass or regrowth within (stage 2a)")
+    p.add_argument("--edge", type=float, default=2.0)
+    p.add_argument("--trample", type=float, default=0.0)
     p.add_argument("--walker_only", action="store_true", help="only the explorer measures (both walkers)")
     a = p.parse_args()
     keys = jnp.stack([jax.random.PRNGKey(30_000 + i) for i in range(a.meadows)])
     states = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))(keys)
+    if a.inner > 0 or a.trample > 0:  # stage 2a's terrain (spec § 21)
+        states = with_terrain(states, trample=a.trample, bank=(a.inner + a.edge) if a.inner > 0 else None, mud=a.inner > 0, inner=a.inner)
     grass0 = np.asarray(states.meadow.grass)
     water = np.asarray(states.meadow.water)
     d_start = np.asarray(jax.vmap(lambda w, p: start_distance(w, p.mean(0)[None])[0])(states.meadow.water, states.flock.pos))
@@ -141,7 +146,7 @@ def main():
     budget = {f"need_scale_{ns}": float((found & (first < h0 / (loss / ns))).mean()) for ns in (1, 2, 3, 4, 6)}
 
     res = {
-        "meadows": a.meadows,
+        "meadows": a.meadows, "willows": a.willows, "inner": a.inner, "trample": a.trample,
         "sheep_per_meadow": int(n_sheep),
         "steps": a.steps,
         "1_survival": {

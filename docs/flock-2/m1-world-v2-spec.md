@@ -1258,3 +1258,27 @@ source of paths; its *creation* is a terrain fact set by one dial, the mud radiu
 Since at `inner` 16 two ponds would leave only about a third of the meadow grassed, 12 is the largest
 radius measured; if 12 passes, the ramp for stage 2a runs from 0 to 12 and the demand check decides
 where on it the stage-1 brain fails.
+
+### Ring-growth measurement, grid 5: result (2026-10-29)
+
+`meadow2-results/ring_grid5_{camp,wander}.json`: mud radius `inner` ∈ {6, 8, 12} (edge 2 tiles), mud
+sets the starting grass, trample ∈ {0, 0.05}, 8 days, both flocks.
+
+**The mud radius holds the ring exactly, for all 8 days, at every setting** (bare radius = `inner`;
+the bands inside it read 0.0). Bites move out with it: 8–9 tiles from water at `inner` 6, 10–11.5 at
+8, 14–16 at 12 (camping flock; the wanderers 1–2 tiles farther). Trampling adds 1 tile of bite
+distance and the first trails (2–5 % of far cells bared at `inner` 8).
+
+**Survival sets the ceiling.** Hunger deaths of 192 over 8 days: `inner` 6: 0–1; **`inner` 8: 2–4
+(1.0–2.1 %, at the 2 % gate)**; `inner` 12: 18–28 (9–15 %), a clear fail, though 60 % of the meadow
+is still grassed: the walk between water and grass is what the scripted flock's rules cannot afford,
+not the grass. All deaths were of hunger, none of thirst (the scripted flock knows where water is).
+
+**Reading.** Stage 2a's dial is the mud radius, ramped from 0 toward **8 tiles**, the largest radius
+the scripted gate allows with 12 sheep (10 is untested; 12 fails). The full 64-meadow, 5-day gate
+(`meadow2_checks.py --inner 8 --mud --trample 0.05 --willows 3`) is run below; the end point is the
+largest radius ≤ 8 that passes it. Trampling 0.05 comes with it for the paths. Whether 8 tiles is a
+*pressure* is the demand check's question (the stage-1 brain must lose ≥ 40 %, of thirst): by day a
+sheep grazing at 10–11 tiles may still see the willows (readable to 8–16), so the demand is expected
+to come at night, when the eyes reach 4–5 tiles; if the stage-1 brain survives the 8-tile mud, the
+pressure needs night (willows unlit) or a bigger flock, decided then with the owner.
