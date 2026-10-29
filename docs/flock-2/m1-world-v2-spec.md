@@ -1253,6 +1253,39 @@ Chain order (owner's approval, 2026-10-29 15:10): after A1 s1 finishes, the firs
 - *Lone-sheep evaluation*: each A3 seed with one sheep per meadow, 64 meadows, 3 days, the willow world.
   If the lone death share exceeds 20 % while the flock's is under 5 %, following carries survival, and
   stage 2a's demand check and pass rule are read on the lone evaluation as well as the flock's.
+### 20.3 Stage 1 result: the embed hybrid with willows passes at three seeds (2026-10-29, 18:20)
+
+| arm | seed | dead | max / meadow | reward | within 8 | nearest neighbour | deaths by day | never within 8 | water at death (quartiles) | D2_true 8–16 day sin / cos |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A3 | 0 | 4.7 % | 6 | 2.34 | 86 % | 2.6 | 6 / 3 / 0 | 0.89 | 17 / 24 / 26 | 0.59 / 0.38 |
+| A3 | 1 | 6.8 % | 7 | 2.31 | 95 % | 1.3 | 8 / 4 / 1 | 0.15 | 8 / 9 / 10 | 0.50 / 0.45 |
+| A3 | 2 | 9.9 % | 3 | 2.28 | 76 % | 4.2 | 13 / 1 / 5 | 0.47 | 11 / 18 / 23 | 0.40 / 0.36 |
+| A1 | 0 | 29.7 % | 10 | 1.89 | 68 % | 3.6 | 22 / 18 / 17 | 0.28 | 12 / 18 / 20 | 0.05 / −0.05 |
+| A1 | 1 | 20.8 % | 9 | 2.03 | 79 % | 2.9 | 21 / 12 / 7 | 0.50 | 10 / 12 / 20 | — |
+| A1 | 2 | 52.1 % | 10 | 1.48 | 55 % | 5.5 | 43 / 42 / 15 | 0.43 | 12 / 17 / 22 | — |
+
+**Verdict.** The embed hybrid with willows passes § 20's rule at every seed (≤ 20 % dead, reward ≥ 2.0):
+4.7, 6.8 and 9.9 % dead, mean 7.1 %, rewards 2.34, 2.31, 2.28 against the scripted flock's 2.36. The
+strong bar (≤ 5 %) is met at seed 0 only. The reactive sheep fails at two of three seeds (29.7, 20.8,
+52.1 %; mean 34 %) with a wide spread, so § 20's registered arm is closed as a fail and the stage's bet
+is won by the hybrid, as § 20.2 adopted. Stage 1 passes with the embed hybrid as its brain.
+
+**What the three seeds add.** The embedding decodes the true water bearing at 8–16 tiles by day at
+every seed (sin 0.59 / 0.50 / 0.40, cos 0.38 / 0.45 / 0.36), around the 0.5 § 20 asked for and far from
+the old hybrids' 0; at 4–8 tiles 0.78 at every seed; at night nothing. D3_recent (water seen in the last
+300 steps, now out of view) is negative at every seed: this brain has no memory, so stage 2a's demand
+check is a fair test of the world. Deaths are mostly by day (night holds 40 % of the steps and 11, 15
+and 42 % of the deaths), so the willows are not a night-only cue failing at night; they are far-start
+search deaths and, at seed 1, something else: its dead died 8–10 tiles from water, with 85 % having had
+water within 8 tiles, in a flock so tight (1.3 tiles to the nearest neighbour, 95 % of steps within 8
+tiles of water) that it looks like a herd that camps at the pond and loses a member who does not drink
+in time. That seed is the one the lone-sheep evaluation will be hardest on.
+
+**Route-around reading across seeds.** (i) within-8 share 76–95 %, the oracle's 96 %; allowed at
+stage 1, and the first thing the mud must break. (ii) Not camping-and-starving: graze success 0.81–0.95,
+last-day hydration 1.04–1.10. (iii) Following: nearest neighbour 1.3–4.2 tiles against the old hybrids'
+6; open, pending the lone evaluation queued below.
+
 - A3's probes so far (seed 0): D1 water-pixel recall 0.92 / 0.73 / 0.09 by band (0–4 / 4–8 / 8–16 tiles)
   by day, so the pond itself is still not segmented beyond 8 tiles; the bearing at 8–16 is read from the
   willows. D3_recent (bearing of water seen in the last 300 steps, now out of view): negative, no memory.
