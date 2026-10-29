@@ -1573,6 +1573,91 @@ living steps within 8 tiles of water, thirsty-sees-water at 8 tiles 0.59, gap at
 is "far" for the eyes though not for the legs: a pond is a flat surface seen from an eye 0.8 tiles
 high, a two-pixel sliver on the horizon at 8 tiles, gone at 12–16 and at night beyond 8.
 
+### 21.1 The learning stage: pre-registration (2026-10-29 evening, draft for the owner's review before any run)
+
+**Where it starts.** From each of stage 1's three brains (A3 seeds 0, 1, 2: the embed hybrid with
+willows, § 20.3), each continued in its own run, so the stage has three seeds by construction. The demand
+check is done (§ 20.4): on the 8-tile mud at 5 days the stage-1 brain loses 69 / 68 / 42 %, in two styles,
+camping on bare ground and starving, or wandering beyond the mud and dying of thirst.
+
+**The brain change (one, progressive-style).** A recurrent column beside the stage-1 network:
+
+- A GRU of 256 units, state **g**, whose input each step is the current view's embedding (512, the
+  world model's encoder, gradient stopped so the column cannot retrain the eyes), the six felt numbers
+  and the one-hot previous action. It is trained by PPO's reward only, through time, which is what
+  stage 1 lacked: a state shaped by what pays rather than by what predicts the next frame (the RSSM's
+  h is such a state, the policy already reads it, and D3 says it holds no water bearing once water is
+  out of view).
+- The policy's input grows from [h, z, embed] to [h, z, embed, g]. The first layer of the actor and of
+  the critic is widened by 256 columns initialised to **zero**, so at iteration 0 the policy is exactly
+  stage 1's and the world is stage 1's (mud radius 0): there is nothing to regress from, and the column
+  earns its way into the decision. The world model keeps training as before (its loss is unchanged and
+  the mud is new data for it); the stage-1 policy weights keep training under PPO. The review's "freeze
+  the old until the regression tests hold" is met by the zero start plus the regression test below, with
+  a freeze held as the first fallback.
+- Credit through time: the rollout grows from 64 to **128 steps**, and PPO's update runs the column
+  forward over each sheep's whole rollout from its stored starting state (one sequence per sheep per
+  rollout, minibatches of sequences), so gradients flow across the 128 steps. γ 0.998 (a 500-step
+  horizon) covers an out-and-back trip (8 tiles at a walk is ~70 steps each way plus grazing). The
+  column's state is carried across rollouts like h and reset with the meadow.
+- Everything else as A3's recipe: 8 meadows × 12 sheep, replay 1,024, add 0.5, kl_dyn 1.0, 4 epochs,
+  Adam 3e-4, clip 0.2, entropy 0.01, reset every 2 days. Budget **2,000 iterations** of 128 steps
+  (twice stage 1's samples; about 2 hours a seed with its evaluations).
+
+**The world change (one, ramped).** Mud radius `inner` 0 for iterations 1–200 (the stage-1 world while
+the column settles), linear to **8 tiles** over iterations 200–1,400, held at 8 for 1,400–2,000; edge 2
+(regrowth back to full over 8–10 tiles). A meadow takes the current radius when it is (re)made and
+keeps it until its reset, so live meadows lag the ramp by at most two days. **No trampling in this arm**:
+the demand check and the 5-day scripted gate through `m2_eval.py` were run without it, and without worn
+paths route-around (ii) cannot arise, which keeps the first test of memory clean. Trampling (0.05, the
+owner's paths) is added as its own world fact once this arm is read, with § 21's swap test then. This is
+a departure from the owner's original pairing of mud and paths, flagged for review.
+
+**Evaluation (pre-registered).** `m2_eval.py`, 16 meadows (seeds 50,000+), the willow world:
+
+| test | world | window | rule |
+| --- | --- | --- | --- |
+| survival on the mud | `--inner 8` | 5 days | ≤ 20 % dead at every seed, reward ≥ 2.0 (scripted: 0 of 960, 2.32) |
+| memory | the same frames | | D3 from **g** (bearing of water seen within the last 300 steps, now out of view and > 1.5 tiles away; the better of sine and cosine, ridge) **≥ 0.3** at every seed; noise as wide as g scores < 0.1 |
+| stage 1 still passes | no mud | 3 days | ≤ 20 % dead at every seed (the regression test) |
+| alone on the mud | `--inner 8 --sheep 1 --meadows 64` | 5 days | reported; passes alone if ≤ 20 % |
+
+**Pass:** survival and memory and the regression test, all three seeds. **Reported, not deciding:** D3
+from h and z (does the world model's state pick up memory once the world pays for it?) and from
+[h, z, g] together; D2_true from g; deaths per day and their cause (starved / thirst); within-8 and
+within-16 shares of living steps; bite distance by day and by night; the within-8 share at night
+against the day; nearest neighbour and others in view; the action mix; the lone result.
+
+**Route-around list, with the readings that catch each.** (i) *Grazing within sight of the willows*:
+with the willows readable to ~16 tiles by day (§ 20.3's probe), a sheep can eat at 9–15 tiles and still
+see water, needing no memory by day. This is expected and allowed: it is the stage-0 route-around
+(§ 19.3), and the ring is where the grass is. Night is when it fails, since the probe reads the willows
+at 0 at night, so the readings are the night-time within-8 share and the night deaths. A brain that
+passes survival with D3 < 0.3 has lived by (i): the stage then fails on memory, the result is written,
+and the decision returns to the owner, with two pre-named next pressures: a radius beyond the willows'
+readable range (12–16, with the scripted gate re-tuned, since the scripted flock camps by design), or
+stage 3's hiding of the willows pulled forward. (ii) *Paths*: none in this arm. (iii) *Following*: the
+lone evaluation on the mud.
+
+**Fallbacks, in order, one change each, pre-registered:** (1) the regression test fails (stage 1
+forgotten): freeze the world model and the stage-1 policy weights, train only the column and the
+zero-initialised slices. (2) Survival fails at the end point in the camping style (deaths starved,
+within-8 high): hold the ramp longer (end point reached at iteration 1,000, held 1,000 more). (3)
+Survival fails in the wandering style (deaths of thirst beyond the mud, D3 < 0.3): **2a-ii, the owner's
+compass**: two or three fixed peaks on the horizon at distinct bearings, a world fact readable in one
+frame, so "water is north-east" can be stored without integrating turns (the design sketched in
+conversation 2026-10-29: a one-dimensional skyline indexed by heading, composited behind the ground
+before the renderer's march; the sun and moon stay scenery until the fixed peaks are read). It comes
+with a heading probe (allocentric heading from one frame's embedding). (4) D3 ≥ 0.3 but survival fails:
+the memory is there and the policy cannot use it; PPO budget doubled once.
+
+**Code to build (after the owner's review):** `m2_hybrid.py --column 256 --continue_from <stage-1 dir>
+--mud_ramp 200,1400,8 --steps 128` with the recurrent PPO update; `m2_eval.py` and `m2_diag.py` carry g
+for a `column` config and probe it (D3, D2_true, the noise floor at g's width); `runs/m2_stage2a.sh`
+with the three seeds in one chain, each followed by the four evaluations. Smoke test on CPU, the
+regression test's zero-start checked numerically (the widened policy's logits equal stage 1's at
+iteration 0), then the chain.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
