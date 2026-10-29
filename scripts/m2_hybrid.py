@@ -343,6 +343,7 @@ def main():
     p.add_argument("--continue_from", default=None, help="stage 2a: a stage-1 checkpoint directory to continue from")
     p.add_argument("--mud_ramp", default=None, help="stage 2a: A,B,R: mud radius 0 to iteration A, linear to R tiles at B, held")
     p.add_argument("--edge", type=float, default=2.0, help="tiles of regrowth ramp outside the mud")
+    p.add_argument("--fog_ramp", default=None, help="spec § 21.4: A,B,P: fog probability 0 to iteration A, linear to P at B, held")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
@@ -357,6 +358,7 @@ def main():
     policy = make_policy(a.seed + 1, a.hidden, n_policy_in(world, use_embed, a.column))
     column = make_column(a.seed + 2, world, a.column)
     ramp = tuple(float(x) for x in a.mud_ramp.split(",")) if a.mud_ramp else None
+    fog_ramp = tuple(float(x) for x in a.fog_ramp.split(",")) if a.fog_ramp else None
     if a.continue_from:
         src = os.path.expanduser(a.continue_from)
         wm.load_into(world, pickle.load(open(os.path.join(src, "wm.pkl"), "rb")))
@@ -368,11 +370,11 @@ def main():
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
-    fresh_plain = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))
-    mud = 0.0
+    fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f), in_axes=(0, None)))
+    mud, fog = 0.0, 0.0
 
     def fresh(keys):
-        nw = fresh_plain(keys)
+        nw = fresh_plain(keys, jnp.float32(fog))
         return with_terrain(nw, bank=mud + a.edge, mud=True, inner=mud) if mud > 0 else nw
 
     key, k = jax.random.split(key)
@@ -387,6 +389,7 @@ def main():
         t_a = time.time()
         key, k = jax.random.split(key)
         mud = mud_radius(it, ramp)
+        fog = mud_radius(it, fog_ramp)  # the same ramp shape, read as a probability
         g0 = mems[3]
         states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed, column)
         tr = jax.tree.map(np.asarray, tr)
@@ -450,6 +453,7 @@ def main():
             "actions": {sim.ACTION_NAMES[i]: round(float((acts == i).mean()), 3) for i in range(sim.N_ACTIONS)},
             "replay": int(replay.n),
             "mud": round(mud, 3),
+            "fog": round(fog, 3),
             "t_collect": t_collect,
             "t_train": t_train,
             **{f"wm_{k2}": v for k2, v in wm_aux.items()},

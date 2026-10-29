@@ -49,6 +49,7 @@ N_CELLS = N_TILES * GRASS_RES
 PATCH_RADIUS = 0.4  # tiles: a bite crops every grass cell within this of the mouth point
 DAY_SCALE = 2.0  # v2.1: days are this many times the first meadow's 1,200 steps
 DAY = int(1200 * DAY_SCALE)  # steps per day (sim.DAY); here so random_start need not import sim
+MAX_DAYS = 8  # fog is drawn per day for this many days; an episode never runs longer
 
 SALT, TREE, FLOWER, HUT, MUSHROOM = (S.OBJECT_NAMES.index(n) for n in ("salt", "tree", "flower", "hut", "mushroom"))
 # kind, count: about 128 x 128's contents scaled by the area (48 / 128)^2 ~ 0.14 (spec § 2)
@@ -83,6 +84,7 @@ class Meadow(NamedTuple):
     regrow: jax.Array = jnp.float32(REGROW)  # () grass regrowth per step (stage 2a's first dial)
     trample: jax.Array = jnp.float32(0.0)  # () biomass lost per step under a moving sheep (the second)
     regrow_map: jax.Array = jnp.ones((N_CELLS, N_CELLS), jnp.float32)  # per-cell regrowth factor (muddy banks)
+    fog_days: jax.Array = jnp.zeros((MAX_DAYS,), bool)  # (MAX_DAYS,) which days are foggy, dawn to dawn (spec § 21.4)
 
 
 class Flock(NamedTuple):
@@ -329,11 +331,18 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
     return state._replace(meadow=m)
 
 
-def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0) -> State:
+def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0, fog: float | jax.Array = 0.0) -> State:
     """A new meadow with the flock at a random place, a random time of day, levels drawn from
-    [0.2, 1.0] and fat from [0.2, 0.8] (the agents' varied starts)."""
-    k1, k3, k4, k5 = jax.random.split(key, 4)
+    [0.2, 1.0] and fat from [0.2, 0.8] (the agents' varied starts). ``fog`` is the probability that
+    each day is foggy (spec § 21.4), drawn independently per day, dawn to dawn."""
+    k1, k3, k4, k5, k6 = jax.random.split(key, 5)
     st = generate(k1, n_sheep, willows=willows)
     levels = jax.random.uniform(k3, st.flock.levels.shape, minval=0.2, maxval=1.0)
     fat = jax.random.uniform(k5, (n_sheep,), minval=0.2, maxval=0.8)
-    return st._replace(flock=st.flock._replace(levels=levels, fat=fat), t=jax.random.randint(k4, (), 0, DAY))
+    fog_days = jax.random.bernoulli(k6, jnp.asarray(fog, jnp.float32), (MAX_DAYS,))
+    return st._replace(meadow=st.meadow._replace(fog_days=fog_days), flock=st.flock._replace(levels=levels, fat=fat), t=jax.random.randint(k4, (), 0, DAY))
+
+
+def foggy(m: Meadow, t: jax.Array) -> jax.Array:
+    """() bool: whether step ``t`` falls on one of the meadow's fog days."""
+    return m.fog_days[jnp.clip(t // DAY, 0, MAX_DAYS - 1)]

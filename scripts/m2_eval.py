@@ -46,7 +46,7 @@ import numpy as np
 
 from flock import wm
 from flock.meadow2 import drives as D, privileged as P, scripted, sim
-from flock.meadow2.world import DAY, random_start, with_terrain
+from flock.meadow2.world import DAY, foggy, random_start, with_terrain
 
 
 def policy_fn(name, agent):
@@ -71,11 +71,11 @@ def policy_fn(name, agent):
 
         return init, act
     if name == "hybrid":
-        world, policy, hy, use_embed, column = agent
+        world, policy, hy, use_embed, column, col_size = agent
 
         def init(st):
             B, S = st.flock.alive.shape
-            return hy.zero_mems(world, B, S, column.size if column is not None else 0)
+            return hy.zero_mems(world, B, S, col_size)
 
         def act(st, mem, k):
             new, mem, rec = hy.sheep_step(world, policy, st, mem, k, use_embed, column)
@@ -109,12 +109,13 @@ def sees_water(st, rng=SEE_RANGE):
     return jnp.any(wet[None] & (d <= rng) & (jnp.abs(alpha) < sim.FOV / 2), -1)
 
 
-def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0):
+def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0, fog=0.0):
     """``n_sheep`` (default the world's 12) for lone-sheep evaluations; ``inner`` > 0 puts stage 2a's mud
     on the banks (no grass or regrowth within ``inner`` tiles of water, regrowth ramping to full over
-    ``edge`` more), ``trample`` the biomass lost under a moving sheep (spec § 21)."""
+    ``edge`` more), ``trample`` the biomass lost under a moving sheep (spec § 21); ``fog`` the
+    probability of each day being foggy (spec § 21.4)."""
     init, act = policy
-    kw = {"willows": willows} | ({} if n_sheep is None else {"n_sheep": n_sheep})
+    kw = {"willows": willows, "fog": fog} | ({} if n_sheep is None else {"n_sheep": n_sheep})
     states = jax.vmap(functools.partial(random_start, **kw))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
     if inner > 0 or trample > 0:
         states = with_terrain(states, trample=trample, bank=(inner + edge) if inner > 0 else None, mud=inner > 0, inner=inner)
@@ -152,7 +153,7 @@ def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, ed
         thirsty = al & (st.flock.levels[..., D.HYDRATION] < THIRSTY)
         rec.update(nn=nn, seen=st.flock.seen, thirsty=thirsty, thirsty_sees=thirsty & sees, gap=thirsty & ~sees & told, alive_now=al,
                    thirsty_sees8=thirsty & sees8, gap8=thirsty & ~sees8 & told8, wdist=wdist, last_seen8=last_seen8, last_near8=last_near8,
-                   levels_before=st.flock.levels)
+                   levels_before=st.flock.levels, sees8=sees8, fog=jnp.broadcast_to(jax.vmap(foggy)(st.meadow, st.t)[:, None], al.shape))
         return (new, mem, last_seen, last_seen8, last_near8, t + 1), rec
 
     def scan(s, k):
@@ -200,6 +201,79 @@ def forensics(dl, steps):
     }
 
 
+# The behavioural memory probe M1 (spec § 21.4). An onset is a living sheep whose hydration has fallen
+# below the scripted flock's urgency line (scripted.URGENT, where even its night rest gives way to
+# water, so waiting is no longer an option), with no water in its 8-tile cone, more than 8 tiles from
+# water, and within 8 tiles of water in the last RECENT steps (it has something to remember). The
+# episode ends when water is back in the 8-tile cone (resolved), or after M1_CAP steps, or at death or
+# the end (censored at M1_CAP); the next onset needs a new approach to within 8 tiles first (one
+# episode per excursion). The time to resight is compared, per bin of the distance at onset, with the
+# best memoryless search rule of § 20.1 (the wall-aware correlated trot, turn probability 0.1, scattered
+# starts, 2026-10-29): its median steps to the 8-tile cone. The rule reads the "unsighted" split,
+# onsets in fog or at night, where the willows cannot carry the water's bearing; the other splits are
+# reported. The scripted flock, which knows where the water is, is the positive control.
+RECENT, M1_CAP = 1200, 600
+M1_THIRST = scripted.URGENT
+M1_BINS = ((8, 12), (12, 16), (16, 24), (24, 1e9))
+M1_BASELINE_MEDIAN = {"8-12": 90.0, "12-16": 254.0, "16-24": 244.0, "24-inf": 321.5}  # walk_p0.1_wall, meadow2-results/search/search.json
+M1_FACTOR, M1_MIN_ONSETS = 0.5, 30
+
+
+def memory_return(rec):
+    T, B, S = rec["alive_now"].shape
+    al, sees8, wdist, near8, fog, night = (rec[k] for k in ("alive_now", "sees8", "wdist", "last_near8", "fog", "night"))
+    urgent = rec["levels_before"][..., D.HYDRATION] < M1_THIRST
+    night = np.broadcast_to(night[..., None], al.shape)
+    t_idx = np.arange(T)[:, None, None]
+    knows = (t_idx - near8 <= RECENT) & (near8 != NEVER)
+    can_start = al & urgent & ~sees8 & (wdist > NEAR_RANGE) & knows
+    onsets = []  # (dist, duration, resolved, fog, night)
+    active = np.zeros((B, S), bool)
+    t0 = np.zeros((B, S), int)
+    t_close = np.full((B, S), NEVER)  # when the last episode closed; a new one needs a later approach
+    d0 = np.zeros((B, S))
+    f0 = np.zeros((B, S), bool)
+    n0 = np.zeros((B, S), bool)
+
+    def close(mask, t, resolved):
+        for b, s in zip(*np.nonzero(mask)):
+            onsets.append((d0[b, s], min(t - t0[b, s], M1_CAP), bool(resolved), bool(f0[b, s]), bool(n0[b, s])))
+        active[mask] = False
+        t_close[mask] = t
+
+    for t in range(T):
+        close(active & sees8[t] & al[t], t, True)
+        close(active & (~al[t] | (t - t0 >= M1_CAP)), t, False)
+        start = can_start[t] & ~active & (near8[t] > t_close)
+        active |= start
+        t0[start], d0[start], f0[start], n0[start] = t, wdist[t][start], fog[t][start], night[t][start]
+    close(active, T, False)
+    arr = np.array(onsets, dtype=float).reshape(-1, 5)
+    out = {"onsets": int(len(arr)), "recent": RECENT, "cap": M1_CAP, "thirst": float(M1_THIRST), "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec § 20.1)"}
+    splits = {"all": np.ones(len(arr), bool), "unsighted": (arr[:, 3] > 0) | (arr[:, 4] > 0), "clear_day": (arr[:, 3] == 0) & (arr[:, 4] == 0),
+              "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0}
+    passes = []
+    for name, sm in splits.items():
+        bins = {}
+        for lo, hi in M1_BINS:
+            key = f"{lo}-{hi if hi < 1e8 else 'inf'}"
+            m = sm & (arr[:, 0] >= lo) & (arr[:, 0] < hi)
+            n = int(m.sum())
+            base = M1_BASELINE_MEDIAN[key]
+            row = {"onsets": n, "baseline_median": base}
+            if n:
+                dur = arr[m, 1]
+                row.update(median_censored=float(np.median(dur)), resolved_share=float(arr[m, 2].mean()),
+                           resolved_median=float(np.median(dur[arr[m, 2] > 0])) if (arr[m, 2] > 0).any() else None)
+                if name == "unsighted" and n >= M1_MIN_ONSETS:
+                    passes.append(row["median_censored"] <= M1_FACTOR * base)
+            bins[key] = row
+        out[name] = bins
+    out["pass"] = bool(passes) and all(passes)
+    out["bins_read"] = len(passes)
+    return out
+
+
 def summarise(rec):
     se = lambda x: float(x.std(ddof=1) / np.sqrt(len(x)))
     T, B, S = rec["reward"].shape
@@ -238,6 +312,7 @@ def summarise(rec):
         "information_gap_8": float(rec["gap8"].sum() / max(1, rec["thirsty"].sum())),
         "within_8_share_of_living_steps": float(((rec["wdist"] <= NEAR_RANGE) & rec["alive_now"]).sum() / max(1, rec["alive_now"].sum())),
         "forensics": forensics(deaths(rec), T),
+        "M1": memory_return(rec),
     }
 
 
@@ -254,6 +329,8 @@ def main():
     p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius in tiles (0: none)")
     p.add_argument("--edge", type=float, default=2.0, help="tiles over which regrowth ramps back to full outside the mud")
     p.add_argument("--trample", type=float, default=0.0, help="biomass lost per step under a moving sheep")
+    p.add_argument("--zero_column", action="store_true", help="ablation (spec § 21.4): the policy sees zeros where the column's state would be")
+    p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy (spec § 21.4)")
     a = p.parse_args()
     agent = None
     willows = a.willows or 0
@@ -299,10 +376,12 @@ def main():
         column = hy.make_column(0, world, col)
         if column is not None:
             wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
-        agent = (world, policy, hy, use_embed, column)
-    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample)
+        # --zero_column: the column is not run and its state stays at the zeros it starts from, so the policy
+        # reads nothing there; if survival does not move, the column is unused whatever it holds
+        agent = (world, policy, hy, use_embed, None if a.zero_column else column, col)
+    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog)
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
-           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, **summarise(rec)}
+           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "zero_column": a.zero_column, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

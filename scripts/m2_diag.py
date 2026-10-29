@@ -49,7 +49,7 @@ import optax
 
 from flock import wm
 from flock.meadow2 import drives as D, privileged as P, render as R, scripted, sim
-from flock.meadow2.world import random_start
+from flock.meadow2.world import foggy, random_start
 
 MIN_PX = 5
 RECENT = 30
@@ -94,11 +94,12 @@ def _targets(st, water, depth):
     tb, td, tf = jax.vmap(true_water)(st)
     return dict(n_px=n_px, bearing=bearing, near_px=near_px,
                 wbear=jnp.arctan2(priv[..., D.N_FELT + 5], priv[..., D.N_FELT + 4]), wdist=priv[..., D.N_FELT + 6] * 32.0, alive=f.alive,
-                light=jnp.broadcast_to(light[:, None], n_px.shape), heading=f.heading, wbear_v=tb, wdist_v=td, found_v=tf)
+                light=jnp.broadcast_to(light[:, None], n_px.shape), heading=f.heading, wbear_v=tb, wdist_v=td, found_v=tf,
+                fog=jnp.broadcast_to(jax.vmap(foggy)(st.meadow, st.t)[:, None], n_px.shape))
 
 
-def _starts(n_meadows, willows):
-    return jax.vmap(functools.partial(random_start, willows=willows))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
+def _starts(n_meadows, willows, fog=0.0):
+    return jax.vmap(functools.partial(random_start, willows=willows, fog=fog))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
 
 
 def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
@@ -120,8 +121,8 @@ def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
     return {k: np.asarray(v[warm:]) for k, v in out.items()}
 
 
-def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0):
-    states = _starts(n_meadows, willows)
+def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0, fog=0.0):
+    states = _starts(n_meadows, willows, fog)
     if inner > 0:  # stage 2a's mud (spec section 21.1): the memory probe on the world that demands memory
         from flock.meadow2.world import with_terrain
         states = with_terrain(states, bank=inner + 2.0, mud=True, inner=inner)
@@ -224,6 +225,7 @@ def main():
     p.add_argument("--warm", type=int, default=150)
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius on the probe's meadows (0: none)")
+    p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy on the probe's meadows (spec § 21.4)")
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_mlp", action="store_true")
@@ -247,8 +249,8 @@ def main():
         column = hy.make_column(0, world, int(cfg.get("column", 0)))
         if column is not None:
             wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
-        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner}
+        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog)
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog}
 
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
     if not reactive:
@@ -354,7 +356,8 @@ def main():
         # spec section 21.1 (amended after stage 2a seed 0): by day the willows stay in view when the water's
         # pixels do not, so the embedding alone decodes the "unseen" water's bearing; the memory reading is
         # the night split, where the willows are not readable either (D2_true night 8-16 = 0 at stage 1)
-        for nm, dm in (("day", day_full), ("night", ~day_full)):
+        fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
+        for nm, dm in (("day", day_full), ("night", ~day_full), ("fog_day", day_full & fog_full), ("clear_day", day_full & ~fog_full)):
             m = recent & dm
             res[f"D3_recent_{nm}"] = {"frames": int(m.sum()),
                                       "sin_bearing": probe(m, np.sin(rec["wbear"]), f"recent {nm} sin"), "cos_bearing": probe(m, np.cos(rec["wbear"]), f"recent {nm} cos")}

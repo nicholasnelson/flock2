@@ -26,6 +26,10 @@ tiles away 6.6 (was 1.7), and the sky 18 rows (was 28).
   window glows at night.
 - **Haze.** Each pixel is blended toward the horizon colour by 1 - exp(-distance / ``HAZE``).
   Nothing has a view range: things vanish when they shrink below a pixel or fade into the haze.
+- **Fog** (spec § 21.4). On a meadow's fog days (``world.foggy``) the haze length is ``FOG_HAZE``
+  instead, so contrast falls to a tenth by about 2.3 x ``FOG_HAZE`` tiles, and the sky is the flat
+  horizon colour, so nothing far stands out against it. The willows on the banks are then
+  unreadable from the grazing ring while the water is still seen from close by.
 
 No textures. Pure and jittable; vmap over sheep or meadows.
 """
@@ -37,13 +41,14 @@ import jax.numpy as jnp
 import numpy as np
 
 from flock.meadow2 import sim
-from flock.meadow2.world import FLOWER, HUT, MUSHROOM, N_TILES, SALT, TREE, WILLOW, State, grass_at, water_at
+from flock.meadow2.world import FLOWER, HUT, MUSHROOM, N_TILES, SALT, TREE, WILLOW, State, foggy, grass_at, water_at
 
 H, W = 64, 256
 FOV = np.deg2rad(300.0)
 EYE = 0.8
 GRASS_H = 0.25  # tiles at full density (3); spec § 11: low enough never to hide the mouth point
 HAZE = 30.0
+FOG_HAZE = 3.0  # haze length on fog days: a tenth of the contrast left at ~7 tiles
 K = 192
 DISTS = jnp.asarray(0.15 * (90.0 / 0.15) ** (np.arange(K) / (K - 1)), jnp.float32)
 HUT_LIGHT, HUT_LIGHT_R = 0.6, 3.0
@@ -276,15 +281,19 @@ def render_aux(state: State, i: jax.Array):
     d_hut = jnp.min(jnp.where(hut[None, None, :], jnp.linalg.norm(gpos[:, :, None, :] - m.obj_pos[None, None], axis=-1), jnp.inf), -1)
     lit = jnp.maximum(L, HUT_LIGHT * jnp.clip(1.0 - d_hut / HUT_LIGHT_R, 0.0, 1.0))
     water_vis = hit & wet_px & ~fence & ~front
-    mirror = sky(-ROW_ELEV, jnp.maximum(L, WATER_FLOOR))[:, None, :]  # (H, 1, 3): the sky seen in the water
+    fog = foggy(m, state.t)
+    horizon = sky(jnp.zeros(()), L)
+    Lw = jnp.maximum(L, WATER_FLOOR)
+    mirror = jnp.where(fog, sky(jnp.zeros(()), Lw)[None, :], sky(-ROW_ELEV, Lw))[:, None, :]  # (H, 1, 3): the sky seen in the water
     colour = jnp.where(water_vis[..., None], (1 - REFLECT) * colour + REFLECT * mirror, colour)
     lit = jnp.where(water_vis, jnp.maximum(lit, WATER_FLOOR), lit)
     colour = jnp.where(glow_px[..., None], colour, colour * lit[..., None] + (1.0 - L) * NIGHT_CAST)
-    horizon = sky(jnp.zeros(()), L)
-    fade = 1.0 - jnp.exp(-jnp.where(jnp.isfinite(depth), depth, 1e3) / HAZE)
+    haze = jnp.where(fog, FOG_HAZE, HAZE)
+    fade = 1.0 - jnp.exp(-jnp.where(jnp.isfinite(depth), depth, 1e3) / haze)
     colour = colour + (horizon - colour) * fade[..., None]
     above = ~jnp.isfinite(depth)
-    colour = jnp.where(above[..., None], sky(ROW_ELEV, L)[:, None, :], colour)
+    sky_px = jnp.where(fog, horizon[None, :], sky(ROW_ELEV, L))[:, None, :]  # (H, 1, 3); flat in fog
+    colour = jnp.where(above[..., None], sky_px, colour)
     water_px = water_vis
     return jnp.clip(colour, 0.0, 1.0), water_px, depth
 

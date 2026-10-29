@@ -1751,6 +1751,86 @@ sheep's survival) must be re-read under it before the mud is put back. The stage
 `~/flock2_data/m2_hybrid/s2a_s{0,1,2}` as the starting point for whichever pressure is chosen.
 
 
+### 21.4 Stage 2a's second pressure: fog days, and a behavioural memory rule (pre-registered 2026-10-30, 00:45, before any run on the fog world; owner: "happy to follow your lead")
+
+**The owner's question (2026-10-30).** Is the memory rule reading only one way of remembering the water,
+the angle to it? Yes. The D3 probes decode the egocentric bearing from a state with a ridge or a small
+MLP, and would miss distance without direction, a fixed frame plus heading (nonlinear in the bearing),
+route memory (an action history that lets a sheep retrace its steps), landmark associations, memory
+held in position (staying on the ring is itself a memory of the water), and memory held in the flock.
+The stage-2a verdict (§ 21.3) stands on behaviour, since nothing moved toward unseen water, but the
+rule for the next stage is made behavioural, and the decoding probes become reported diagnostics.
+
+**M1, the behavioural memory rule** (`m2_eval.py`, `memory_return`; every evaluation reports it):
+
+- *Onset:* a living sheep whose hydration has fallen below **0.25** (`scripted.URGENT`, the line below
+  which the scripted flock leaves even its night rest for water, so waiting is no longer an option),
+  with no water in its 8-tile cone, more than 8 tiles from water, and within 8 tiles of water in the
+  last **1,200 steps** (half a day: it has something to remember).
+- *End:* water back in the 8-tile cone (resolved), or **600 steps** (the cap), death or the end of the
+  run (censored at 600). One episode per excursion: the next onset needs a new approach to within 8.
+- *Reading:* per bin of the distance at onset (8–12, 12–16, 16–24, 24+ tiles), the median time to
+  return with censored episodes at 600, against the **best memoryless search rule of § 20.1**, the
+  wall-aware correlated trot with turn probability 0.1 (found ≥ 0.99 in every bin): medians **90 / 254
+  / 244 / 321.5** steps. Splits: *unsighted* (onsets in fog or at night, where the willows cannot carry
+  the bearing), clear day, fog day, night.
+- *Pass:* on the unsighted split, in every bin with ≥ 30 onsets (and at least one such bin), the median
+  ≤ **0.5 ×** the baseline median, at three seeds. A sheep walking straight back from 14 tiles needs
+  about 50 steps (17 at a trot), so the bar of 127 in the 12–16 bin is generous to any form of memory
+  and out of reach of search.
+- *Controls:* the scripted flock, which knows where the water is, must pass M1 on the same world
+  (positive control, run first; `runs/m2_stage2a_fog.sh control`). The stage-2a brains on the fog
+  world are the pre-learning reading (expected to fail). The zeroed-column ablation (`--zero_column`)
+  asks, independently of what the column holds, whether it is used: if survival does not move, it is
+  not. **Run on the mud world while this was written (02:33–02:42): with the column's state held at
+  zero the stage-2a brains lose 2.1 / 0.5 / 0.0 % at 5 days, against 1.0 / 2.1 / 0.0 % with it
+  (reward 2.40 / 2.42 / 2.45 against 2.44 / 2.42 / 2.46). The column is unused, whatever it holds;
+  the § 21.3 verdict holds without the decoding probe.**
+- *Caveats, stated now:* "return" is geometric (a water pixel within 8 tiles in the 300° cone), so in
+  fog, where sight is 5–7 tiles, it means "back within 8 tiles facing the water" rather than seeing it.
+  The scripted flock drinks at hydration 0.4 by day and rests at night until 0.25, so onsets at 0.25
+  are mostly night and fog onsets, which is the split the rule reads. Following another sheep counts;
+  the lone evaluation is reported beside the flock's.
+
+**The pressure: fog days** (`world.fog_days`, `render.FOG_HAZE`; image
+`meadow2-results/fog/fog_samples.png`, clear above fog, 3 / 6 / 9 / 12 tiles from a willow, midday and
+night). Each day is foggy with probability **0.5**, drawn independently per day, dawn to dawn. On a
+fog day the haze length is 3 tiles instead of 30 (contrast falls to a tenth by about 7 tiles) and the
+sky is the flat horizon colour, so nothing far stands out against it. In the image the willow reads
+at 3 tiles, is faint at 6 and gone at 9 and 12; the water reads at 3. Mud stays at 8 tiles, willows at
+3 per pond, hydration as it is. Why this of the three options of § 21.3: it is the only one that
+removes the cue while thirst still bites; night already removes the cue but a full sheep sleeps
+through it (§ 21.3), and a wider mud leaves the willows readable or eats the meadow.
+
+Route-arounds foreseen: (i) *camp at the water through the fog, eating nothing*: the mud leaves no
+grass within 8 tiles, fat lasts two or three days (§ 20.4), so one fog day is survivable by camping and a
+run of two or three is not; with p = 0.5 a 5-day run has a run of ≥ 2 fog days with probability 0.59 and
+of ≥ 3 with 0.25. (ii) *dither at the mud's edge, 8–9 tiles out*: the 8–12 bin's baseline is 90 steps
+for this reason and its bar 45. (iii) *follow the flock*: allowed, and the lone evaluation shows how
+much of the pass is social. (iv) *wait for the willows at night*: at night they are unreadable too.
+
+**Demand check (pre-registered; `runs/m2_stage2a_fog.sh demand`):** the three stage-2a brains on mud 8
++ fog 0.5, 16 meadows, 5 days: survival, M1, and the probes with fog (`m2_diag.py --fog`, which adds
+`D3_recent_fog_day` and `D3_recent_clear_day`). The pressure is **confirmed** if the brains fail the
+survival rule (> 20 % dead) at all three seeds while the scripted flock passes it and passes M1. If one
+or two seeds fail, the pressure is weak: fog probability goes to 0.75 and the check is run once more.
+If none fail, fog at this hydration does not bite, and the decision returns to the owner (fog with the
+faster thirst of § 21.3 (c) is the pre-named combination). Also read: `D2_true` on fog-day frames at
+8–16 tiles must be ≈ 0 (the fog hides the willows from the embedding, so the split is clean); if the
+embedding still reads them there above 0.3, `FOG_HAZE` drops to 2.0 before the learning stage.
+
+**The learning stage (to run only if the demand check confirms; `runs/m2_stage2a_fog.sh chain`):**
+each stage-2a brain continued as it is (column 256 kept; no widening), mud held at 8 from iteration 0,
+fog probability ramped 0 → 0.5 over iterations 200–1,400 of 2,000, 128-step rollouts, `reset_every`
+4,864, seeds 0–2 (brains `s2f_s{0,1,2}`). **Pass:** survival ≤ 20 % on mud 8 + fog 0.5 at 5 days, **M1
+passes** on the unsighted split, and stage 1 still passes (≤ 20 % on the plain world at 3 days), at
+three seeds. Reported: alone on the fog world (64 meadows, 1 sheep), the D3 splits, and the
+zeroed-column ablation of the trained brain (if a passing brain does not need its column, the memory
+lives in h and z, and that is said). Fallbacks, one at a time, each pre-registered when reached:
+(i) fog probability 0.75; (ii) freeze the stage-1 weights and train only the column and the policy;
+(iii) a longer ramp; (iv) the owner's horizon compass. About 95 minutes per seed on the GPU.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
