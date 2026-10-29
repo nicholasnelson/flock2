@@ -419,7 +419,11 @@ def main():
     p.add_argument("--trample", type=float, default=0.0, help="biomass lost per step under a moving sheep")
     p.add_argument("--zero_column", action="store_true", help="ablation (spec § 21.4): the policy sees zeros where the column's state would be")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy (spec § 21.4)")
+    p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay (spec § 21.6: 2 halves the reserve)")
     a = p.parse_args()
+    if a.thirst != 1.0:
+        # the constant is read at trace time, so scaling it here before anything is jitted changes the world
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     agent = None
     willows = a.willows or 0
     if a.agent and a.willows is None:
@@ -469,7 +473,7 @@ def main():
         agent = (world, policy, hy, use_embed, None if a.zero_column else column, col)
     rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog)
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
-           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "zero_column": a.zero_column, **summarise(rec)}
+           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "zero_column": a.zero_column, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

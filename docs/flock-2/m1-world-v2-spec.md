@@ -2012,6 +2012,70 @@ light: the demand must be raised (the faster thirst) so a day out cannot be surv
 return. The reading is taken at all three seeds; the case is decided by the majority, and a split is
 reported as such and taken to the owner.
 
+**R1's reading (09:39–09:58; `runs/m2_stage2a_fog_r1.sh`, files `*_mud8_fog075_d5_r1.json`; a fresh
+5-day run, so the death shares differ by a point or two from the registered ones above).**
+
+*Where they graze.* Share of living steps more than 12 tiles from water, beyond the reach of the mud
+ring's cue in fog:
+
+| | fog day, before → after | night, before → after | clear day, after | fog-day steps at 8–12 tiles, before → after |
+| --- | --- | --- | --- | --- |
+| seed 0 | 60.3 % → **10.7 %** | 38.3 → 26.6 % | 8.9 % | 18 → 53 % |
+| seed 1 | 38.8 % → **9.0 %** | 28.9 → 13.9 % | 10.3 % | 12 → 36 % |
+| seed 2 | 41.3 % → **15.1 %** | 27.6 → 27.9 % | 14.4 % | 14 → 33 % |
+| scripted flock | 20.1 % | 30.5 % | 17.8 % | 33 % |
+
+*Excursions: median steps from the farthest point back to within 8 tiles (share resolved within 600),
+trained → the same brain before fog learning; the scripted flock in the last column (it grazes before
+turning back, so its times are not a floor):*
+
+| condition, bin of the farthest point | seed 0 | seed 1 | seed 2 | stage-2a brains (before) | scripted | M1 bar |
+| --- | --- | --- | --- | --- | --- | --- |
+| fog day, 8–12 | 64 (98 %) n 2,824 | 35 (99 %) n 3,054 | 23 (99 %) n 4,527 | 55 (85) / 34 (85) / 33 (90) | 28 (98) | 45 |
+| fog day, 12–16 | 146 (96 %) n 164 | 138 (98 %) n 283 | **79 (99 %)** n 311 | 108 (72) / 237 (80) / 292 (60) | 127 (88) | 127 |
+| fog day, 16–24 | 152 (95 %) n 100 | 402 (75 %) n 20 | 162 (91 %) n 114 | 598 (43) / 600 (38) / 595 (40) | 313 (70) | 122 |
+| night, 12–16 | 167 (93 %) n 345 | 204 (94 %) n 234 | 175 (96 %) n 370 | 78 (100, n 25) / 175 (84) / 94 (93) | 223 (63) | 127 |
+| night, 16–24 | 288 (91 %) n 144 | 312 (67 %) n 46 | 301 (86 %) n 131 | 321 (42) / 351 (41) / 503 (50) | 332 (50) | 122 |
+
+The trained sheep are at hydration 0.9–1.06 at their farthest point in every bin (the scripted flock
+0.6–0.8); steps per tile of ground to cover by day are 26–46 (seed 0), 26–30 (seed 1) and 14–15
+(seed 2), against 8.3 for a straight walk and about 42 for the memoryless walker. **M1 at the thirsty
+line is unreadable too: 11 / 28 / 15 onsets** (the stage-2a brains 222 / 193 / 236; the scripted flock
+4,255), so the sheep turn back above 0.5 and no onset threshold reaches them.
+
+*The case.* By the letter, seed 1 is case (a) (9.0 % of fog-day steps beyond the cue), seeds 0 and 2
+are not (10.7 and 15.1 %); case (b) holds for seed 2 in the fog 12–16 bin alone (79 against a bar of
+127, its stage-2a self 292) and for no seed in 16–24 (152 / 402 / 162 against 122); so **no case has a
+majority: a split, reported as such and taken to the owner.** In substance the three agree: every
+brain learned to **stay where the mud ring is visible in fog** (fog-day time beyond the cue cut from
+39–60 % to 9–15 %, time at the ring's edge tripled) and to **keep hydration near full**, which is why
+no memory test fires. From beyond the cue they come back better than before (fog, 16–24: resolved
+75–95 % against about 40 %, medians 152–402 against 600) and in two seeds faster than the memoryless
+baseline of 244, but short of the memory bar of 122, and the probes decode nothing there. The honest
+summary of stage 2a's fog pressure: **survival learned, memory not demonstrated, the world does not yet
+ask for it.**
+
+**Recommendation to the owner, and a measurement taken meanwhile (pre-registered here before it runs;
+it commits to nothing).** The pressure has to put a thirsty sheep where no cue exists, and the mud ring
+is a cue that moves with the mud, so a wider mud does not do it. Two places have no cue: beyond ~12
+tiles in fog, which the sheep now avoid, and the **night**, where nothing reads and the sheep still
+spend 14–28 % of their steps beyond 12 tiles (resting out on the grass after the evening graze) at
+hydration near 1.0. The pre-named combination of § 21.4, **fog with the faster thirst of § 21.3 (c)**,
+is the lever on the night: with hydration decaying twice as fast (full reserve ≈ 1,875 steps ≈ 0.8
+day; urgent about 1,400 steps after a full drink; the night is 960 steps) a sheep that drinks at dusk
+and rests out at 12–16 tiles is urgent before dawn, in the dark, and M1's night split fills. **Demand
+check** (`runs/m2_stage2a_thirst.sh demand`; `m2_eval.py --thirst 2`, which scales `HYDRATION_DECAY`;
+M1's knowledge window stays 4,000 steps, more than two reserves): the three `s2f` brains on mud 8 +
+fog 0.75 + thirst ×2, 16 meadows, 5 days, and the scripted flock on 64 meadows (its thresholds
+unchanged). Readings, stated first: (1) the pressure is **confirmed** if all three brains exceed 20 %
+dead while the scripted flock passes survival and M1; (2) if the brains survive but M1 becomes
+readable (≥ 30 unsighted onsets in a bin at every seed), the stage is judged on that reading directly,
+without further training, since readability was the missing piece; (3) if one or two brains fail,
+thirst ×3 once; (4) if none fail and M1 stays unreadable, the lever is wrong and the decision is the
+owner's (the horizon compass of § 21.4 (iv) and the parked signposts are the alternatives). The
+learning stage that would follow a confirmation (continue the `s2f` brains with the decay ramped
+1 → 2 over iterations 200–1,400, fog held at 0.75) is **not** started without the owner's word.
+
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
