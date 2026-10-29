@@ -321,7 +321,8 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
         m = m._replace(trample=like(trample, m.trample))
     if bank is not None:
         b, i = like(bank, m.trample), like(inner, m.trample)
-        fn = bank_map if m.water.ndim == 2 else jax.vmap(bank_map)
+        # one meadow at a time: the cell-to-tile distance table is 85 MB per meadow, and 64 at once ran a GPU out of memory
+        fn = bank_map if m.water.ndim == 2 else (lambda w, bb, ii: jax.lax.map(lambda x: bank_map(*x), (w, bb, ii)))
         m = m._replace(regrow_map=fn(m.water, b, i))
         if mud:
             m = m._replace(grass=m.grass * m.regrow_map)
