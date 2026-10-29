@@ -1,0 +1,211 @@
+{
+ "agent": "/home/nnels/flock2_data/m2_reactive/a1_s0",
+ "meadows": 32,
+ "steps": 300,
+ "willows": 3,
+ "D2_visible": {
+  "0-4": {
+   "frames": 22462,
+   "bearing": {
+    "embed": {
+     "ridge": 0.278,
+     "n_train": 17708,
+     "n_test": 4754,
+     "mlp_es": 0.123
+    }
+   },
+   "distance": {
+    "embed": {
+     "ridge": 0.009,
+     "n_train": 17708,
+     "n_test": 4754,
+     "mlp_es": -0.245
+    }
+   }
+  },
+  "4-8": {
+   "frames": 25597,
+   "bearing": {
+    "embed": {
+     "ridge": 0.029,
+     "n_train": 20743,
+     "n_test": 4854,
+     "mlp_es": -0.137
+    }
+   },
+   "distance": {
+    "embed": {
+     "ridge": -0.12,
+     "n_train": 20743,
+     "n_test": 4854,
+     "mlp_es": -0.192
+    }
+   }
+  },
+  "8-16": {
+   "frames": 32199,
+   "bearing": {
+    "embed": {
+     "ridge": -0.093,
+     "n_train": 20499,
+     "n_test": 11700,
+     "mlp_es": -0.38
+    }
+   },
+   "distance": {
+    "embed": {
+     "ridge": -0.239,
+     "n_train": 20499,
+     "n_test": 11700,
+     "mlp_es": -0.25
+    }
+   }
+  },
+  "16-inf": {
+   "frames": 1217,
+   "bearing": {
+    "embed": {
+     "ridge": -4.566,
+     "n_train": 739,
+     "n_test": 478,
+     "mlp_es": -5.7
+    }
+   },
+   "distance": {
+    "embed": {
+     "ridge": -228170812.444,
+     "n_train": 739,
+     "n_test": 478,
+     "mlp_es": -1.021
+    }
+   }
+  },
+  "day_within_8": {
+   "frames": 34887,
+   "bearing": {
+    "embed": {
+     "ridge": 0.243,
+     "n_train": 32338,
+     "n_test": 2549,
+     "mlp_es": 0.185
+    }
+   }
+  }
+ },
+ "D2_true": {
+  "day_0-4": {
+   "frames": 16201,
+   "sin": {
+    "embed": {
+     "ridge": 0.483,
+     "n_train": 15025,
+     "n_test": 1176,
+     "mlp_es": 0.418
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.496,
+     "n_train": 15025,
+     "n_test": 1176,
+     "mlp_es": 0.409
+    }
+   }
+  },
+  "day_4-8": {
+   "frames": 25561,
+   "sin": {
+    "embed": {
+     "ridge": 0.027,
+     "n_train": 23520,
+     "n_test": 2041,
+     "mlp_es": -0.182
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.075,
+     "n_train": 23520,
+     "n_test": 2041,
+     "mlp_es": -0.042
+    }
+   }
+  },
+  "day_8-16": {
+   "frames": 19605,
+   "sin": {
+    "embed": {
+     "ridge": 0.049,
+     "n_train": 15616,
+     "n_test": 3989,
+     "mlp_es": -0.179
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -0.048,
+     "n_train": 15616,
+     "n_test": 3989,
+     "mlp_es": -0.161
+    }
+   }
+  },
+  "night_0-4": {
+   "frames": 7715,
+   "sin": {
+    "embed": {
+     "ridge": 0.21,
+     "n_train": 3644,
+     "n_test": 4071,
+     "mlp_es": 0.039
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -0.729,
+     "n_train": 3644,
+     "n_test": 4071,
+     "mlp_es": -0.626
+    }
+   }
+  },
+  "night_4-8": {
+   "frames": 9694,
+   "sin": {
+    "embed": {
+     "ridge": -1.515,
+     "n_train": 3653,
+     "n_test": 6041,
+     "mlp_es": -1.196
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -0.853,
+     "n_train": 3653,
+     "n_test": 6041,
+     "mlp_es": -1.391
+    }
+   }
+  },
+  "night_8-16": {
+   "frames": 13802,
+   "sin": {
+    "embed": {
+     "ridge": -0.179,
+     "n_train": 5543,
+     "n_test": 8259,
+     "mlp_es": -0.199
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -0.757,
+     "n_train": 5543,
+     "n_test": 8259,
+     "mlp_es": -0.644
+    }
+   }
+  }
+ }
+}

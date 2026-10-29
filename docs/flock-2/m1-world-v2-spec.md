@@ -1173,6 +1173,74 @@ HYDRATION_DECAY is 0.0008 / 3 per step, so full lasts ~4,300 steps and 0.3 lasts
 Whatever the branch, the encoder is not changed in the same arm: the probe's 4-tile limit is real but
 a sheep that does not move toward anything would not be saved by seeing further.
 
+**Results of the search measurement (2026-10-29, 32 meadows × 3 seeds × 12 sheep, one-day cap;
+`meadow2-results/search/`).** Starts 8–12 / 12–16 tiles from water (n = 196 / 188):
+
+| rule | found in a day | median steps | 90th pct | ≤ 500 | ≤ 1,100 |
+| --- | --- | --- | --- | --- | --- |
+| uniform | 0.84 / 0.73 | 253 / 820 | censored / censored | 0.59 / 0.36 | 0.74 / 0.58 |
+| A1's mix | 0.89 / 0.75 | 250 / 966 | censored / censored | 0.66 / 0.37 | 0.77 / 0.55 |
+| trot, turn p 0.05 | 0.84 / 0.78 | 404 / 793 | censored / censored | 0.52 / 0.39 | 0.66 / 0.58 |
+| trot, turn p 0.05, turn at walls | 0.99 / 1.00 | 100 / 246 | 692 / 884 | 0.81 / 0.77 | 0.95 / 0.94 |
+| trot, turn p 0.1, turn at walls | 0.99 / 1.00 | 90 / 254 | 609 / 864 | 0.87 / 0.73 | 0.97 / 0.96 |
+| A1's movement budget, p 0.05, walls | 0.92 / 0.87 | 250 / 654 | 1,962 / censored | 0.60 / 0.44 | 0.78 / 0.64 |
+
+From 24+ tiles the wall-aware walks still find water 99 % of the time (median ~320 steps, 90th
+percentile ~1,000); the uncorrelated rules find it 28–34 % of the time.
+
+*Reading, by the rule above:* **branch 2**, the horizon. The best memoryless search has a 90th percentile
+of 600–900 steps from 8–16 tiles, above γ's 500 and below the 1,100 a thirsty sheep has; the
+pre-registered consequence is γ ≈ 0.9993 (horizon 1,333 ≥ 1.5 × 884). Exploration is implicated too,
+short of branch 1: the uncorrelated rules leave 11–27 % of sheep unfound after a whole day where the
+correlated walks leave none, and a straight walker without the wall rule pins itself to the meadow's
+edge and does no better than uniform. A1's own movement budget with a persistent heading is not
+enough; it has to move more. None of this is the critical path any more, for the reason below.
+
+### 20.2 The seed-0 screening, and the plan adjustment (2026-10-29)
+
+| arm (seed 0) | world | brain | dead | max / meadow | reward | within 8 | thirsty sees water (8) | D2_true 8–16 day (sin / cos) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A1 | willows | reactive | 29.7 % | 10 | 1.89 | 68 % | 0.28 | 0.05 / −0.05 |
+| A2 | none | reactive | 59.4 % | 12 | 1.44 | 46 % | 0.17 | — |
+| A3 | willows | embed hybrid | **4.7 %** | 6 | **2.34** | 86 % | 0.18 | **0.59 / 0.38** |
+| embed hybrid (§ 19.1, 26 Oct) | none | embed hybrid | 39.6 % | — | 1.80 | 35 % | 0.08 | ≈ 0 (D2_visible) |
+| scripted | willows | rules | 0 % | 0 | 2.36 | 75 % | 0.91 | — |
+
+**The assumption in § 20.1 was wrong.** A2 did not match A1: without willows the reactive sheep loses
+twice as many, so far perception was never irrelevant in this regime. What A1 could not do was learn
+to read the willows from the reward gradient alone (its probe: nothing beyond 4 tiles).
+
+**A3 passes § 20's strong bar at seed 0.** The same embed hybrid that lost 39.6 % on 26 October loses
+4.7 % with willows on the banks, one change, and its embedding decodes the true water bearing at 8–16
+tiles by day (0.59 / 0.38) where § 20 asked for ≥ 0.5 and the old hybrids read 0. The world model's
+prediction loss learned to represent a pale crown at distance; PPO's reward gradient did not. Its 9
+deaths: 6 on day 1, 3 on day 2, 0 on day 3; 8 of 9 never had water within 8 tiles; 17–26 tiles from
+water at death. Those are far-start search deaths, the residual the search measurement sizes (from 24+
+tiles even a good memoryless search has a 90th percentile near 1,000 steps, and a sheep starting at
+hydration 0.2 has ~750). Route-around list: (i) within-8 share 86 % (the oracle's 96 %), allowed and
+noted; (ii) not camping-and-starving: graze success 0.87, last-day gut 1.09, fat 0.96; (iii) following:
+nearest neighbour 2.6 tiles and 6.2 others in view against the old hybrids' 6 and 0.4, so the flock is
+much tighter and following may carry some of the survival; D3_recent and a lone-sheep evaluation are
+owed before stage 2a leans on this brain.
+
+**Adjustment (the owner's standing permission: adjust when a result shows the plan no longer makes
+sense).** Stage 1's bet was that a sheep which reads the willows survives; A3 wins it, A1 does not.
+So:
+
+1. The stage-1 brain becomes the embed hybrid with willows (A3's recipe: `m2_hybrid.py --willows 3
+   --iters 2000 --kl_dyn 1.0 --replay 1024 --add_frac 0.5 --policy_input state_embed`), to be confirmed
+   at seeds 1 and 2 under § 20's pass rule as written (every seed ≤ 20 % dead, reward ≥ 2.0; strong ≤ 5 %).
+   Three seeds or none.
+2. Stage 2a's demand check runs with A3's brain on the 8-tile mud world (must lose ≥ 40 %).
+3. A1 is reported at its remaining seeds as the record of the reactive sheep; its registered fix
+   (branch 2: γ 0.9993, one change) is parked as a side arm, run only if GPU time is free, since the
+   reactive sheep is no longer on the critical path. If it ever runs, wall-aware correlated exploration
+   is a second, separate arm, not folded in.
+4. The D2 probe and the stage-2a column build on the hybrid's embedding (`embed`, 512) rather than a
+   reactive encoder; the stage-2a pre-registration (§ 21's learning stage) is written against that.
+
+Chain order (owner's approval, 2026-10-29 15:10): after A1 s1 finishes, the first chain is stopped before A1 s2 and `runs/m2_stage1b_chain.sh` runs A3 s1, A3 s2, then A1 s2 for the record.
+
 ## 21. Stage 2a's pressure: depletion and trampling (owner's design, pre-registered 2026-10-29)
 
 **The idea (owner).** Instead of the review's hand-set bare banks (no grass within R tiles of water),
