@@ -1295,3 +1295,24 @@ pressure needs night (willows unlit) or a bigger flock, decided then with the ow
 So the ramp's end point is **6 tiles** (7 is being measured; 8 fails on the full gate, where the
 16-meadow grid had it at the line). At 6 tiles the camping scripted flock bites 8–9 tiles from water,
 at the edge of the willows' sure daytime range; the demand is expected to come at night.
+
+### The scripted flock's far sense for grass, and the gate re-run (2026-10-29)
+
+The owner asked why a privileged flock should starve with grass a 70-step walk away. It should not:
+an 8-tile round trip costs about 0.06 energy and one bite returns 0.012. The cause was the scripted
+flock's grass sense, which looked only at eight points three tiles away (all zero on mud), so a hungry
+sheep steered in an arbitrary direction. It now heads for the nearest grass of density ≥ 1.5 anywhere
+when nothing worth eating lies within three tiles (`scripted.GOOD_GRASS`), a privileged sense like
+its water sense; on the base world this rarely triggers. Gate re-run (`checks_v4_mud{0,8,12}.json`,
+64 meadows, 5 days, willows 3, trample 0.05):
+
+| Mud radius R | Died of 768 | Of hunger / thirst | Reward / step | Gate |
+| --- | --- | --- | --- | --- |
+| 0 (base world) | 0 | 0 / 0 | 2.355 (2.373 before the change; trampling on) | pass |
+| 8 | 0 | 0 / 0 | 2.303 | **pass** |
+| 12 | 17 (2.2 %) | 17 / 0 | 2.274 | fail, at the line |
+
+So the ramp's end point is **at least 8 tiles**, past the willows' sure daytime range; 10 is being
+measured. The water view at 4/8/12/16 tiles (`meadow2-results/water_samples.png`) shows why 8 tiles
+is "far" for the eyes though not for the legs: a pond is a flat surface seen from an eye 0.8 tiles
+high, a two-pixel sliver on the horizon at 8 tiles, gone at 12–16 and at night beyond 8.

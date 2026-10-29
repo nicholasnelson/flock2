@@ -1,0 +1,85 @@
+{
+ "meadows": 64,
+ "willows": 3,
+ "inner": 12.0,
+ "trample": 0.05,
+ "sheep_per_meadow": 12,
+ "steps": 12000,
+ "1_survival": {
+  "death_share": 0.022135416666666668,
+  "max_deaths_in_a_meadow": 2,
+  "deaths_of_thirst": 0,
+  "deaths_of_hunger": 17,
+  "pass": false
+ },
+ "2_needs_met": {
+  "energy_after_day1_mean": 0.7483490109443665,
+  "energy_after_day1_min_meadow_step": 0.42728689312934875,
+  "hydration_after_day1_mean": 0.6579108238220215,
+  "hydration_after_day1_min_meadow_step": 0.3491383492946625,
+  "pass": true
+ },
+ "3_grass_lasts": {
+  "dry_biomass_start": 0.8313514788807964,
+  "dry_biomass_end": 1.4017018941859016,
+  "ratio": 1.6860520848208957,
+  "pass": true
+ },
+ "4_water_near": {
+  "start_to_water_median": 10.163769721984863,
+  "start_to_water_p90": 13.206238746643066,
+  "pass": true
+ },
+ "reported": {
+  "random_turn_wanderer_reaches_water_within_500_steps": 0.14192708333333334,
+  "random_turn_wanderer_flag_below_30pct": true,
+  "walker_first_water_median_steps": 1504.0,
+  "walker_never_within_4000": 0.17317708333333334,
+  "naive_explorer_finds_water_before_death": {
+   "need_scale_1": 0.2994791666666667,
+   "need_scale_2": 0.4947916666666667,
+   "need_scale_3": 0.6328125,
+   "need_scale_4": 0.7005208333333334,
+   "need_scale_6": 0.7669270833333334
+  },
+  "naive_explorer_rule_pass_at_current_need_scale": true,
+  "warmth_after_day1_mean": 1.0817971229553223,
+  "fat_start_mean": 0.5027844905853271,
+  "fat_end_mean": 0.537854015827179,
+  "reward_per_step_mean": 2.274212121963501,
+  "bad_taste_per_step": 0.010879172943532467,
+  "action_mix": {
+   "stop": 0.023,
+   "walk": 0.407,
+   "trot": 0.012,
+   "left": 0.094,
+   "right": 0.078,
+   "graze": 0.031,
+   "drink": 0.013,
+   "rest": 0.342
+  },
+  "energy_by_day": [
+   0.73,
+   0.729,
+   0.738,
+   0.752,
+   0.774
+  ],
+  "hydration_by_day": [
+   0.629,
+   0.651,
+   0.656,
+   0.658,
+   0.666
+  ],
+  "alive_by_day": [
+   768,
+   766,
+   759,
+   753,
+   751
+  ],
+  "seen_mean": 7.872837066650391,
+  "huddling_share_at_night": 0.5040053129196167
+ }
+}
