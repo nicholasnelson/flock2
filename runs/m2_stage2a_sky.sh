@@ -4,6 +4,8 @@
 #   bash runs/m2_stage2a_sky.sh smoke        5 training iterations with the skyline (nothing saved that matters)
 #   bash runs/m2_stage2a_sky.sh <seed>       the learning stage: continue s2f_s<seed> on mud 8 + fog 0.75 + skyline, then the evaluations
 #   bash runs/m2_stage2a_sky.sh chain        before, then seeds 0, 1, 2 in turn
+#   bash runs/m2_stage2a_sky.sh more <seed>  fallback (1) of section 21.7: 2,000 more iterations, s2k_s<seed> -> s2l_s<seed>, then the same evaluations
+#   bash runs/m2_stage2a_sky.sh chain2       fallback (1) for seeds 0, 1, 2 in turn
 cd /mnt/c/Users/nnels/Documents/projects/flock2 && . ~/.venvs/flock2/bin/activate && export XLA_PYTHON_CLIENT_PREALLOCATE=false
 mkdir -p runs/meadow2/hybrid runs/meadow2/eval runs/meadow2/deaths runs/meadow2/diag
 E=runs/meadow2/eval; X=runs/meadow2/deaths; G=runs/meadow2/diag
@@ -31,9 +33,16 @@ if [ "$1" = chain ]; then
   echo SKY_ALL_DONE $(date +%H:%M:%S)
   exit
 fi
+if [ "$1" = chain2 ]; then
+  echo SKY2_START $(date +%H:%M:%S)
+  for s in 0 1 2; do bash runs/m2_stage2a_sky.sh more $s; echo $(date +%H:%M:%S); done
+  echo SKY2_ALL_DONE $(date +%H:%M:%S)
+  exit
+fi
 # the learning stage: the fog recipe with mud 8 and fog 0.75 held from the start (the brains know both) and the skyline on every meadow
-s=$1; n=s2k_s$s; agent=~/flock2_data/m2_hybrid/$n
-MAXGB=12 bash runs/watchdog.sh python scripts/m2_hybrid.py --out $agent $RECIPE --continue_from ~/flock2_data/m2_hybrid/s2f_s$s --iters 2000 --seed $s > runs/meadow2/hybrid/$n.log 2>&1 || { echo TRAIN_FAILED $n; tail -5 runs/meadow2/hybrid/$n.log; exit 1; }
+if [ "$1" = more ]; then s=$2; n=s2l_s$s; from=s2k_s$s; else s=$1; n=s2k_s$s; from=s2f_s$s; fi
+agent=~/flock2_data/m2_hybrid/$n
+MAXGB=12 bash runs/watchdog.sh python scripts/m2_hybrid.py --out $agent $RECIPE --continue_from ~/flock2_data/m2_hybrid/$from --iters 2000 --seed $s > runs/meadow2/hybrid/$n.log 2>&1 || { echo TRAIN_FAILED $n; tail -5 runs/meadow2/hybrid/$n.log; exit 1; }
 cp $agent/log.jsonl runs/meadow2/hybrid/${n}_log.jsonl
 echo TRAIN_DONE $n $(date +%H:%M:%S)
 # the evaluations: the stage world; the ablation (skyline blanked); the plain world (stage 1's regression, with and without the skyline); alone; the column zeroed

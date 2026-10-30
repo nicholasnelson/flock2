@@ -2,7 +2,7 @@
 # The labelled replays for the top-down viewer (web/replay/), one meadow each, written to
 # docs/flock-2/meadow2-results/replays/ with index.json refreshed after each. Usage:
 #   bash runs/m2_record.sh            all seven
-#   bash runs/m2_record.sh a d g      a selection (letters a-h, below)
+#   bash runs/m2_record.sh a d g      a selection (letters a-j, below)
 # GPU rule: if another job holds more than 9,000 MiB of the GPU, the recording runs on the CPU instead.
 cd /mnt/c/Users/nnels/Documents/projects/flock2 && . ~/.venvs/flock2/bin/activate && export XLA_PYTHON_CLIENT_PREALLOCATE=false
 B=~/flock2_data/m2_hybrid
@@ -44,7 +44,9 @@ run_one() {
          --label "g. Fog-trained brain s2f, thirst x3" \
          --description "The fog-trained brain s2f_s0 on the fog world (mud 8) with hydration decaying three times faster, 5 days. The sheep stay closer to the water still; in the evaluations 34 % die." ;;
     h) FLOCK2_TILES=72 rec --name h_scripted_river --policy scripted --willows 3 --inner 8 --river 1 --skyline 1 --tiles 72 --days 3          --label "h. Scripted flock, river meadow (72 tiles, skyline)"          --description "The scripted flock on the river meadow (spec section 21.8): 72 x 72 tiles, one straight river through the centre at a random angle, uncrossable, willows along both banks, a mud band of 8 tiles, the skyline on; clear days, 3 days. The layout only: the scripted policy knows where the water is. Nothing has trained on this world yet." ;;
-    *) echo "unknown run $1 (a-h)" ;;
+    i) rec --name i_s2k_sky_mud8_fog --policy hybrid --agent $B/s2k_s2 --inner 8 --fog 0.75 --days 5          --label "i. Skyline-trained brain s2k in fog, skyline on"          --description "The skyline-trained brain s2k_s2 (continued from the fog brain with three fixed peaks on the horizon, spec section 21.7) on the fog world (mud 8, 3 days in 4 foggy), 5 days, the skyline on. The seed with the best survival (4.7 % dead) and the clearest ablation effect." ;;
+    j) rec --name j_s2k_nosky_mud8_fog --policy hybrid --agent $B/s2k_s2 --inner 8 --fog 0.75 --skyline 0 --days 5          --label "j. Skyline-trained brain s2k in fog, skyline blanked"          --description "The same brain s2k_s2 on the same world with the skyline blanked at evaluation (the ablation of section 21.7): night returns from 12-16 and 16-24 tiles were 19-24 % slower without it in the evaluations, survival unchanged." ;;
+    *) echo "unknown run $1 (a-j)" ;;
   esac
 }
 

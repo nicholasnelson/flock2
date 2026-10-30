@@ -1,7 +1,7 @@
 {
  "format": "flock2-replay",
  "version": 1,
- "updated": "2026-10-30T16:35:02",
+ "updated": "2026-10-30T21:46:04",
  "replays": [
   {
    "file": "a_scripted_plain.flock.gz",
@@ -474,6 +474,68 @@
     "meadow_index": 0,
     "meadow_seed": 50000,
     "steps": 7200,
+    "deaths": 0,
+    "alive_at_end": 12
+   }
+  },
+  {
+   "file": "i_s2k_sky_mud8_fog.flock.gz",
+   "label": "i. Skyline-trained brain s2k in fog, skyline on",
+   "description": "The skyline-trained brain s2k_s2 (continued from the fog brain with three fixed peaks on the horizon, spec section 21.7) on the fog world (mud 8, 3 days in 4 foggy), 5 days, the skyline on. The seed with the best survival (4.7 % dead) and the clearest ablation effect.",
+   "bytes": 1054393,
+   "meta": {
+    "label": "i. Skyline-trained brain s2k in fog, skyline on",
+    "description": "The skyline-trained brain s2k_s2 (continued from the fog brain with three fixed peaks on the horizon, spec section 21.7) on the fog world (mud 8, 3 days in 4 foggy), 5 days, the skyline on. The seed with the best survival (4.7 % dead) and the clearest ablation effect.",
+    "policy": "hybrid",
+    "agent": "/home/nnels/flock2_data/m2_hybrid/s2k_s2",
+    "willows": 3,
+    "sheep": 12,
+    "inner": 8.0,
+    "edge": 2.0,
+    "trample": 0.0,
+    "fog": 0.75,
+    "thirst": 1.0,
+    "zero_column": false,
+    "skyline": true,
+    "river": false,
+    "tiles": 48,
+    "days": 5.0,
+    "seed": 0,
+    "meadow_seed0": 50000,
+    "meadows_run": 1,
+    "grass_every": 100,
+    "git": "567693f",
+    "date": "2026-10-30T21:46:03",
+    "DAY": 2400,
+    "N_TILES": 48,
+    "MAX_DAYS": 8,
+    "day_fraction": 0.6,
+    "action_names": [
+     "stop",
+     "walk",
+     "trot",
+     "left",
+     "right",
+     "graze",
+     "drink",
+     "rest"
+    ],
+    "drive_names": [
+     "energy",
+     "hydration",
+     "warmth",
+     "interest"
+    ],
+    "near_range": 8.0,
+    "memory_bins": [
+     8,
+     12,
+     16,
+     24
+    ],
+    "meadow_index": 0,
+    "meadow_seed": 50000,
+    "steps": 12000,
     "deaths": 0,
     "alive_at_end": 12
    }

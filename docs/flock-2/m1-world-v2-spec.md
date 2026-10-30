@@ -2245,6 +2245,48 @@ world-frame bearing to the water is nearly one value per meadow where the flock 
 R² says there is no code that generalises across meadows, which is the right question for a memory that
 must be re-learned on each meadow. The fog-day rows are empty because the probe world was clear.
 
+**Readings at 2,000 iterations (21:45; the chain ran 15:27–21:41, `runs/meadow2/stage2a_sky.log`;
+files `meadow2-results/{eval,deaths,diag,hybrid}/*s2k*`).** Training was uneventful (peak 6.4 GB, no
+deaths in the last iterations' episodes). Per rule, three seeds:
+
+- **S, survival: passes 2–1.** Stage world **6.8 / 11.5 / 4.7 %** dead at 5 days (bar 10 %; seed 1
+  over by 1.5 points, 22 deaths of 192, all of thirst, 19–27 tiles from water). Plain world, 3 days,
+  with the skyline 8.3 / 14.1 / 2.1 %, without it 1.6 / 7.3 / 2.1 % (bar 15 %, passed). Unexpected: at
+  seeds 0 and 1 the plain world is *worse with the skyline than without* (16 vs 3 and 27 vs 14 deaths),
+  so the peaks are not neutral scenery for them on a world without mud or fog. Alone 10.9 / 17.2 /
+  7.8 %; column zeroed 6.2 / 9.9 / 2.1 % (the column is still not needed, as at every stage).
+- **H, the compass is read: fails by the letter at one seed.** From the embedding, clear day
+  **0.85 / 0.83 / 0.86** (before 0.57 / 0.66 / 0.67; bar 0.5), night **0.40 / 0.28 / 0.35** (before
+  −0.18 / −0.24 / −0.12; bar 0.3 at every seed: seed 1 misses by 0.02). The learning reading is in the
+  state: the heading now reads from **h** by clear day at **0.38 / 0.36 / 0.64** (before −0.08 /
+  −0.11 / −0.09) and from g at 0.04 / 0.14 / 0.31; the recurrent state carries the heading by day,
+  which nothing in the fog brains did. At night h still reads nothing (−0.78 / −0.65 / −0.13; seed 2
+  closest). Sanity: on an all-fog probe world the embedding reads −0.11 by day and −0.9 at night, so
+  the probe reads the peaks and nothing else.
+- **M, the memory: fails at every seed.** M-probe: D2_true_allo at night 8–16 from h −2.4 / −2.0 /
+  −1.6, z −0.9, g −5.2 / −3.4 / −4.0; D3_recent_allo at night −1.5 / −0.4 / −1.0 from h; by day the
+  same probes −1 to −12 (the meadow split: no code for the water's world-frame bearing that carries
+  across meadows). The egocentric D3_recent still reads by day (h 0.62 / 0.62 / 0.56) and not at night.
+  M-behaviour: M1 unreadable at every seed (`bins_read` 0: two to nine onsets a bin); the excursion
+  reading, night returns from 12–16 / 16–24: **139 / 282, 298 / 333, 96 / 116** steps (bar ≤ 63.5 /
+  61). For reference the same brains before skyline training on the same world: 177 / 292, 187 / 368,
+  189 / 306: seed 0 a little faster after, seed 1 slower, **seed 2 half the time**, the first brain to
+  return at night faster than the random-walk baseline (127 / 122).
+- **A, the ablation: fails at every seed by the bars, with a consistent small effect.** Skyline
+  blanked, the night return medians go 139→157 (+13 %) and 282→313 (+11 %); 298→321 (+8 %) and
+  333→322 (−3 %); 96→119 (+24 %) and 116→138 (+19 %): five of six slower without the peaks, none by
+  the 25 % the rule asks. Survival 6.8→6.8, 11.5→9.9, 4.7→3.6 %: unchanged or better without.
+
+**Verdict at 2,000: not passed.** H fails by 0.02 at one seed; M and A fail at all three. **Fallback
+(1) applied as pre-registered** (`runs/m2_stage2a_sky.sh chain2`, started 21:44, about 7 hours: 2,000
+more iterations per seed, `s2k_s*` → `s2l_s*`, then the same evaluations and probes). What the
+readings say so far: the encoder has learned the peaks (0.85 by day, about 0.3 at night, where the
+silhouette is 0.05 per channel), the state carries the heading by day, and no seed holds the water's
+world-frame bearing or returns at night as the rule asks; one seed uses the peaks a little (returns a
+fifth to a quarter slower without them). If after the fallback H passes and M or A still fail, the
+stage goes to the owner under fallback (2); the pressure that *needs* the compass is the river meadow
+below. Recordings i (seed 2, skyline on) and j (the same, skyline blanked) are in the replay viewer.
+
 ### 21.8 The river meadow (owner's addition, 2026-10-30, 16:20; drafted, not yet pre-registered to run)
 
 **The owner's idea.** A larger meadow split in half by a river, so that remembering *which world
