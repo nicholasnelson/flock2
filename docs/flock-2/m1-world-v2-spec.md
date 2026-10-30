@@ -2133,7 +2133,16 @@ for the owner to choose from or replace):
    ecology to tune, and the sheep may answer it by going hungry at the edge rather than far.
 3. **The owner's horizon compass / signposts** (§ 21.4 (iv), the parked mountain and sun): gives the
    sheep an orientation reference and asks it to combine that with a remembered distance, a different
-   and more legible form of memory, but a built-in cue the sheep did not earn (see the project's rule).
+   and more legible form of memory. *(Written at 10:30 as "a built-in cue the sheep did not earn"; the
+   owner corrected that at 10:50, and the correction is right: the project's rule is about the brain,
+   not the world. It forbids privileged inputs and built-in geometry, a compass channel, coordinates,
+   a memory shifted by known movement; a skyline is a feature of the world seen through the sheep's
+   own eyes, learned the way the willows and the mud ring were learned, and the ponds keep their
+   random layout per meadow, so the peaks say which way the sheep faces and never where the water is.
+   The owner's wider point stands too: the sky is the same in every direction and at night nothing in
+   the image says which way a sheep faces, so remembering the water has meant integrating its own
+   turns for a thousand steps with nothing to correct against, and the brains' answer to every
+   pressure, staying close, is the right policy for a world with no reference frame.)*
 4. **Move on**: take stage 2a as "survival under mud and fog learned, memory not demonstrated", and let
    world v3's terrain (§ 22) supply the occlusion naturally at stage 3.
 
