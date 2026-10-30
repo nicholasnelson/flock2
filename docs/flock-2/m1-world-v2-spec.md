@@ -2337,6 +2337,54 @@ scripted-flock recording on a river meadow goes into the replay viewer so that t
 Nothing trains on it before the skyline stage is read and the owner has seen this section.
 
 
+### 21.9 Why the memory keeps failing, and the next two changes (2026-10-30, 22:30; owner: "go ahead, follow your proposed plan")
+
+**The question (owner, 22:05): why does the memory rule fail at every stage?** Four readings of the
+evidence, the first two held to account for it together:
+
+1. **The fog hides the compass on the nights that matter.** Fog is drawn per day, dawn to dawn
+   (`world.fog_days`), and the renderer blanks the ridge whenever fog is on (`ridge = … & ~fog`); the
+   all-fog probe world confirmed it (heading from the embedding −0.11 by day, −0.9 at night). In the
+   stage world three days in four are foggy, so the peaks are visible on one night in four. The fog
+   was added to hide the ground cues and force a memory; the skyline was added as the reference that
+   memory needs; the fog takes the reference away at the same time. The ablation readings fit: if the
+   skyline halved the night returns on clear nights and did nothing on fog nights, the pooled night
+   median would move by about the 8–24 % seen.
+2. **Nothing in the training loss asks the state to hold anything for long.** The world model trains
+   on one-step reconstruction and one-step reward prediction; the multi-step view loss exists
+   (`--ms_weight`, `flock.wm.Config.ms_*`) and has been 0 in every recipe. The policy gradient reaches
+   the recurrent column through rollouts of 128 steps (`--steps 128`), while a night return takes
+   100–300 steps and the fact must survive about 960 (the night). The discount (0.998) is long enough;
+   the gradient is truncated far short of the memory span. This was true at every stage, and every
+   stage failed M the same way. The day readings agree: h carries the heading by day because the
+   heading predicts the next frame; not at night, when a near-black frame does not need it.
+3. **The pressure is marginal and the policy avoids the states where the memory would be learned.**
+   Staying close survives 93–95 %; in training episodes of about two days almost no sheep die
+   (alive share 0.99–1.0 in the logs), so the memory pays for the last few percent, and the thirst
+   stages (§ 21.6) showed the brains meet more pressure by staying closer still. The seeds that roam
+   least at night die least, so the policy's own distribution starves the memory of data.
+4. **The day-time egocentric reading is perception, not memory.** D3_recent from h reads 0.6 by day
+   and nothing at night at every stage: the mud edge and the willows are still in view by day.
+
+**Pre-registered, before anything runs.**
+
+*The clear-night check (`runs/m2_sky_clearnight.sh`, about 25 minutes of GPU, after the fallback
+chain):* the three skyline brains (`s2k_s*`; the fallback brains `s2l_s*` too if H passes there) on
+the mud 8 world with **no fog days** (`--fog 0`), 5 days, 16 meadows, the skyline on and blanked.
+Every night is clear, so the peaks are visible on every night. The evaluation also gains two splits,
+`clear_night` and `fog_night`, in the excursion and M1 tables (an addition; the pooled `night` split is
+unchanged), so that the fallback chain's own evaluations, which start after this edit, split their
+nights too. **Reading:** the night return medians from 12–16 and 16–24, skyline on against blanked,
+and survival. **Decision rule:** if blanking the skyline slows the clear-night returns by ≥ 25 % in at
+least one of the two bins at two seeds (rule A's bar, on the nights the compass can be seen), reading
+(1) is confirmed and the next change is the world's: **peaks above the fog** (§ 21.10, to be
+pre-registered: the ridge drawn on fog days too, a silhouette above a ground fog, as real mountains
+stand above it; everything else as now; one change). Otherwise reading (2) is the bottleneck and the
+next change is the learning objective's: **the multi-step view loss on** (`--ms_weight` > 0 with
+horizons reaching tens of steps; § 21.10 likewise), which gives the state a reason to hold the world
+beyond the next frame. Both respect § 6's rule: the world or the objective changes, the brain's inputs
+do not. Neither runs before its own section is written with numbers.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

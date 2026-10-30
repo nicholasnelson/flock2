@@ -263,6 +263,7 @@ def memory_return(rec, thirst=M1_THIRST):
     unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
     splits = {"all": np.ones(len(arr), bool), "unsighted": unsighted, "clear_day": (arr[:, 3] == 0) & (arr[:, 4] == 0),
               "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0,
+              "clear_night": (arr[:, 3] == 0) & (arr[:, 4] > 0), "fog_night": (arr[:, 3] > 0) & (arr[:, 4] > 0),
               "unsighted_fresh": unsighted & (arr[:, 5] <= FRESH), "unsighted_stale": unsighted & (arr[:, 5] > FRESH)}
     passes = []
     for name, sm in splits.items():
@@ -345,7 +346,8 @@ def excursions(rec):
     arr = np.array(rows, dtype=float).reshape(-1, 7)
     out = {"excursions": int(len(arr)), "cap": R1_CAP, "straight_steps_per_tile": {"walk": round(1 / sim.WALK_SPEED, 1), "trot": round(1 / sim.TROT_SPEED, 1)}}
     unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
-    splits = {"all": np.ones(len(arr), bool), "clear_day": ~unsighted, "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0, "unsighted": unsighted}
+    splits = {"all": np.ones(len(arr), bool), "clear_day": ~unsighted, "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0,
+              "clear_night": (arr[:, 3] == 0) & (arr[:, 4] > 0), "fog_night": (arr[:, 3] > 0) & (arr[:, 4] > 0), "unsighted": unsighted}
     med = lambda x: float(np.median(x)) if len(x) else None
     for name, sm in splits.items():
         bins = {}
