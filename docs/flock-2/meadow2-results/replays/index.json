@@ -1,7 +1,7 @@
 {
  "format": "flock2-replay",
  "version": 1,
- "updated": "2026-10-30T21:46:04",
+ "updated": "2026-10-30T21:56:31",
  "replays": [
   {
    "file": "a_scripted_plain.flock.gz",
@@ -538,6 +538,68 @@
     "steps": 12000,
     "deaths": 0,
     "alive_at_end": 12
+   }
+  },
+  {
+   "file": "j_s2k_nosky_mud8_fog.flock.gz",
+   "label": "j. Skyline-trained brain s2k in fog, skyline blanked",
+   "description": "The same brain s2k_s2 on the same world with the skyline blanked at evaluation (the ablation of section 21.7): night returns from 12-16 and 16-24 tiles were 19-24 % slower without it in the evaluations, survival unchanged.",
+   "bytes": 1039136,
+   "meta": {
+    "label": "j. Skyline-trained brain s2k in fog, skyline blanked",
+    "description": "The same brain s2k_s2 on the same world with the skyline blanked at evaluation (the ablation of section 21.7): night returns from 12-16 and 16-24 tiles were 19-24 % slower without it in the evaluations, survival unchanged.",
+    "policy": "hybrid",
+    "agent": "/home/nnels/flock2_data/m2_hybrid/s2k_s2",
+    "willows": 3,
+    "sheep": 12,
+    "inner": 8.0,
+    "edge": 2.0,
+    "trample": 0.0,
+    "fog": 0.75,
+    "thirst": 1.0,
+    "zero_column": false,
+    "skyline": false,
+    "river": false,
+    "tiles": 48,
+    "days": 5.0,
+    "seed": 0,
+    "meadow_seed0": 50000,
+    "meadows_run": 1,
+    "grass_every": 100,
+    "git": "99b0b72",
+    "date": "2026-10-30T21:56:30",
+    "DAY": 2400,
+    "N_TILES": 48,
+    "MAX_DAYS": 8,
+    "day_fraction": 0.6,
+    "action_names": [
+     "stop",
+     "walk",
+     "trot",
+     "left",
+     "right",
+     "graze",
+     "drink",
+     "rest"
+    ],
+    "drive_names": [
+     "energy",
+     "hydration",
+     "warmth",
+     "interest"
+    ],
+    "near_range": 8.0,
+    "memory_bins": [
+     8,
+     12,
+     16,
+     24
+    ],
+    "meadow_index": 0,
+    "meadow_seed": 50000,
+    "steps": 12000,
+    "deaths": 1,
+    "alive_at_end": 11
    }
   }
  ]
