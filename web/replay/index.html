@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FLOCK 2.0 replay viewer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header id="top">
+  <div class="brand">FLOCK 2.0 <span class="dim">replay viewer</span></div>
+  <label class="run-pick">Run
+    <select id="run"><option value="">loading index...</option></select>
+  </label>
+  <button id="theme" title="Theme: auto / light / dark">theme: auto</button>
+  <a class="dim" href="README.md" target="_blank" rel="noopener">help</a>
+</header>
+
+<div id="desc" class="desc"></div>
+
+<main id="main">
+  <section id="mapwrap">
+    <canvas id="map"></canvas>
+    <div id="tooltip" class="tooltip" hidden></div>
+    <div id="status" class="status" hidden></div>
+    <div id="legend" class="legend"></div>
+  </section>
+
+  <aside id="side">
+    <div class="clock" id="clock">
+      <div class="big"><span id="clk-day">Day -</span> <span id="clk-time" class="mono">--:--</span></div>
+      <div class="dim mono"><span id="clk-step">step - / -</span> &middot; light <span id="clk-light">-</span> <span id="clk-flags"></span></div>
+    </div>
+
+    <div class="controls">
+      <div class="row">
+        <button id="first" title="First step (Home)">&#x23EE;</button>
+        <button id="back100" title="Back 100 steps (Shift+Left)">&#x23EA;</button>
+        <button id="back" title="Back one step (Left)">&#x25C0;</button>
+        <button id="play" class="primary" title="Play / pause (Space)">&#x25B6;</button>
+        <button id="fwd" title="Forward one step (Right)">&#x25B6;&#xFE0E;&#x258F;</button>
+        <button id="fwd100" title="Forward 100 steps (Shift+Right)">&#x23E9;</button>
+        <button id="last" title="Last step (End)">&#x23ED;</button>
+      </div>
+      <div class="row">
+        <label>speed
+          <select id="speed">
+            <option value="0.25">0.25x</option>
+            <option value="0.5">0.5x</option>
+            <option value="1" selected>1x</option>
+            <option value="2">2x</option>
+            <option value="4">4x</option>
+            <option value="8">8x</option>
+            <option value="16">16x</option>
+            <option value="32">32x</option>
+            <option value="64">64x</option>
+          </select>
+        </label>
+        <button id="prevev" title="Previous event (Shift+E)">&#x25C0; event</button>
+        <button id="nextev" title="Next event (E)">event &#x25B6;</button>
+        <button id="reset" title="Reset the view (0)">reset view</button>
+      </div>
+    </div>
+
+    <div class="options">
+      <div class="row">
+        <label>colour
+          <select id="fill">
+            <option value="action" selected>action</option>
+            <option value="id">sheep id</option>
+            <option value="hydration">hydration</option>
+            <option value="energy">energy</option>
+            <option value="fat">fat</option>
+            <option value="plain">plain</option>
+          </select>
+        </label>
+        <label>trail
+          <input id="trail" type="range" min="0" max="1200" step="20" value="200">
+          <span id="trailv" class="mono">200</span>
+        </label>
+      </div>
+      <div class="row wrap">
+        <label><input id="opt-fov" type="checkbox"> field of view (300&deg;, 8 tiles)</label>
+        <label><input id="opt-rings" type="checkbox" checked> 8 / 12 / 16-tile rings</label>
+        <label><input id="opt-labels" type="checkbox" checked> ids</label>
+        <label><input id="opt-ring" type="checkbox" checked> hydration ring</label>
+        <label><input id="opt-mud" type="checkbox" checked> mud</label>
+        <label><input id="opt-tint" type="checkbox" checked> night / fog tint</label>
+        <label><input id="opt-follow" type="checkbox"> follow selected (F)</label>
+      </div>
+    </div>
+
+    <table id="sheep" class="sheep">
+      <thead><tr><th>#</th><th>action</th><th>hydr.</th><th>energy</th><th>fat</th><th title="distance to the nearest water tile centre">water</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <details id="metabox"><summary>run details</summary><pre id="meta" class="mono"></pre></details>
+    <details><summary>events</summary><div id="events" class="events"></div></details>
+    <details><summary>keys</summary>
+      <div class="keys">
+        <div><b>space</b> play / pause</div><div><b>&larr; &rarr;</b> step (shift: 100)</div>
+        <div><b>+ -</b> zoom</div><div><b>0</b> reset view</div>
+        <div><b>f</b> follow selected</div><div><b>e / E</b> next / previous event</div>
+        <div><b>[ ]</b> slower / faster</div><div><b>home / end</b> first / last step</div>
+        <div><b>1-9</b> select sheep 1-9 (click for the others)</div><div><b>esc</b> deselect</div>
+        <div><b>wheel</b> zoom at cursor</div><div><b>drag</b> pan</div>
+      </div>
+    </details>
+  </aside>
+</main>
+
+<footer id="scrubwrap">
+  <canvas id="scrub"></canvas>
+</footer>
+
+<script src="viewer.js"></script>
+</body>
+</html>
