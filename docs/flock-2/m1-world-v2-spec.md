@@ -2287,6 +2287,53 @@ fifth to a quarter slower without them). If after the fallback H passes and M or
 stage goes to the owner under fallback (2); the pressure that *needs* the compass is the river meadow
 below. Recordings i (seed 2, skyline on) and j (the same, skyline blanked) are in the replay viewer.
 
+**Readings at 4,000 iterations, after fallback (1) (2026-10-31, 04:10; the chain ran 21:44–04:04,
+`runs/meadow2/stage2a_sky2.log`; files `meadow2-results/{eval,deaths,diag,hybrid}/*s2l*`).** Training
+uneventful again (peak 6.3 GB, no deaths in the last episodes, alive share 0.98–1.0, reward 2.43–2.47).
+Per rule, three seeds, the 2,000-iteration reading in brackets:
+
+- **S, survival: passes 2–1.** Stage world **3.6 / 4.7 / 10.4 %** dead at 5 days [6.8 / 11.5 / 4.7];
+  seeds 0 and 1 improved, seed 2 worsened and is over the 10 % bar by 0.4 points (20 deaths of 192).
+  Plain world, 3 days: with the skyline 7.8 / 7.8 / 6.8 %, without it 4.2 / 4.2 / 5.2 % (bar 15 %,
+  passed). The 2,000-iteration oddity is now at every seed: the plain world is **worse with the
+  skyline than without** (15 vs 8, 15 vs 8, 13 vs 10 deaths). The peaks are not neutral scenery on a
+  world without mud or fog. Alone 7.8 / 9.4 / 10.9 %; column zeroed 6.2 / 5.7 / **3.1** % (seed 2
+  survives three times better with its recurrent column silenced: the column is still not needed, and
+  at seed 2 it hurts).
+- **H, the compass is read: passes.** From the embedding, clear day **0.88 / 0.88 / 0.88** [0.85 /
+  0.83 / 0.86; bar 0.5], night **0.50 / 0.46 / 0.40** [0.40 / 0.28 / 0.35; bar 0.3 at every seed:
+  passed, the weakest seed by 0.10]. From the recurrent state h by clear day **0.46 / 0.53 / 0.67**
+  [0.38 / 0.36 / 0.64]; at night h reads −0.45 / −0.19 / −0.11 [−0.78 / −0.65 / −0.13], moving
+  toward zero and still below it. The fog sanity holds (embedding on an all-fog world −0.13 by day,
+  −0.9 at night).
+- **M, the memory: fails at every seed.** M-probe: D2_true_allo at night 8–16 from h −2.6 / −1.8 /
+  −1.8, z −0.9, g −3.4 / −3.0 / −2.0; D3_recent_allo at night −1.0 / −1.1 / −0.8 from h; by day the
+  same probes −1 to −15: still no code for the water's world-frame bearing that carries across
+  meadows. The egocentric D3_recent reads by day from h 0.67 / 0.58 / 0.59 and not at night (−0.9 /
+  −2.3 / −1.0), as at every stage. M-behaviour: M1 unreadable at every seed (`bins_read` 0); night
+  returns from 12–16 / 16–24: **121 / 196, 104 / 184, 273 / 302** steps [139 / 282, 298 / 333,
+  96 / 116; bar ≤ 63.5 / 61; random walk 127 / 122]. Seeds 0 and 1 now return at about the random
+  walk's pace from 12–16, seed 1 having halved its times; seed 2, the one that returned fastest at
+  2,000, is now the slowest, three times slower than before. The seeds swap places from one
+  2,000-iteration block to the next; nothing converges toward the bar.
+- **A, the ablation: fails at every seed, and the sign has turned.** Skyline blanked, the night
+  return medians go 121→116 (−4 %) and 196→159 (−19 %); 104→98 (−6 %) and 184→185 (+1 %); 273→241
+  (−12 %) and 302→256 (−15 %): **five of six faster without the peaks** [at 2,000: five of six slower
+  by 8–24 %]. Survival 3.6→5.2, 4.7→6.2, 10.4→9.9 %: 1.5 points worse without at two seeds, under the
+  5-point bar. The new splits (fog is on three nights in four, so the clear-night counts are small:
+  16–24 holds 4 / 0, 40 / 54, 16 / 17 excursions with and without): clear nights 12–16 **157→206**
+  (+31 %, n 63 / 33), 87→76 (−13 %), 212→217 (+2 %); fog nights 12–16 110→107, 122→141 (+16 %),
+  356→300 (−16 %). One seed looks slower without the peaks on the nights they can be seen; the
+  samples are too small to read, which is what the clear-night check below is for.
+
+**Verdict at 4,000: not passed. H passes; M and A fail at every seed → fallback (2), to the owner.**
+What the stage has shown: a brain that reads its heading from the peaks by day (0.88) and at night
+(0.4–0.5), carries it in the recurrent state by day (0.5–0.7), and does not hold the water's bearing
+or use the peaks to come back to it at night. The approved path (§ 21.9) runs now: the clear-night
+check on both brain sets (`s2l_s*` since H passes there, and `s2k_s*`), then the decision rule that
+picks § 21.10. The stage's own next pressure, the river meadow (§ 21.8), waits on the owner's answer
+to its defaults.
+
 ### 21.8 The river meadow (owner's addition, 2026-10-30, 16:20; drafted, not yet pre-registered to run)
 
 **The owner's idea.** A larger meadow split in half by a river, so that remembering *which world
