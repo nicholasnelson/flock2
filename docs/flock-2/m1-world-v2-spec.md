@@ -2147,6 +2147,88 @@ for the owner to choose from or replace):
    world v3's terrain (§ 22) supply the occlusion naturally at stage 3.
 
 
+### 21.7 The skyline: a compass the sheep must learn to read (2026-10-30, 10:50–)
+
+**Why.** The owner's correction of § 21.6 (candidate 3) reframed the problem: the sheep have been asked
+to remember the water from very little information. The sky is one gradient by elevation, the same at
+every heading; by day the only orientation cues are ground features, which the fog hides within about
+seven tiles, and at night, beyond the hut's three-tile light pool and the pond's reflection, no pixel
+says which way a sheep faces. Remembering the water has meant integrating its own turns for a thousand
+steps with nothing to correct against. Three pressures (fog, thirst ×2, ×3) gave one answer, staying
+close, which is the right policy for a world with no reference frame. The skyline gives the world a
+reference frame; the sheep still have to learn to read it, as they learned the willows and the mud ring.
+
+**The world change (`render.PEAKS`, `RIDGE_DARK`; `Meadow.skyline`, `random_start(skyline=)`;
+`m2_hybrid.py --skyline`, saved in the checkpoint's config; `m2_eval.py` / `m2_diag.py --skyline 0|1`,
+default the brain's config; tests `tests/test_skyline.py`; image
+`meadow2-results/fog/skyline_samples.png`, eight headings at midday, dusk, night and on a fog day).**
+Three peaks at fixed world bearings, the same on every meadow:
+
+| peak | bearing (rad, the sim's heading convention) | height above the horizon | width (Gaussian σ) |
+| --- | --- | --- | --- |
+| tall and narrow | 0.9 | 6.0° | 6° |
+| broad and low | 2.9 | 2.5° | 18° |
+| middling | 4.6 | 4.0° | 9° |
+
+The ridge line is the sum of the three Gaussians in world angle; a sky pixel below it, at its
+column's world angle, takes `RIDGE_DARK` = 0.45 of the horizon colour: a silhouette by day and by
+night (night contrast about 0.05 per channel against the night sky, which the 8-bit view keeps), hidden
+on fog days with everything far. No two peaks overlap and the 300° field of view holds at least one at
+every heading, so one clear frame tells the heading.
+
+**What is given, and the line that is held.** Nothing in the brain changes: no compass channel, no
+coordinates, the same encoder, world model, column and policy. The peaks are pixels. They are a
+*compass, not a map*: they are at infinity, so they give heading and no position, and the ponds keep
+their random layout per meadow, so "the water is toward the tall peak" has to be learned on each meadow
+and held through the day. (With the fence the peaks do let a sheep place itself on the meadow, which is
+also something it must learn and remember per meadow.) The sun and moon stay scenery until the fixed
+peaks are read (one change per comparison).
+
+**Pre-registered, before anything runs (`runs/m2_stage2a_sky.sh chain`, about 7 hours of GPU).**
+
+*Before (a reading, not a gate):* the three fog-trained brains (`s2f_s{0,1,2}`), untrained on the
+skyline, on mud 8 + fog 0.75 + skyline, 5 days, and the probes on the clear mud world with the skyline.
+Expected: survival about where it was (3.6–6.2 % dead); a rise above 15 % would say the new pixels
+confuse the brains, which the stage retrains anyway. The heading probe (DH, below) expected near 0:
+nothing in their training rewarded the heading.
+
+*The learning stage:* continue `s2f_s{0,1,2}` → `s2k_s{0,1,2}`, the fog recipe (column 256, PPO from
+iteration 0, episodes of 4,864 steps) with mud 8 and fog 0.75 held from iteration 1 (the brains know
+both) and the skyline on every meadow, 2,000 iterations (~95 minutes a seed). The skyline is not
+ramped: it is a feature, not a pressure.
+
+*Evaluations, every seed:* the stage world (mud 8 + fog 0.75 + skyline, 16 meadows, 5 days, with
+deaths); the **ablation**, the same world with the skyline blanked at evaluation (`--skyline 0`); the
+plain world, 3 days, with and without the skyline (stage 1's regression); alone (64 meadows); the
+column zeroed. Probes (`m2_diag.py`, new fields): **DH**, the sheep's own heading (sin, cos) from one
+frame's embedding, by clear day / fog day / night; **D2_true_allo**, the water's bearing *in the world
+frame* (heading minus the egocentric bearing) at 8–12 and 12–16 tiles by day / night / fog, from the
+embedding, h, z, g; **D3_recent_allo**, the same target 30 steps after the water left the view. The
+existing egocentric probes are kept beside them.
+
+*Readings (three seeds; each rule by majority; a split is reported as a split):*
+
+- **S, survival:** ≤ 10 % dead at 5 days on the stage world (the fog stage's 3.6–6.2 %, with room for a
+  changed world); the plain world no worse than the fog brains' (13.0 / 5.7 / 0.5 %; bar 15 %).
+- **H, the compass is read:** DH ridge R² (mean of sin and cos) from the embedding ≥ 0.5 on clear days
+  and ≥ 0.3 at night, at every seed. A world fact readable in one frame; if the encoder has not
+  learned it, nothing downstream can use it.
+- **M, the memory, one of two:** (M-probe) D2_true_allo or D3_recent_allo at **night** from h, z or g
+  (not the embedding alone) ≥ 0.3 at 8–16 tiles at two seeds, where the egocentric night probes have
+  read 0 since stage 1; or (M-behaviour) M1 on the unsighted split, if it is readable (§ 21.4's rule,
+  unchanged), else the excursion reading of § 21.6: night returns from 12–16 and 16–24 at a median
+  ≤ 0.5 × the § 20.1 baseline (127 / 122).
+- **A, the ablation:** with the skyline blanked, the night return medians from 12–16 / 16–24 rise by
+  ≥ 25 % or survival worsens by ≥ 5 points. If the ablation changes nothing, the brains did not use
+  the skyline, whatever the probes say.
+
+The stage **passes** on S and H and M and A. **Fallbacks, one change each:** (1) H fails (the encoder
+never learned the peaks: they are a few rows of pixels and the world model's loss is reconstruction):
+one more 2,000 iterations; (2) H passes but M or A fails: the sheep read the compass and do not use it
+for the water; back to the owner with the readings, since the next move (a pressure that needs the
+compass, or the sun and moon) is a design choice. Nothing beyond these is run without the owner.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

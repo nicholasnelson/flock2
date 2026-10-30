@@ -26,6 +26,11 @@ tiles away 6.6 (was 1.7), and the sky 18 rows (was 28).
   window glows at night.
 - **Haze.** Each pixel is blended toward the horizon colour by 1 - exp(-distance / ``HAZE``).
   Nothing has a view range: things vanish when they shrink below a pixel or fade into the haze.
+- **Skyline** (spec § 21.7). When the meadow's ``skyline`` flag is set, fixed peaks (``PEAKS``: world
+  bearing, height, width) stand on the horizon at the same bearings on every meadow, drawn as a
+  silhouette a fixed fraction (``RIDGE_DARK``) darker than the horizon colour, by day and by night,
+  and hidden on fog days like everything far. A compass the sheep can learn to read, not a map: the
+  ponds keep their random layout, so where the water is still has to be remembered.
 - **Fog** (spec § 21.4). On a meadow's fog days (``world.foggy``) the haze length is ``FOG_HAZE``
   instead, so contrast falls to a tenth by about 2.3 x ``FOG_HAZE`` tiles, and the sky is the flat
   horizon colour, so nothing far stands out against it. The willows on the banks are then
@@ -57,6 +62,11 @@ HUT_LIGHT, HUT_LIGHT_R = 0.6, 3.0
 # lit below WATER_FLOOR of its day brightness, like a pond catching the last light
 REFLECT, WATER_FLOOR = 0.3, 0.45
 FENCE_H, POST_H, POST_EVERY = 0.4, 0.5, 2.0
+# the skyline (spec section 21.7): (world bearing in radians, in the sim's heading convention; height in
+# degrees above the horizon; width, the Gaussian sigma in degrees). A tall narrow peak, a broad low
+# range and a middling one, far enough apart that no two overlap, so one frame tells the heading.
+PEAKS = ((0.9, 6.0, 6.0), (2.9, 2.5, 18.0), (4.6, 4.0, 9.0))
+RIDGE_DARK = 0.45  # the ridge is this fraction of the horizon colour: a silhouette in any light
 
 
 ROW_TOP, ROW_BOTTOM = 34.0, -74.0  # degrees
@@ -108,6 +118,15 @@ TRUNK, LEAVES, PINE = _c(0.42, 0.29, 0.17), _c(0.16, 0.38, 0.17), _c(0.10, 0.30,
 WILLOW_C, WILLOW_SKIRT = _c(0.62, 0.70, 0.34), _c(0.52, 0.62, 0.30)  # pale yellow-green crown and drooping skirt
 WALL, ROOF, DOOR, GLASS, GLOW = _c(0.78, 0.65, 0.45), _c(0.55, 0.22, 0.16), _c(0.35, 0.22, 0.12), _c(0.30, 0.35, 0.40), _c(1.0, 0.85, 0.45)
 SALT_C, STEM, PINK, YELLOW, MUSH_STEM, MUSH_CAP = _c(0.86, 0.86, 0.84), _c(0.30, 0.55, 0.22), _c(0.90, 0.45, 0.65), _c(0.95, 0.85, 0.30), _c(0.90, 0.88, 0.80), _c(0.72, 0.55, 0.36)
+
+
+def skyline_elev(ang: jax.Array) -> jax.Array:
+    """(...,) elevation (radians) of the skyline at world angle(s) ``ang``: Gaussian peaks on a flat horizon."""
+    e = jnp.zeros_like(ang)
+    for b, h, s in PEAKS:
+        d = (ang - b + jnp.pi) % (2 * jnp.pi) - jnp.pi
+        e = e + jnp.deg2rad(h) * jnp.exp(-0.5 * (jnp.rad2deg(d) / s) ** 2)
+    return e
 
 
 def grass_colour(g: jax.Array) -> jax.Array:
@@ -294,6 +313,9 @@ def render_aux(state: State, i: jax.Array):
     above = ~jnp.isfinite(depth)
     sky_px = jnp.where(fog, horizon[None, :], sky(ROW_ELEV, L))[:, None, :]  # (H, 1, 3); flat in fog
     colour = jnp.where(above[..., None], sky_px, colour)
+    # the skyline (spec section 21.7): sky pixels below the ridge line at each column's world angle
+    ridge = above & m.skyline & ~fog & (ROW_ELEV[:, None] >= 0.0) & (ROW_ELEV[:, None] < skyline_elev(ang)[None, :])
+    colour = jnp.where(ridge[..., None], horizon * RIDGE_DARK, colour)
     water_px = water_vis
     return jnp.clip(colour, 0.0, 1.0), water_px, depth
 

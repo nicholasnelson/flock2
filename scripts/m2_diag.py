@@ -98,8 +98,8 @@ def _targets(st, water, depth):
                 fog=jnp.broadcast_to(jax.vmap(foggy)(st.meadow, st.t)[:, None], n_px.shape))
 
 
-def _starts(n_meadows, willows, fog=0.0):
-    return jax.vmap(functools.partial(random_start, willows=willows, fog=fog))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
+def _starts(n_meadows, willows, fog=0.0, skyline=False):
+    return jax.vmap(functools.partial(random_start, willows=willows, fog=fog, skyline=skyline))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
 
 
 def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
@@ -121,8 +121,8 @@ def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
     return {k: np.asarray(v[warm:]) for k, v in out.items()}
 
 
-def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0, fog=0.0):
-    states = _starts(n_meadows, willows, fog)
+def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0, fog=0.0, skyline=False):
+    states = _starts(n_meadows, willows, fog, skyline)
     if inner > 0:  # stage 2a's mud (spec section 21.1): the memory probe on the world that demands memory
         from flock.meadow2.world import with_terrain
         states = with_terrain(states, bank=inner + 2.0, mud=True, inner=inner)
@@ -226,6 +226,7 @@ def main():
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius on the probe's meadows (0: none)")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy on the probe's meadows (spec § 21.4)")
+    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the probe's meadows (spec § 21.7); default the agent's config")
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_mlp", action="store_true")
@@ -235,6 +236,7 @@ def main():
     d = os.path.expanduser(a.agent)
     cfg = json.load(open(os.path.join(d, "config.json")))
     willows = int(cfg.get("willows", 0))
+    skyline = bool(cfg.get("skyline", False)) if a.skyline is None else bool(a.skyline)
     reactive = cfg.get("kind") == "m2_reactive"
     world = None
     if reactive:
@@ -249,8 +251,8 @@ def main():
         column = hy.make_column(0, world, int(cfg.get("column", 0)))
         if column is not None:
             wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
-        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog}
+        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog, skyline)
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog, "skyline": skyline}
 
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
     if not reactive:
@@ -330,6 +332,17 @@ def main():
             os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)
             json.dump(res, open(a.out, "w"), indent=1)
         return
+    # DH (spec section 21.7): the sheep's own heading from one frame, by light. With the skyline this is
+    # readable from the embedding wherever a peak is in view; without it nothing in the image says it.
+    fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
+    res["DH_heading"] = {}
+    for dn, dm in (("clear_day", day_full & ~fog_full), ("fog_day", day_full & fog_full), ("night", ~day_full)):
+        m = alive & dm
+        res["DH_heading"][dn] = {"frames": int(m.sum()), "sin": probe(m, np.sin(rec["heading"]), f"heading {dn} sin"), "cos": probe(m, np.cos(rec["heading"]), f"heading {dn} cos")}
+    # the water's bearing in the world frame (heading minus the left-positive egocentric bearing): the
+    # form a memory anchored to the skyline would take
+    allo_v = rec["heading"] - rec["wbear_v"]
+    allo = rec["heading"] - rec["wbear"]
     res["D2_visible"] = {}
     for lo, hi in BINS:
         m = vis & (rec["near_px"] >= lo) & (rec["near_px"] < hi)
@@ -340,12 +353,14 @@ def main():
     # D2_true: the true bearing of the nearest water tile in the field of view, by its true distance,
     # by day and by night, whether or not water pixels show (stage 1: the willows should carry it)
     res["D2_true"] = {}
-    fog_full = rec["fog"].reshape(day_full.shape) if "fog" in rec else np.zeros_like(day_full)
+    res["D2_true_allo"] = {}
     for dn, dm in (("day", day_full), ("night", ~day_full), ("fog_day", day_full & fog_full), ("clear_day", day_full & ~fog_full)):
         for lo, hi in tuple(BINS[:-1]) + ((8, 12), (12, 16)):  # spec section 21.5: 8-16 split, to tell the mud edge from the willows in fog
             m = alive & rec["found_v"] & (rec["wdist_v"] >= max(lo, NEAR)) & (rec["wdist_v"] < hi) & dm
             key = f"{dn}_{lo}-{hi}"
             res["D2_true"][key] = {"frames": int(m.sum()), "sin": probe(m, np.sin(rec["wbear_v"]), f"true sin {key}"), "cos": probe(m, np.cos(rec["wbear_v"]), f"true cos {key}")}
+            if lo >= 8:  # spec section 21.7: the same frames, the bearing in the world frame
+                res["D2_true_allo"][key] = {"frames": int(m.sum()), "sin": probe(m, np.sin(allo_v), f"allo sin {key}"), "cos": probe(m, np.cos(allo_v), f"allo cos {key}")}
     if not reactive:
         if world.cfg.rot_bins:  # spec § 18: noise as wide as h and z, as the D3 floor
             inputs = {**inputs, "noise_wide": np.random.default_rng(0).normal(size=inputs["hz"].shape).astype(np.float16)}
@@ -361,6 +376,8 @@ def main():
             m = recent & dm
             res[f"D3_recent_{nm}"] = {"frames": int(m.sum()),
                                       "sin_bearing": probe(m, np.sin(rec["wbear"]), f"recent {nm} sin"), "cos_bearing": probe(m, np.cos(rec["wbear"]), f"recent {nm} cos")}
+            res[f"D3_recent_allo_{nm}"] = {"frames": int(m.sum()),
+                                           "sin_bearing": probe(m, np.sin(allo), f"recent allo {nm} sin"), "cos_bearing": probe(m, np.cos(allo), f"recent allo {nm} cos")}
     print(json.dumps({"D1": res.get("D1"), "D2_true": res["D2_true"]}, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

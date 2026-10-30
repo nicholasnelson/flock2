@@ -344,6 +344,7 @@ def main():
     p.add_argument("--mud_ramp", default=None, help="stage 2a: A,B,R: mud radius 0 to iteration A, linear to R tiles at B, held")
     p.add_argument("--edge", type=float, default=2.0, help="tiles of regrowth ramp outside the mud")
     p.add_argument("--fog_ramp", default=None, help="spec § 21.4: A,B,P: fog probability 0 to iteration A, linear to P at B, held")
+    p.add_argument("--skyline", action="store_true", help="spec § 21.7: fixed peaks on the horizon of every meadow")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
@@ -370,7 +371,7 @@ def main():
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
-    fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f), in_axes=(0, None)))
+    fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f, skyline=a.skyline), in_axes=(0, None)))
     mud, fog = 0.0, 0.0
 
     def fresh(keys):
