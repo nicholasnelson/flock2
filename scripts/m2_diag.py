@@ -230,7 +230,7 @@ def main():
     p.add_argument("--steps", type=int, default=300)
     p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius on the probe's meadows (0: none)")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy on the probe's meadows (spec § 21.4)")
-    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the probe's meadows (spec § 21.7); default the agent's config")
+    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the probe's meadows, hidden by fog (spec § 21.7); 2: drawn on fog days too (spec § 21.10); default the agent's config")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config")
     p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     p.add_argument("--decode_every", type=int, default=10)
@@ -242,7 +242,7 @@ def main():
     d = os.path.expanduser(a.agent)
     cfg = json.load(open(os.path.join(d, "config.json")))
     willows = int(cfg.get("willows", 0))
-    skyline = bool(cfg.get("skyline", False)) if a.skyline is None else bool(a.skyline)
+    skyline = int(cfg.get("skyline", False) or 0) if a.skyline is None else int(a.skyline)
     river = bool(cfg.get("river", False)) if a.river is None else bool(a.river)
     reactive = cfg.get("kind") == "m2_reactive"
     world = None

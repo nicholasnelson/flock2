@@ -29,8 +29,9 @@ tiles away 6.6 (was 1.7), and the sky 18 rows (was 28).
 - **Skyline** (spec § 21.7). When the meadow's ``skyline`` flag is set, fixed peaks (``PEAKS``: world
   bearing, height, width) stand on the horizon at the same bearings on every meadow, drawn as a
   silhouette a fixed fraction (``RIDGE_DARK``) darker than the horizon colour, by day and by night,
-  and hidden on fog days like everything far. A compass the sheep can learn to read, not a map: the
-  ponds keep their random layout, so where the water is still has to be remembered.
+  and hidden on fog days like everything far (``skyline`` 1), or standing above the fog as real
+  mountains stand above a ground fog (``skyline`` 2, spec § 21.10). A compass the sheep can learn to
+  read, not a map: the ponds keep their random layout, so where the water is still has to be remembered.
 - **Fog** (spec § 21.4). On a meadow's fog days (``world.foggy``) the haze length is ``FOG_HAZE``
   instead, so contrast falls to a tenth by about 2.3 x ``FOG_HAZE`` tiles, and the sky is the flat
   horizon colour, so nothing far stands out against it. The willows on the banks are then
@@ -314,7 +315,7 @@ def render_aux(state: State, i: jax.Array):
     sky_px = jnp.where(fog, horizon[None, :], sky(ROW_ELEV, L))[:, None, :]  # (H, 1, 3); flat in fog
     colour = jnp.where(above[..., None], sky_px, colour)
     # the skyline (spec section 21.7): sky pixels below the ridge line at each column's world angle
-    ridge = above & m.skyline & ~fog & (ROW_ELEV[:, None] >= 0.0) & (ROW_ELEV[:, None] < skyline_elev(ang)[None, :])
+    ridge = above & (m.skyline > 0) & (~fog | (m.skyline > 1)) & (ROW_ELEV[:, None] >= 0.0) & (ROW_ELEV[:, None] < skyline_elev(ang)[None, :])
     colour = jnp.where(ridge[..., None], horizon * RIDGE_DARK, colour)
     water_px = water_vis
     return jnp.clip(colour, 0.0, 1.0), water_px, depth

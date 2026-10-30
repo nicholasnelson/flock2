@@ -359,7 +359,7 @@ def main(argv=None):
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy")
     p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay")
     p.add_argument("--zero_column", action="store_true", help="hybrid ablation: the column's state stays at zeros")
-    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon (spec section 21.7); default the agent's config, else 0")
+    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon, hidden by fog (spec section 21.7); 2: drawn on fog days too (spec section 21.10); default the agent's config, else 0")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec section 21.8); default the agent's config, else 0")
     p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec section 21.8); default the agent's config, else 48")
     p.add_argument("--seed", type=int, default=0, help="seed of the policy's randomness (the meadows are m2_eval's)")
@@ -375,11 +375,11 @@ def main(argv=None):
         D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     ev = load_script("m2_eval")
     agent, willows = load_agent(a.policy, a.agent, a.willows, a.zero_column)
-    skyline, river = bool(a.skyline or 0), bool(a.river or 0)
+    skyline, river = int(a.skyline or 0), bool(a.river or 0)
     if a.agent:  # as m2_eval: the brain's own world unless overridden
         cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
         if a.skyline is None:
-            skyline = bool(cfg0.get("skyline", False))
+            skyline = int(cfg0.get("skyline", False) or 0)
         if a.river is None:
             river = bool(cfg0.get("river", False))
     steps = a.steps if a.steps is not None else int(a.days * DAY)

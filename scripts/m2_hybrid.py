@@ -348,7 +348,7 @@ def main():
     p.add_argument("--mud_ramp", default=None, help="stage 2a: A,B,R: mud radius 0 to iteration A, linear to R tiles at B, held")
     p.add_argument("--edge", type=float, default=2.0, help="tiles of regrowth ramp outside the mud")
     p.add_argument("--fog_ramp", default=None, help="spec § 21.4: A,B,P: fog probability 0 to iteration A, linear to P at B, held")
-    p.add_argument("--skyline", action="store_true", help="spec § 21.7: fixed peaks on the horizon of every meadow")
+    p.add_argument("--skyline", type=int, nargs="?", const=1, default=0, help="1 (or bare): fixed peaks on the horizon of every meadow, hidden by fog (spec § 21.7); 2: drawn on fog days too (spec § 21.10)")
     p.add_argument("--river", action="store_true", help="spec § 21.8: the river meadow (one straight river instead of the ponds, willows along its banks)")
     p.add_argument("--tiles", type=int, default=None, help="spec § 21.8: the meadow's side in tiles (default 48; read before import, saved in the config)")
     p.add_argument("--seed", type=int, default=0)

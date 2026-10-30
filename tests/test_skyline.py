@@ -1,4 +1,5 @@
-"""The skyline (spec section 21.7): fixed peaks on the horizon, a compass the sheep can learn, hidden by fog."""
+"""The skyline (spec section 21.7): fixed peaks on the horizon, a compass the sheep can learn, hidden by fog;
+spec section 21.10: ``skyline`` 2 keeps the peaks above the fog."""
 
 import jax
 import jax.numpy as jnp
@@ -80,3 +81,26 @@ def test_skyline_reads_at_night_and_vanishes_in_fog():
     assert contrast >= 0.04, contrast  # a silhouette the 8-bit view keeps
     rgb_f, d_f, _ = _frames(True, int(0.3 * DAY), b, fog=True)
     assert not _ridge_cols(rgb_f, d_f, int(0.3 * DAY)).any()
+
+
+def test_skyline_2_stands_above_the_fog():
+    """Spec section 21.10: with ``skyline`` 2 the ridge is drawn on fog days too, as a silhouette on the
+    flat fog sky; everything below the sky is the fog world as before; 1 and 2 agree on clear days."""
+    b = R.PEAKS[0][0]
+    for t in (int(0.3 * DAY), int(0.8 * DAY)):
+        rgb1, d1, st1 = _frames(1, t, b, fog=True)
+        rgb2, d2, st2 = _frames(2, t, b, fog=True)
+        assert int(st1.meadow.skyline) == 1 and int(st2.meadow.skyline) == 2
+        sky = ~np.isfinite(d2)
+        changed = np.linalg.norm(rgb2 - rgb1, axis=-1) > 1e-4
+        assert not changed[~sky].any()  # the ground, the fence and the water are untouched
+        cols = np.any(changed & sky, 0)
+        assert cols[R.W // 2 - 3 : R.W // 2 + 3].sum() >= 4, t  # the peak ahead shows through the fog
+        assert cols.sum() < R.W // 2  # and the horizon is flat elsewhere
+        rows = (np.asarray(R.ROW_ELEV) >= 0.0) & (np.asarray(R.ROW_ELEV) < np.deg2rad(1.0))
+        contrast = np.abs(rgb2[rows][:, R.W // 2] - rgb1[rows][:, R.W // 2]).max()
+        assert contrast >= 0.04, (t, contrast)  # a silhouette the 8-bit view keeps, at night too
+    # on a clear day 1 and 2 draw the same frame
+    rgb1, _, _ = _frames(1, int(0.3 * DAY), b)
+    rgb2, _, _ = _frames(2, int(0.3 * DAY), b)
+    assert np.abs(rgb2 - rgb1).max() < 1e-6

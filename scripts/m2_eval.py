@@ -427,7 +427,7 @@ def main():
     p.add_argument("--zero_column", action="store_true", help="ablation (spec § 21.4): the policy sees zeros where the column's state would be")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy (spec § 21.4)")
     p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay (spec § 21.6: 2 halves the reserve)")
-    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon (spec § 21.7); default the agent's config, else 0; 0 on a skyline-trained brain is the ablation")
+    p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon, hidden by fog (spec § 21.7); 2: drawn on fog days too (spec § 21.10); default the agent's config, else 0; 0 on a skyline-trained brain is the ablation")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config, else 0")
     p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     a = p.parse_args()
@@ -436,14 +436,14 @@ def main():
         D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     agent = None
     willows = a.willows or 0
-    skyline = bool(a.skyline or 0)
+    skyline = int(a.skyline or 0)
     river = bool(a.river or 0)
     if a.agent:
         cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
         if a.willows is None:
             willows = cfg0.get("willows", 0)
         if a.skyline is None:
-            skyline = bool(cfg0.get("skyline", False))
+            skyline = int(cfg0.get("skyline", False) or 0)
         if a.river is None:
             river = bool(cfg0.get("river", False))
     if a.policy == "reactive":

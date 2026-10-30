@@ -2432,6 +2432,112 @@ horizons reaching tens of steps; § 21.10 likewise), which gives the state a rea
 beyond the next frame. Both respect § 6's rule: the world or the objective changes, the brain's inputs
 do not. Neither runs before its own section is written with numbers.
 
+**The clear-night check, read (2026-10-31, 04:50; ran 04:06–04:46, `runs/meadow2/clearnight.log`;
+files `meadow2-results/eval/hybrid_s2{k,l}_s*_{sky,nosky}_mud8_fog0_d5.json`).** Mud 8, no fog days,
+5 days, 16 meadows; night return medians from 12–16 / 16–24, skyline on → blanked, with the
+excursion counts, and survival:
+
+- **The 2,000-iteration brains (`s2k_s*`):** seed 0 **113→179 (+58 %**, n 383 / 465) and 217→270
+  (+24 %, n 411 / 306), survival 6.8→2.1 %; seed 1 131→149 (+14 %) and **214→282 (+32 %**, n 272 /
+  105), survival 9.9→6.8 %; seed 2 67→74 (+11 %) and 160→157 (−2 %), survival 1.0→2.1 %. **Two seeds
+  meet the bar:** on clear nights these brains come back faster with the peaks.
+- **The 4,000-iteration brains (`s2l_s*`):** seed 0 138→141 (+2 %) and 213→168 (−21 %, n 16 / 2; it
+  no longer goes that far at night), no deaths with or without; seed 1 90→74 (−18 %) and 158→182
+  (+15 %, n 213 / 273), survival 7.3→4.2 %; seed 2 254→210 (−18 %) and 299→278 (−7 %), survival
+  7.3→2.1 %. **No seed meets the bar.**
+- **Survival is better without the peaks in five of six readings** (equal in the sixth), by 1 to 5
+  points, as on the plain world (§ 21.7 at 4,000). The night share of time 16–24 tiles out falls
+  without the peaks at every brain (seed 0 at 2,000: 0.24→0.17). The peaks draw the sheep out at
+  night; at 2,000 they also brought them back faster, at 4,000 they no longer do.
+
+**The decision, and why both changes run.** The rule named `s2k_s*` as the brains to check and
+added `s2l_s*` "if H passes there", without saying which decides when they disagree. They disagree.
+By the brains named first, reading (1) is confirmed and the world changes (**§ 21.10, peaks above
+the fog**). By the brains that would be continued, the compass's night use faded over 2,000 more
+iterations of the same training, with nothing in the loss to hold it, which is reading (2)
+(**§ 21.11, the multi-step view loss on**). Neither reading excludes the other, so both changes are
+pre-registered below as single-change arms from the same brains (`s2l_s*`), the world change first as
+the rule's primary set says, the objective change after it whatever the first shows. Each arm is
+one change against `s2l_s*`; the two arms are not compared with each other. Both respect § 6: the
+world or the loss changes, the brain's inputs do not.
+
+### 21.10 Peaks above the fog (2026-10-31, 05:00; pre-registered, runs first)
+
+**The change (one):** `skyline` 2. The meadow's skyline flag becomes an integer: 0 no peaks, 1 the
+peaks, hidden on fog days (§ 21.7, unchanged), **2 the peaks drawn on fog days too**, a silhouette on
+the flat fog sky at the same bearings, as real mountains stand above a ground fog. Nothing else
+changes: fog still hides the ground cues, the willows, the ponds and the mud edge beyond a few tiles.
+The renderer's one line (`ridge = above & (skyline > 0) & (~fog | skyline > 1) & …`), the flag
+threaded through training, evaluation, probes and the recorder (`--skyline 2`; old configs that
+stored `true` read as 1), and `tests/test_skyline.py::test_skyline_2_stands_above_the_fog` (the
+peak ahead shows through the fog by day and by night with contrast ≥ 0.04, the ground is untouched,
+1 and 2 draw the same clear-day frame). Built and tested on CPU (14 tests) before this section was
+written; nothing has trained with it.
+
+**The run (`runs/m2_stage2a_sky.sh chain3`, about 7 hours):** `s2l_s{0,1,2}` → `s2m_s{0,1,2}`,
+2,000 iterations each, the § 21.7 recipe with `--skyline 2` and nothing else changed; then the
+evaluations of § 21.7 (stage world, skyline blanked `--skyline 0`, plain with and without, alone,
+column zeroed) **plus the stage world with `--skyline 1`** (the peaks hidden by the fog again: the
+old world, so that the fog-night difference is read directly), and the two probes (`sky_mud8`,
+`sky_mud8_fog1`, both on skyline 2; the all-fog probe world now shows the peaks).
+
+**Pass rules (three seeds):**
+- **S** as § 21.7: ≤ 10 % dead on the stage world, ≤ 15 % plain, at every seed.
+- **H-fog**, the brain sees the peaks through the fog: heading from the embedding on the all-fog
+  probe world ≥ 0.3 by fog day and ≥ 0.3 at night, at every seed (today −0.13 by day, −0.9 at night,
+  because nothing is drawn there). Fails → the encoder has not learned the silhouette on the flat
+  sky, its own finding; fallback (1) below.
+- **M** as § 21.7: the allocentric probe ≥ 0.3 at night from h, z or g at two seeds, or night
+  returns 12–16 / 16–24 median ≤ 63.5 / 61. The direct reading, new: **fog-night returns**
+  (`excursions.fog_night`, 12–16 and 16–24) with skyline 2 against skyline 1 at the same brain.
+- **A**, the compass is used on fog nights: skyline 1 (hidden in fog) or 0 (blanked) slows the
+  fog-night return medians ≥ 25 % in one of the two bins at two seeds, or worsens survival ≥ 5
+  points. Reported with it, not a rule: whether survival is better without the peaks (the lure),
+  and the clear-night splits.
+- **Baseline for every number:** `s2l_s*` on the stage world (survival 3.6 / 4.7 / 10.4 %; night
+  returns 121 / 196, 104 / 184, 273 / 302; fog nights 110 / 173, 122 / 184, 356 / 338).
+
+**Fallbacks:** (1) H-fog fails → 2,000 more iterations once (`s2m` → `s2o`), as § 21.7's fallback (1);
+(2) H-fog passes and M or A fail → § 21.11 runs as planned and both results go to the owner
+together; (3) S fails at two seeds → stop, to the owner.
+
+### 21.11 The multi-step view loss on (2026-10-31, 05:00; pre-registered, runs after § 21.10)
+
+**The change (one):** the world model's multi-step view loss, present since § 20 and 0 in every
+recipe, is turned on: `--ms_weight 0.4 --ms_horizons 8,16,24 --ms_stride 8`. From the posterior at
+the start of each 32-step replay sequence the prior is rolled forward with the actions taken and the
+view decoded at 8, 16 and 24 steps ahead and compared with the real view (summed squared colour
+error, mean over horizons). The gradient reaches the recurrent state through 24 transitions, so the
+state is asked to hold what the view will need up to 24 steps on, where today it is asked for the
+next frame only. The horizons are bounded by the replay sequence length (32); 24 steps is a fortieth
+of a night, the longest the objective can reach without changing the replay as well, which would be a
+second change. **The weight, 0.4,** was read from a 6-iteration smoke on `s2l_s0` with weight 1
+(multi-step 608 / 445 / 505 / 416 against reconstruction 212 / 167 / 184 / 162 at the start, a
+ratio of 2.7): 0.4 makes the two terms equal at the start, rounded to one figure. The training step
+costs 1.1 s more (2.4 against 1.3 s), about 1.9 hours per seed.
+
+**The run (`runs/m2_stage2a_sky.sh chain4`, about 8 hours, after chain3):** `s2l_s{0,1,2}` →
+`s2n_s{0,1,2}`, 2,000 iterations, the § 21.7 recipe (`--skyline` 1, the fog world as it is) with
+the three flags above and nothing else changed; then § 21.7's evaluations and probes.
+
+**Pass rules (three seeds):**
+- **S** as § 21.7.
+- **L**, the loss is learnable: `wm_multistep` in the training log falls over the 2,000 iterations
+  (last 100 iterations' mean below the first 100's) at every seed, and `wm_recon` ends within 25 % of
+  `s2l`'s (15–20); otherwise the weight is wrong and the reading is void (fallback (1)).
+- **K**, the state holds the compass at night: heading from h on the clear mud world at night
+  (`DH_heading.night`, input h) ≥ 0.3 at two seeds (today −0.45 / −0.19 / −0.11); and the egocentric
+  recent-water bearing from h at night (`D3_recent_night`, input h) ≥ 0.3 at two seeds (today −0.9 /
+  −2.3 / −1.0; by day 0.6–0.7). This is what reading (2) predicts the loss will buy, before any
+  behaviour changes.
+- **M** and **A** as § 21.7 (the ablation `--skyline 0`), against the `s2l_s*` baseline above.
+
+**Fallbacks:** (1) L fails → one re-run with the weight halved or doubled, whichever way `wm_recon`
+points (grew → halve), once; (2) L and K pass and M or A fail → the memory is there and the policy
+does not use it: to the owner, with § 21.10's result; (3) K fails with L passing → 24 steps is too
+short a reach, and the next step would be the replay sequence length (a change to pre-register,
+not to run now).
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

@@ -96,7 +96,7 @@ class Meadow(NamedTuple):
     trample: jax.Array = jnp.float32(0.0)  # () biomass lost per step under a moving sheep (the second)
     regrow_map: jax.Array = jnp.ones((N_CELLS, N_CELLS), jnp.float32)  # per-cell regrowth factor (muddy banks)
     fog_days: jax.Array = jnp.zeros((MAX_DAYS,), bool)  # (MAX_DAYS,) which days are foggy, dawn to dawn (spec § 21.4)
-    skyline: jax.Array = jnp.asarray(False)  # () whether the fixed peaks stand on the horizon (spec § 21.7; render.PEAKS)
+    skyline: jax.Array = jnp.asarray(0, jnp.int32)  # () 0: no peaks; 1: the fixed peaks on the horizon, hidden on fog days (spec § 21.7; render.PEAKS); 2: the peaks drawn on fog days too (spec § 21.10)
 
 
 class Flock(NamedTuple):
@@ -391,18 +391,19 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
     return state._replace(meadow=m)
 
 
-def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0, fog: float | jax.Array = 0.0, skyline: bool | jax.Array = False, river: bool = False) -> State:
+def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0, fog: float | jax.Array = 0.0, skyline: bool | int | jax.Array = False, river: bool = False) -> State:
     """A new meadow with the flock at a random place, a random time of day, levels drawn from
     [0.2, 1.0] and fat from [0.2, 0.8] (the agents' varied starts). ``fog`` is the probability that
     each day is foggy (spec § 21.4), drawn independently per day, dawn to dawn. ``skyline`` puts the
-    fixed peaks on the horizon (spec § 21.7): a world fact, the same on every meadow. ``river`` makes
+    fixed peaks on the horizon (spec § 21.7): a world fact, the same on every meadow; 2 keeps them
+    above the fog (spec § 21.10). ``river`` makes
     the river meadow (spec § 21.8)."""
     k1, k3, k4, k5, k6 = jax.random.split(key, 5)
     st = generate(k1, n_sheep, willows=willows, river=river)
     levels = jax.random.uniform(k3, st.flock.levels.shape, minval=0.2, maxval=1.0)
     fat = jax.random.uniform(k5, (n_sheep,), minval=0.2, maxval=0.8)
     fog_days = jax.random.bernoulli(k6, jnp.asarray(fog, jnp.float32), (MAX_DAYS,))
-    return st._replace(meadow=st.meadow._replace(fog_days=fog_days, skyline=jnp.asarray(skyline, bool)), flock=st.flock._replace(levels=levels, fat=fat), t=jax.random.randint(k4, (), 0, DAY))
+    return st._replace(meadow=st.meadow._replace(fog_days=fog_days, skyline=jnp.asarray(skyline, jnp.int32)), flock=st.flock._replace(levels=levels, fat=fat), t=jax.random.randint(k4, (), 0, DAY))
 
 
 def foggy(m: Meadow, t: jax.Array) -> jax.Array:
