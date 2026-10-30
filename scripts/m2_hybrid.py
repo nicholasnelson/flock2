@@ -60,11 +60,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import optax
+
+from flock import tiles as _tiles
+
+_tiles.bootstrap()  # spec § 21.8: the meadow's side (--tiles, else the brain's config) before the world is imported
 from flax import nnx
 
 from flock import ac, wm, wm_spatial
 from flock.meadow2 import drives as D, render as R, sim
-from flock.meadow2.world import DAY, random_start, with_terrain
+from flock.meadow2.world import DAY, N_TILES, random_start, with_terrain
 
 
 def _load(name):
@@ -345,10 +349,13 @@ def main():
     p.add_argument("--edge", type=float, default=2.0, help="tiles of regrowth ramp outside the mud")
     p.add_argument("--fog_ramp", default=None, help="spec § 21.4: A,B,P: fog probability 0 to iteration A, linear to P at B, held")
     p.add_argument("--skyline", action="store_true", help="spec § 21.7: fixed peaks on the horizon of every meadow")
+    p.add_argument("--river", action="store_true", help="spec § 21.8: the river meadow (one straight river instead of the ponds, willows along its banks)")
+    p.add_argument("--tiles", type=int, default=None, help="spec § 21.8: the meadow's side in tiles (default 48; read before import, saved in the config)")
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
     os.makedirs(a.out, exist_ok=True)
+    a.tiles = N_TILES  # the side in force, whatever set it, so that evaluation and continuation follow it
     json.dump({**vars(a), "kind": "m2_hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
 
     horizons = tuple(int(x) for x in a.ms_horizons.split(","))
@@ -371,7 +378,7 @@ def main():
     replay = Replay(a.replay, a.length)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
-    fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f, skyline=a.skyline), in_axes=(0, None)))
+    fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f, skyline=a.skyline, river=a.river), in_axes=(0, None)))
     mud, fog = 0.0, 0.0
 
     def fresh(keys):

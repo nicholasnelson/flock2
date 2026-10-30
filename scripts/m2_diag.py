@@ -47,9 +47,13 @@ import jax.numpy as jnp
 import numpy as np
 import optax
 
+from flock import tiles as _tiles
+
+_tiles.bootstrap()  # spec § 21.8: the meadow's side (--tiles, else the brain's config) before the world is imported
+
 from flock import wm
 from flock.meadow2 import drives as D, privileged as P, render as R, scripted, sim
-from flock.meadow2.world import foggy, random_start
+from flock.meadow2.world import N_TILES, foggy, random_start
 
 MIN_PX = 5
 RECENT = 30
@@ -98,8 +102,8 @@ def _targets(st, water, depth):
                 fog=jnp.broadcast_to(jax.vmap(foggy)(st.meadow, st.t)[:, None], n_px.shape))
 
 
-def _starts(n_meadows, willows, fog=0.0, skyline=False):
-    return jax.vmap(functools.partial(random_start, willows=willows, fog=fog, skyline=skyline))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
+def _starts(n_meadows, willows, fog=0.0, skyline=False, river=False):
+    return jax.vmap(functools.partial(random_start, willows=willows, fog=fog, skyline=skyline, river=river))(jnp.stack([jax.random.PRNGKey(70_000 + i) for i in range(n_meadows)]))
 
 
 def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
@@ -121,8 +125,8 @@ def collect_reactive(policy, ra, n_meadows, warm, steps, seed, willows=0):
     return {k: np.asarray(v[warm:]) for k, v in out.items()}
 
 
-def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0, fog=0.0, skyline=False):
-    states = _starts(n_meadows, willows, fog, skyline)
+def collect(world, hy, n_meadows, warm, steps, decode_every, seed, willows=0, column=None, inner=0.0, fog=0.0, skyline=False, river=False):
+    states = _starts(n_meadows, willows, fog, skyline, river)
     if inner > 0:  # stage 2a's mud (spec section 21.1): the memory probe on the world that demands memory
         from flock.meadow2.world import with_terrain
         states = with_terrain(states, bank=inner + 2.0, mud=True, inner=inner)
@@ -227,6 +231,8 @@ def main():
     p.add_argument("--inner", type=float, default=0.0, help="stage 2a's mud radius on the probe's meadows (0: none)")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy on the probe's meadows (spec § 21.4)")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the probe's meadows (spec § 21.7); default the agent's config")
+    p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config")
+    p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--no_mlp", action="store_true")
@@ -237,6 +243,7 @@ def main():
     cfg = json.load(open(os.path.join(d, "config.json")))
     willows = int(cfg.get("willows", 0))
     skyline = bool(cfg.get("skyline", False)) if a.skyline is None else bool(a.skyline)
+    river = bool(cfg.get("river", False)) if a.river is None else bool(a.river)
     reactive = cfg.get("kind") == "m2_reactive"
     world = None
     if reactive:
@@ -251,8 +258,8 @@ def main():
         column = hy.make_column(0, world, int(cfg.get("column", 0)))
         if column is not None:
             wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
-        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog, skyline)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog, "skyline": skyline}
+        rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog, skyline, river)
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog, "skyline": skyline, "river": river, "tiles": N_TILES}
 
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
     if not reactive:

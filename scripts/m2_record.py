@@ -44,9 +44,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from flock import tiles as _tiles
+
+_tiles.bootstrap()  # spec § 21.8: the meadow's side (--tiles, else the brain's config) before the world is imported
+
 from flock import sprites_iso as SP, wm
 from flock.meadow2 import drives as D, privileged as P, sim
-from flock.meadow2.world import DAY, GRASS_RES, MAX_DAYS, N_CELLS, N_TILES, WILLOW, foggy, random_start, with_terrain
+from flock.meadow2.world import DAY, GRASS_RES, MAX_DAYS, N_CELLS, N_TILES, RIVER_WIDTH, WILLOW, foggy, random_start, river_geometry, with_terrain
 
 MAGIC = b"FLK2"
 FORMAT = "flock2-replay"
@@ -108,10 +112,10 @@ def load_agent(policy, agent_dir, willows, zero_column=False):
     return agent, willows
 
 
-def make_states(n_meadows, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0, fog=0.0, seed=MEADOW_SEED, skyline=False):
+def make_states(n_meadows, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0, fog=0.0, seed=MEADOW_SEED, skyline=False, river=False):
     """The evaluation's meadows (``m2_eval.run``): seeds ``seed + i``, stage 2a's mud when ``inner`` > 0,
-    the skyline (spec section 21.7) when ``skyline``."""
-    kw = {"willows": willows, "fog": fog, "skyline": skyline} | ({} if n_sheep is None else {"n_sheep": n_sheep})
+    the skyline (spec section 21.7) when ``skyline``, the river meadow (spec section 21.8) when ``river``."""
+    kw = {"willows": willows, "fog": fog, "skyline": skyline, "river": river} | ({} if n_sheep is None else {"n_sheep": n_sheep})
     states = jax.vmap(functools.partial(random_start, **kw))(jnp.stack([jax.random.PRNGKey(seed + i) for i in range(n_meadows)]))
     if inner > 0 or trample > 0:
         states = with_terrain(states, trample=trample, bank=(inner + edge) if inner > 0 else None, mud=inner > 0, inner=inner)
@@ -162,6 +166,12 @@ def record(policy, states, steps, grass_every=100, key_seed=0):
     out["grass"] = np.stack(grass)
     out["grass_steps"] = np.array(grass_steps)
     return out
+
+
+def river(water):
+    """The river's line for the viewer (spec section 21.8): centre and unit normal in (row, col), and the width."""
+    c, n = river_geometry(jnp.asarray(water))
+    return {"row": round(float(c[0]), 2), "col": round(float(c[1]), 2), "nrow": round(float(n[0]), 4), "ncol": round(float(n[1]), 4), "width": RIVER_WIDTH}
 
 
 def ponds(water):
@@ -253,7 +263,8 @@ def pack(rec, states, b, meta):
             "n_tiles": N_TILES, "grass_res": GRASS_RES, "n_cells": N_CELLS,
             "objects": {"kind": kinds, "kind_names": {str(k): v for k, v in KIND_NAMES.items()}, "pos": [[round(float(v), 3) for v in p] for p in m.obj_pos],
                         "present": [bool(v) for v in m.obj_present], "variant": [int(v) for v in m.obj_variant]},
-            "fog_days": [bool(v) for v in m.fog_days], "ponds": ponds(m.water),
+            "fog_days": [bool(v) for v in m.fog_days], "ponds": [] if meta.get("river") else ponds(m.water),
+            "river": river(m.water) if meta.get("river") else None,
             "regrow": float(m.regrow), "trample": float(m.trample),
             "mud": {"inner": meta["inner"], "edge": meta["edge"]},
         },
@@ -349,6 +360,8 @@ def main(argv=None):
     p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay")
     p.add_argument("--zero_column", action="store_true", help="hybrid ablation: the column's state stays at zeros")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon (spec section 21.7); default the agent's config, else 0")
+    p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec section 21.8); default the agent's config, else 0")
+    p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec section 21.8); default the agent's config, else 48")
     p.add_argument("--seed", type=int, default=0, help="seed of the policy's randomness (the meadows are m2_eval's)")
     p.add_argument("--meadow_seed", type=int, default=MEADOW_SEED, help="first meadow seed (m2_eval's 50,000)")
     p.add_argument("--grass_every", type=int, default=100, help="steps between grass snapshots")
@@ -362,15 +375,19 @@ def main(argv=None):
         D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     ev = load_script("m2_eval")
     agent, willows = load_agent(a.policy, a.agent, a.willows, a.zero_column)
-    skyline = bool(a.skyline or 0)
-    if a.agent and a.skyline is None:  # as m2_eval: the brain's own world unless overridden
-        skyline = bool(json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json"))).get("skyline", False))
+    skyline, river = bool(a.skyline or 0), bool(a.river or 0)
+    if a.agent:  # as m2_eval: the brain's own world unless overridden
+        cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
+        if a.skyline is None:
+            skyline = bool(cfg0.get("skyline", False))
+        if a.river is None:
+            river = bool(cfg0.get("river", False))
     steps = a.steps if a.steps is not None else int(a.days * DAY)
-    states = make_states(a.meadows, willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, seed=a.meadow_seed, skyline=skyline)
+    states = make_states(a.meadows, willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, seed=a.meadow_seed, skyline=skyline, river=river)
     rec = record(ev.policy_fn(a.policy, agent), states, steps, grass_every=a.grass_every, key_seed=a.seed)
     meta = {
         "label": a.label, "description": a.description, "policy": a.policy, "agent": a.agent, "willows": willows, "sheep": a.sheep or 12,
-        "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "zero_column": a.zero_column, "skyline": skyline,
+        "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "zero_column": a.zero_column, "skyline": skyline, "river": river, "tiles": N_TILES,
         "days": steps / DAY, "seed": a.seed, "meadow_seed0": a.meadow_seed, "meadows_run": a.meadows, "grass_every": a.grass_every,
         "git": git_commit(), "date": _dt.datetime.now().isoformat(timespec="seconds"),
         "DAY": DAY, "N_TILES": N_TILES, "MAX_DAYS": MAX_DAYS, "day_fraction": sim.DAY_FRACTION, "action_names": list(sim.ACTION_NAMES), "drive_names": list(D.NAMES),

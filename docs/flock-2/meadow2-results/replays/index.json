@@ -1,7 +1,7 @@
 {
  "format": "flock2-replay",
  "version": 1,
- "updated": "2026-10-30T14:36:00",
+ "updated": "2026-10-30T16:35:02",
  "replays": [
   {
    "file": "a_scripted_plain.flock.gz",
@@ -414,6 +414,68 @@
     "steps": 12000,
     "deaths": 10,
     "alive_at_end": 2
+   }
+  },
+  {
+   "file": "h_scripted_river.flock.gz",
+   "label": "h. Scripted flock, river meadow (72 tiles, skyline)",
+   "description": "The scripted flock on the river meadow (spec section 21.8): 72 x 72 tiles, one straight river through the centre at a random angle, uncrossable, willows along both banks, a mud band of 8 tiles, the skyline on; clear days, 3 days. The layout only: the scripted policy knows where the water is. Nothing has trained on this world yet.",
+   "bytes": 730634,
+   "meta": {
+    "label": "h. Scripted flock, river meadow (72 tiles, skyline)",
+    "description": "The scripted flock on the river meadow (spec section 21.8): 72 x 72 tiles, one straight river through the centre at a random angle, uncrossable, willows along both banks, a mud band of 8 tiles, the skyline on; clear days, 3 days. The layout only: the scripted policy knows where the water is. Nothing has trained on this world yet.",
+    "policy": "scripted",
+    "agent": null,
+    "willows": 3,
+    "sheep": 12,
+    "inner": 8.0,
+    "edge": 2.0,
+    "trample": 0.0,
+    "fog": 0.0,
+    "thirst": 1.0,
+    "zero_column": false,
+    "skyline": true,
+    "river": true,
+    "tiles": 72,
+    "days": 3.0,
+    "seed": 0,
+    "meadow_seed0": 50000,
+    "meadows_run": 1,
+    "grass_every": 100,
+    "git": "4ec2262",
+    "date": "2026-10-30T16:35:02",
+    "DAY": 2400,
+    "N_TILES": 72,
+    "MAX_DAYS": 8,
+    "day_fraction": 0.6,
+    "action_names": [
+     "stop",
+     "walk",
+     "trot",
+     "left",
+     "right",
+     "graze",
+     "drink",
+     "rest"
+    ],
+    "drive_names": [
+     "energy",
+     "hydration",
+     "warmth",
+     "interest"
+    ],
+    "near_range": 8.0,
+    "memory_bins": [
+     8,
+     12,
+     16,
+     24
+    ],
+    "meadow_index": 0,
+    "meadow_seed": 50000,
+    "steps": 7200,
+    "deaths": 0,
+    "alive_at_end": 12
    }
   }
  ]

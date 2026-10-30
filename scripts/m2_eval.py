@@ -44,9 +44,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from flock import tiles as _tiles
+
+_tiles.bootstrap()  # spec § 21.8: the meadow's side (--tiles, else the brain's config) before the world is imported
+
 from flock import wm
 from flock.meadow2 import drives as D, privileged as P, scripted, sim
-from flock.meadow2.world import DAY, foggy, random_start, with_terrain
+from flock.meadow2.world import DAY, N_TILES, foggy, random_start, with_terrain
 
 
 def policy_fn(name, agent):
@@ -95,7 +99,7 @@ def stateless_batch(per_batch):
 
 EARSHOT, KNOWS_FOR, SEE_RANGE, NEAR_RANGE, THIRSTY = 10.0, 300, 16.0, 8.0, 0.5
 NEVER = -100_000
-_TILES = jnp.stack(jnp.meshgrid(jnp.arange(48) + 0.5, jnp.arange(48) + 0.5, indexing="ij"), -1).reshape(-1, 2)
+_TILES = jnp.stack(jnp.meshgrid(jnp.arange(N_TILES) + 0.5, jnp.arange(N_TILES) + 0.5, indexing="ij"), -1).reshape(-1, 2)
 
 
 def sees_water(st, rng=SEE_RANGE):
@@ -109,13 +113,14 @@ def sees_water(st, rng=SEE_RANGE):
     return jnp.any(wet[None] & (d <= rng) & (jnp.abs(alpha) < sim.FOV / 2), -1)
 
 
-def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0, fog=0.0, skyline=False):
+def run(policy, n_meadows, steps, seed=0, willows=0, n_sheep=None, inner=0.0, edge=2.0, trample=0.0, fog=0.0, skyline=False, river=False):
     """``n_sheep`` (default the world's 12) for lone-sheep evaluations; ``inner`` > 0 puts stage 2a's mud
     on the banks (no grass or regrowth within ``inner`` tiles of water, regrowth ramping to full over
     ``edge`` more), ``trample`` the biomass lost under a moving sheep (spec § 21); ``fog`` the
-    probability of each day being foggy (spec § 21.4); ``skyline`` the fixed peaks (spec § 21.7)."""
+    probability of each day being foggy (spec § 21.4); ``skyline`` the fixed peaks (spec § 21.7);
+    ``river`` the river meadow (spec § 21.8)."""
     init, act = policy
-    kw = {"willows": willows, "fog": fog, "skyline": skyline} | ({} if n_sheep is None else {"n_sheep": n_sheep})
+    kw = {"willows": willows, "fog": fog, "skyline": skyline, "river": river} | ({} if n_sheep is None else {"n_sheep": n_sheep})
     states = jax.vmap(functools.partial(random_start, **kw))(jnp.stack([jax.random.PRNGKey(50_000 + i) for i in range(n_meadows)]))
     if inner > 0 or trample > 0:
         states = with_terrain(states, trample=trample, bank=(inner + edge) if inner > 0 else None, mud=inner > 0, inner=inner)
@@ -421,6 +426,8 @@ def main():
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy (spec § 21.4)")
     p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay (spec § 21.6: 2 halves the reserve)")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon (spec § 21.7); default the agent's config, else 0; 0 on a skyline-trained brain is the ablation")
+    p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config, else 0")
+    p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     a = p.parse_args()
     if a.thirst != 1.0:
         # the constant is read at trace time, so scaling it here before anything is jitted changes the world
@@ -428,12 +435,15 @@ def main():
     agent = None
     willows = a.willows or 0
     skyline = bool(a.skyline or 0)
+    river = bool(a.river or 0)
     if a.agent:
         cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
         if a.willows is None:
             willows = cfg0.get("willows", 0)
         if a.skyline is None:
             skyline = bool(cfg0.get("skyline", False))
+        if a.river is None:
+            river = bool(cfg0.get("river", False))
     if a.policy == "reactive":
         import importlib.util
 
@@ -477,9 +487,9 @@ def main():
         # --zero_column: the column is not run and its state stays at the zeros it starts from, so the policy
         # reads nothing there; if survival does not move, the column is unused whatever it holds
         agent = (world, policy, hy, use_embed, None if a.zero_column else column, col)
-    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, skyline=skyline)
+    rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, skyline=skyline, river=river)
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
-           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "skyline": skyline, "zero_column": a.zero_column, **summarise(rec)}
+           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "skyline": skyline, "river": river, "tiles": N_TILES, "zero_column": a.zero_column, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

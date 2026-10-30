@@ -2229,6 +2229,72 @@ for the water; back to the owner with the readings, since the next move (a press
 compass, or the sun and moon) is a design choice. Nothing beyond these is run without the owner.
 
 
+**Before readings (16:20; the chain ran 14:38–15:27 for this part).** Survival of the fog brains on the
+skyline world, untrained on it: **7.3 / 5.2 / 5.2 %** dead at 5 days (expected 3.6–6.2 %, bar 15 %): the
+new pixels do not confuse them. The heading probe did **not** read near 0 as expected: from the
+embedding on clear days, ridge R² (mean of sin and cos) **0.57 / 0.66 / 0.67** before any skyline
+training; at night **−0.18 / −0.24 / −0.12**; from h, z and g about −0.1 by day and below −0.7 at night.
+The reading is understood, and the expectation was wrong, not the probe: a convolutional encoder's
+features respond to a dark band at a given column whether or not the world model ever used them, and a
+linear read-out of "which columns are dark" is the heading; the recurrent state does not carry it
+(h ≈ −0.1), which is what "the sheep do not read the compass" means. So rule H's clear-day half is met
+before learning and is not a learning reading; **the night half (≥ 0.3) and the state inputs are**, and
+H is read as pre-registered with that noted. The allocentric water-bearing probes read far below 0
+(−0.5 to −14): the probe splits by meadow (train on the first 75 % of meadows, test on the rest) and the
+world-frame bearing to the water is nearly one value per meadow where the flock grazes, so a negative
+R² says there is no code that generalises across meadows, which is the right question for a memory that
+must be re-learned on each meadow. The fog-day rows are empty because the probe world was clear.
+
+### 21.8 The river meadow (owner's addition, 2026-10-30, 16:20; drafted, not yet pre-registered to run)
+
+**The owner's idea.** A larger meadow split in half by a river, so that remembering *which world
+direction the river lies in*, read against the skyline, pays off: "the river is in the direction of
+the mountains". Nothing is given to the brain; the world is arranged so that one remembered fact is
+worth a life.
+
+**Why it is the right next pressure.** In the pond world the water's world-frame bearing depends on
+where the sheep stands, so the memory asked for is a position-dependent one, and the probe target is
+nearly one value per meadow where the flock happens to graze. A straight river makes "toward the water"
+one world direction for the whole half-meadow (up to the component along the river, which does not
+matter): the memory the world rewards is a single number per meadow, learnable from one sighting of
+the river against the peaks, and the meadow-split probe tests exactly that cross-meadow read-out. It is
+also the pressure fallback (2) of § 21.7 names: one that *needs* the compass.
+
+**The world, as drafted (defaults chosen by Claude; the owner may change any of them before it runs):**
+
+- **Size:** 72 × 72 tiles (`FLOCK2_TILES=72`, read once at import; 48 stays the default and every
+  existing result is unchanged). 2.25 × the area; a half is 36 tiles deep, so the 12–16 and 16–24
+  night bins exist on both sides with room beyond. 96 × 96 would cost four times the grass field and
+  distance maps for bins the readings do not use.
+- **The river** (`world.generate(river=True)`, `random_start(river=)`, `--river` in training,
+  evaluation, probes and the recorder): a straight band 3 tiles wide through the meadow's centre
+  (jittered ± 3 tiles) at a **uniform random angle per meadow**; water tiles, so it blocks movement as
+  ponds do: uncrossable, two separate halves. No ponds. The flock starts as now, 6–14 tiles from the
+  water, on whichever side the draw lands. The river's angle is random per meadow *on purpose*: with a
+  fixed angle "the river is toward the tall peak" would be one world fact learned once for all
+  meadows, a map; random, it must be learned on each meadow and held, a memory read against a compass.
+- **Willows** along both banks, one about every 8 tiles with jitter (the pond world's cue, kept so
+  that water is sighted from the same distance as before); **mud** (`--inner 8`, the bare band) along
+  the river as it was round the ponds; hut, trees, salt, flowers and mushrooms as now, those that fall
+  in the river removed. The fence, the sun, the moon and the fog as now. The skyline on (§ 21.7).
+- **Cost:** rendering is per pixel and does not grow; the grass field grows 2.25 ×; the all-pairs
+  distance tables (`water_distance`, `cell_water_distance`) are rewritten to stream by row so that
+  they stay small at any size.
+
+**What would be read (to be pre-registered in full, with numbers, when the stage is scheduled):**
+survival; the heading probe as in § 21.7; a river probe, **DR**, the world-frame bearing of the river's
+normal from the sheep's side (one value per meadow-side) from h, z and g at night, by meadow split; M1
+on the unsighted split and the night excursion medians; the **ablation** with the skyline blanked at
+evaluation; and a **control** brain trained on the river meadow without the skyline (the compass's
+worth, in deaths). The brain would continue the skyline brains (`s2k_*`), so the stage waits on
+§ 21.7's readings: if H passes, the river meadow is the next stage; if H fails, the compass is not
+read and the river would only add distance. Fallbacks are set when the numbers are.
+
+**Status:** the world is being built and tested on the CPU while the skyline chain holds the GPU; a
+scripted-flock recording on a river meadow goes into the replay viewer so that the layout can be seen.
+Nothing trains on it before the skyline stage is read and the owner has seen this section.
+
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

@@ -7,7 +7,7 @@
 
 const params = new URLSearchParams(location.search);
 const REPLAY_DIR = params.get('dir') || '../../docs/flock-2/meadow2-results/replays/';
-const N = 48;                 // tiles per side
+let N = 48;                   // tiles per side (set from each replay's header; the river meadow is 72)
 const TAU = Math.PI * 2;
 const FOV = 300 * Math.PI / 180;
 const SPEED_STEPS_PER_S = 60; // 1x: one sim step per frame at 60 Hz
@@ -148,6 +148,7 @@ async function loadRun(file) {
     return;
   }
   hideStatus();
+  N = R.world.n_tiles || 48;
   selected = -1; hover = null; grassIdx = -1; terrainCanvas = null; waterDistField = null;
   play.step = 0;
   const m = (location.hash.match(/step=(\d+)/) || [])[1];
@@ -369,10 +370,23 @@ function draw() {
         ctx.beginPath(); ctx.arc(p.col, p.row, p.radius + d, 0, TAU); ctx.stroke();
       }
     }
+    const rv = R.world.river;
+    if (rv) {
+      // the river meadow (spec section 21.8): the bins are bands parallel to the river, on both sides
+      const ax = -rv.nrow, ay = rv.ncol;   // along the river, in (x = col, y = row)
+      for (const sign of [1, -1]) for (const d of [8, 12, 16]) {
+        const off = sign * (rv.width / 2 + d), cx = rv.col + off * rv.ncol, cy = rv.row + off * rv.nrow;
+        ctx.beginPath(); ctx.moveTo(cx - ax * 2 * N, cy - ay * 2 * N); ctx.lineTo(cx + ax * 2 * N, cy + ay * 2 * N); ctx.stroke();
+      }
+    }
     ctx.setLineDash([]); ctx.globalAlpha = 1;
     if (s > 7) {
       ctx.fillStyle = pal.text; ctx.globalAlpha = 0.6; ctx.font = `${lw(11)}px system-ui, sans-serif`; ctx.textAlign = 'center';
       for (const p of R.world.ponds) for (const d of [8, 12, 16]) ctx.fillText(String(d), p.col, p.row - p.radius - d - lw(3));
+      if (rv) for (const sign of [1, -1]) for (const d of [8, 12, 16]) {
+        const off = sign * (rv.width / 2 + d);
+        ctx.fillText(String(d), rv.col + off * rv.ncol, rv.row + off * rv.nrow);
+      }
       ctx.globalAlpha = 1;
     }
   }

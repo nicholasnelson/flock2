@@ -29,10 +29,17 @@ was) and ``trample`` (biomass every grass cell under a moving sheep loses per st
 water over ``bank`` tiles (0 at the water's edge, full beyond ``bank``); ``bank`` 0 is uniform
 regrowth, as it was. The ring the flock wears then depends on how hard it camps, and ``bank`` is the
 one dial a curriculum ramps.
+
+The river meadow (spec § 21.8, ``generate(river=True)``): instead of ponds, one straight band of water
+``RIVER_WIDTH`` tiles wide through the meadow's centre at a uniform random angle per meadow, splitting
+it into two halves a sheep cannot cross; willows along both banks about every ``RIVER_WILLOW_SPACING``
+tiles. The meadow's side ``N_TILES`` is read once from the environment variable ``FLOCK2_TILES``
+(default 48; the river meadow uses 72), so that every shape in the package follows it.
 """
 
 from __future__ import annotations
 
+import os
 from typing import NamedTuple
 
 import jax
@@ -40,7 +47,7 @@ import jax.numpy as jnp
 
 from flock import sprites_iso as S
 
-N_TILES = 48
+N_TILES = int(os.environ.get("FLOCK2_TILES", "48"))  # tiles per side; spec § 21.8 sets 72 for the river meadow
 N_SHEEP = 12
 WATER = S.WATER  # ground state index of water
 N_GRASS_STATES = 4
@@ -62,6 +69,10 @@ WILLOW_BANK = 0.9  # tiles outside the pond's radius
 SHEEP_RADIUS = 0.3
 
 N_PONDS = 2
+RIVER_WIDTH = 3.0  # tiles (spec § 21.8); water, so it blocks movement: the two halves are separate
+RIVER_JITTER = 3.0  # the river passes within this of the meadow's centre
+RIVER_WILLOW_SPACING = 8.0  # tiles between willows along each bank (with jitter)
+N_RIVER_WILLOWS = int(-(-N_TILES * 2 ** 0.5 // RIVER_WILLOW_SPACING))  # per bank, along the longest possible river
 REGROW = 0.00013  # fraction of the gap to full (3) regrown per step: a time constant of ~7,700 steps
 POND_RADIUS = (2.0, 3.5)  # tiles
 # the flock starts with its centre this far from the nearest water (tiles). This replaces the
@@ -188,13 +199,50 @@ def _blobs(key, n_blobs, r_min, r_max):
     return jnp.max(jnp.exp(-d2 / (2 * r[:, None, None] ** 2)), axis=0)
 
 
+def _nearest_water(points: jax.Array, water: jax.Array) -> jax.Array:
+    """(R, C) distance (tiles) from points (R, C, 2) to the nearest water tile centre (inf if none),
+    one row of points at a time, so that the table never holds all pairs (spec § 21.8: at 72 tiles the
+    cell table would be 430 MB per meadow)."""
+    yy, xx = _grid()
+    tiles = jnp.stack([yy.ravel(), xx.ravel()], -1)
+    wet = water.ravel()
+
+    def row(q):
+        d = jnp.linalg.norm(q[:, None, :] - tiles[None, :, :], axis=-1)
+        return jnp.min(jnp.where(wet[None, :], d, jnp.inf), -1)
+
+    return jax.lax.map(row, points)
+
+
 def water_distance(water: jax.Array) -> jax.Array:
     """(N, N) distance (tiles) from each tile centre to the nearest water tile centre (inf if none)."""
     yy, xx = _grid()
+    return _nearest_water(jnp.stack([yy, xx], -1), water)
+
+
+def _river(key):
+    """Water: one straight band RIVER_WIDTH wide through the meadow's centre (within RIVER_JITTER) at a
+    uniform random angle. Returns (water (N, N) bool, centre (2,), unit normal (2,), unit along (2,))."""
+    k1, k2 = jax.random.split(key)
+    phi = jax.random.uniform(k1, (), maxval=jnp.pi)
+    c = N_TILES / 2.0 + jax.random.uniform(k2, (2,), minval=-RIVER_JITTER, maxval=RIVER_JITTER)
+    normal = jnp.stack([jnp.cos(phi), jnp.sin(phi)])
+    along = jnp.stack([-jnp.sin(phi), jnp.cos(phi)])
+    yy, xx = _grid()
+    dist = (yy - c[0]) * normal[0] + (xx - c[1]) * normal[1]
+    return jnp.abs(dist) < RIVER_WIDTH / 2.0, c, normal, along
+
+
+def river_geometry(water: jax.Array) -> tuple[jax.Array, jax.Array]:
+    """(centre (2,), unit normal (2,)) of a river meadow's river, recovered from its water mask (the
+    mean and the minor axis of the water tiles). For evaluation and probes; the brain never sees it."""
+    yy, xx = _grid()
     p = jnp.stack([yy.ravel(), xx.ravel()], -1)
-    d = jnp.linalg.norm(p[:, None, :] - p[None, :, :], axis=-1)
-    d = jnp.where(water.ravel()[None, :], d, jnp.inf)
-    return jnp.min(d, -1).reshape(N_TILES, N_TILES)
+    w = water.ravel().astype(jnp.float32)
+    c = jnp.sum(p * w[:, None], 0) / jnp.maximum(w.sum(), 1.0)
+    q = (p - c) * jnp.sqrt(w)[:, None]
+    _, vecs = jnp.linalg.eigh(q.T @ q)
+    return c, vecs[:, 0]
 
 
 def _ponds(key):
@@ -209,10 +257,7 @@ def _ponds(key):
 
 def start_distance(water: jax.Array, centres: jax.Array) -> jax.Array:
     """(K,) distance (tiles) from each candidate flock centre (K, 2) to the nearest water tile."""
-    yy, xx = _grid()
-    p = jnp.stack([yy.ravel(), xx.ravel()], -1)
-    d = jnp.linalg.norm(centres[:, None, :] - p[None, :, :], axis=-1)
-    return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1)
+    return _nearest_water(centres[None], water)[0]
 
 
 def _choose(key, water):
@@ -224,20 +269,29 @@ def _choose(key, water):
     return ok.any(), c[jnp.argmax(ok)]
 
 
-def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = None, willows: int = 0) -> State:
+def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = None, willows: int = 0, river: bool = False) -> State:
     """A meadow, with the flock grouped around ``centre`` or (default) a centre 6-14 tiles from the
     nearest water; levels 0.6-0.9 (energy, hydration, warmth) and 0.8 (interest), fat 0.5,
-    at dawn. Of N_CANDIDATES pond layouts, the first that admits such a start is used.
-    ``willows`` > 0 stands that many willows on each pond's bank (stage 1)."""
+    at dawn. Of N_CANDIDATES water layouts, the first that admits such a start is used.
+    ``willows`` > 0 stands that many willows on each pond's bank (stage 1). With ``river`` (spec
+    § 21.8) the water is one straight river instead of the ponds, and ``willows`` > 0 stands willows
+    along both banks, one about every RIVER_WILLOW_SPACING tiles."""
     k_g, k_b, k_w, k_o, k_s, k_v, k_l = jax.random.split(key, 7)
     n = N_TILES
     grass = jnp.clip(1.2 + 1.8 * _blobs(k_g, 14, 1.5, 3.75) - 1.4 * _blobs(k_b, 8, 0.75, 1.9), 0.0, 3.0)
 
     kw1, kw2 = jax.random.split(k_w)
-    cands, pond_c, pond_r = jax.vmap(_ponds)(jax.random.split(kw1, N_CANDIDATES))
+    if river:
+        cands, river_c, river_n, river_a = jax.vmap(_river)(jax.random.split(kw1, N_CANDIDATES))
+    else:
+        cands, pond_c, pond_r = jax.vmap(_ponds)(jax.random.split(kw1, N_CANDIDATES))
     ok, starts = jax.vmap(_choose)(jax.random.split(kw2, N_CANDIDATES), cands)
     pick = jnp.where(ok.any(), jnp.argmax(ok), 0)
-    water, pond_c, pond_r = cands[pick], pond_c[pick], pond_r[pick]
+    water = cands[pick]
+    if river:
+        river_c, river_n, river_a = river_c[pick], river_n[pick], river_a[pick]
+    else:
+        pond_c, pond_r = pond_c[pick], pond_r[pick]
     centre = starts[pick] if centre is None else centre
     grass = jnp.where(dry_cells(water), grass, 0.0)  # no grass under water (the field fades at the shore)
 
@@ -255,14 +309,23 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
             p = jax.random.uniform(ka, (count, 2), minval=3.0, maxval=n - 3.0)
         kinds.append(jnp.full((count,), kind))
         poss.append(p)
-    if willows > 0:
+    if willows > 0 and river:
+        # stations along the longest possible river, jittered; those off the meadow are absent (not clipped to the fence)
+        half = n * 2 ** 0.5 / 2.0
+        t = jnp.linspace(-half, half, N_RIVER_WILLOWS) + jax.random.uniform(k_l, (2, N_RIVER_WILLOWS), minval=-0.3, maxval=0.3) * RIVER_WILLOW_SPACING
+        side = jnp.array([1.0, -1.0])[:, None, None] * (RIVER_WIDTH / 2.0 + WILLOW_BANK)
+        kinds.append(jnp.full((2 * N_RIVER_WILLOWS,), WILLOW))
+        poss.append((river_c + t[..., None] * river_a + side * river_n).reshape(-1, 2))
+    elif willows > 0:
         theta = jax.random.uniform(k_l, (N_PONDS, willows), maxval=2 * jnp.pi)
         ring = jnp.stack([jnp.cos(theta), jnp.sin(theta)], -1) * (pond_r[:, None, None] + WILLOW_BANK)
         kinds.append(jnp.full((N_PONDS * willows,), WILLOW))
         poss.append((pond_c[:, None, :] + ring).reshape(-1, 2))
     obj_kind = jnp.concatenate(kinds)
-    obj_pos = jnp.clip(jnp.concatenate(poss), 1.0, n - 1.0)
-    obj_present = ~water[obj_pos[:, 0].astype(jnp.int32), obj_pos[:, 1].astype(jnp.int32)]
+    raw_pos = jnp.concatenate(poss)
+    inside = jnp.all((raw_pos >= 1.0) & (raw_pos <= n - 1.0), -1)
+    obj_pos = jnp.clip(raw_pos, 1.0, n - 1.0)
+    obj_present = inside & ~water[obj_pos[:, 0].astype(jnp.int32), obj_pos[:, 1].astype(jnp.int32)]
     obj_variant = jax.random.randint(k_v, (obj_kind.shape[0],), 0, 4)
 
     # each sheep at the first of 32 random spots around the centre that is dry, clear of blocking
@@ -298,11 +361,7 @@ def generate(key: jax.Array, n_sheep: int = N_SHEEP, centre: jax.Array | None = 
 
 def cell_water_distance(water: jax.Array) -> jax.Array:
     """(N_CELLS, N_CELLS) distance (tiles) from each grass cell's centre to the nearest water tile centre."""
-    yy, xx = _grid()
-    tiles = jnp.stack([yy.ravel(), xx.ravel()], -1)
-    cells = cell_centres().reshape(-1, 2)
-    d = jnp.linalg.norm(cells[:, None, :] - tiles[None, :, :], axis=-1)
-    return jnp.min(jnp.where(water.ravel()[None, :], d, jnp.inf), -1).reshape(N_CELLS, N_CELLS)
+    return _nearest_water(cell_centres(), water)
 
 
 def bank_map(water: jax.Array, bank: float | jax.Array, inner: float | jax.Array = 0.0) -> jax.Array:
@@ -324,7 +383,7 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
         m = m._replace(trample=like(trample, m.trample))
     if bank is not None:
         b, i = like(bank, m.trample), like(inner, m.trample)
-        # one meadow at a time: the cell-to-tile distance table is 85 MB per meadow, and 64 at once ran a GPU out of memory
+        # one meadow at a time (the table streams by row, but 64 meadows at once is still a lot of work in one kernel)
         fn = bank_map if m.water.ndim == 2 else (lambda w, bb, ii: jax.lax.map(lambda x: bank_map(*x), (w, bb, ii)))
         m = m._replace(regrow_map=fn(m.water, b, i))
         if mud:
@@ -332,13 +391,14 @@ def with_terrain(state: State, regrow: float | jax.Array | None = None, trample:
     return state._replace(meadow=m)
 
 
-def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0, fog: float | jax.Array = 0.0, skyline: bool | jax.Array = False) -> State:
+def random_start(key: jax.Array, n_sheep: int = N_SHEEP, willows: int = 0, fog: float | jax.Array = 0.0, skyline: bool | jax.Array = False, river: bool = False) -> State:
     """A new meadow with the flock at a random place, a random time of day, levels drawn from
     [0.2, 1.0] and fat from [0.2, 0.8] (the agents' varied starts). ``fog`` is the probability that
     each day is foggy (spec § 21.4), drawn independently per day, dawn to dawn. ``skyline`` puts the
-    fixed peaks on the horizon (spec § 21.7): a world fact, the same on every meadow."""
+    fixed peaks on the horizon (spec § 21.7): a world fact, the same on every meadow. ``river`` makes
+    the river meadow (spec § 21.8)."""
     k1, k3, k4, k5, k6 = jax.random.split(key, 5)
-    st = generate(k1, n_sheep, willows=willows)
+    st = generate(k1, n_sheep, willows=willows, river=river)
     levels = jax.random.uniform(k3, st.flock.levels.shape, minval=0.2, maxval=1.0)
     fat = jax.random.uniform(k5, (n_sheep,), minval=0.2, maxval=0.8)
     fog_days = jax.random.bernoulli(k6, jnp.asarray(fog, jnp.float32), (MAX_DAYS,))
