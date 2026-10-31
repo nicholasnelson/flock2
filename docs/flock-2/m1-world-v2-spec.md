@@ -2593,6 +2593,123 @@ does not use it: to the owner, with § 21.10's result; (3) K fails with L passin
 short a reach, and the next step would be the replay sequence length (a change to pre-register,
 not to run now).
 
+### 21.12 Why the memory cannot come yet, and two arms to give it a reason and a path (2026-10-31, 13:30; owner's question; proposed, nothing run)
+
+**The owner's question (midday, after § 21.10 was read):** if survival passes while the memory
+fails, is the world too easily survivable on what the eyes give, so that the memory wants more
+incentive? And is a memory even plausible with the present setup: could the state hold the water's
+relative direction for enough steps to get there? Both answers are yes to the suspicion, from the code
+and the recordings. Nothing in this section has run; it waits for the owner.
+
+**21.12.1 Survival does not need the memory, so nothing pays for it.**
+
+- *Thirst never binds within a night.* Hydration falls `HYDRATION_DECAY` = 0.0008 / 3 ≈ 0.00027 a
+  step (`drives.py`), so a full sheep has about 3,750 steps, a day and a half, before it dies; a
+  night is 960 steps and costs 0.26. On the recorded night excursions the sheep leave at hydration
+  0.98 and re-enter at 0.94 (`excursions.night.12-16.hydration_at_farthest_median`, `…_reentry_…`,
+  s2m_s1). Thirsty steps (hydration < 0.5) are 1 % of living steps; the last-day hydration is 1.02
+  of a 1.15 maximum. A return at the random walk's pace costs nothing a sheep can feel.
+- *The reward does not feel the deficit.* The step reward is `ALIVE_BONUS` 2.5 minus the drive
+  `(Σ|1 − h|⁴)^½`: a hydration deficit of 0.25 costs 0.06 a step, 2 % of the bonus; 0.5 costs 0.25.
+  Death is the only real penalty, and it comes about 3,750 steps after the water was lost; at
+  γ = 0.998 that is a weight of 0.0005. No learner here can connect tonight's slow return with a
+  death the day after tomorrow.
+- *The deaths that happen are not of the kind a recent-bearing memory fixes.* The three s2m brains
+  on the stage world (`meadow2-results/deaths/hybrid_s2m_s*_sky_mud8_fog075_d5.json`): 34 deaths of
+  576 sheep, 31 by thirst (the rest at the rounding edge); at death the water is a median 21 tiles
+  away; it was last within 8 tiles about 3,850–4,200 steps earlier (one hydration reserve), or never
+  (14 of 34, far random starts); the deaths are spread evenly over the day. These sheep lost the
+  water a day and a half before dying, or never had it: a search or map problem, not a hundred-step
+  memory problem. It is also why the brain with its column zeroed survives as well or better at
+  every seed (§ 21.7, § 21.10): the column has nothing to offer the deaths that occur. s2l tells the
+  same story (36 of 36 by thirst, median 21 tiles, 3,900–4,200 steps or never).
+
+**21.12.2 The memory cannot emerge from the present training, whatever the incentive.**
+
+- *How long it would have to last.* Water is sighted within 8 tiles (`NEAR_RANGE`; the ponds
+  reflect the sky at night, and in fog the contrast is a tenth at about 7 tiles). A return from 16
+  tiles has a blind leg of 8 tiles: 23 steps straight at a trot (0.35 tiles a step), 67 at a walk.
+  The recorded returns take about 20 steps a tile (`steps_per_tile_median`), 100–250 steps, because
+  the path wanders. A bearing held for a few dozen steps and rotated through the turns (π/8 a turn
+  action) would do, if the sheep then went straight. The span needed is short; nothing trains it.
+- *No gradient reaches far enough.* The world model trains on replay windows of `--length` 32,
+  and **every window starts from a zero state**: `WorldModel.observe` sets h and z to zeros
+  (`flock/wm.py`, `initial`), and the replay stores views, actions, feelings and rewards only
+  (`m2_hybrid.Replay`). Nothing the state could carry from before a window exists in training, so
+  the losses can only ask it to hold what happened inside the last 31 steps. The multi-step loss of
+  § 21.11 reaches 24. The PPO column gets 128 steps of back-propagation from its stored start
+  (`update_recurrent`), enough for a straight blind leg.
+- *Within that reach, nothing depends on the water.* The world model's losses predict the next
+  frames; while the water is out of view no pixel depends on where it is, so there is no gradient
+  toward holding its bearing. The column's only signal is the reward, flat for 128 steps whether the
+  sheep returns or not. What this setup can teach is a quantity visible on every frame that helps the
+  next prediction, which is exactly what § 21.10 produced: the heading from peaks that are on every
+  frame, now carried in the state at night at two seeds.
+- *A train-and-deploy mismatch on top.* At deployment the state runs for `--reset_every` 4,864 steps
+  between resets; the model has only ever seen states built over 31 steps from zero. The night probes
+  from h may be noisy partly because the deployed state is out of the model's own distribution.
+
+**21.12.3 The measure to add first: the blind leg.** Total return time mixes wandering with memory.
+Before either arm runs, `m2_eval.excursions` gains per excursion the **blind leg**: the steps from the
+last frame with the water in the 8-tile cone (`sees8`) to the first later frame with it there again,
+censored at 600 like the return, divided by the tiles beyond 8 at the farthest point (**steps per
+blind tile**), with its median per bin and split as the returns are (all, clear day, fog day, night,
+clear night, fog night, unsighted). The straight-line pace is 2.9 steps a tile at a trot and 8.3 at a
+walk (`straight_steps_per_tile`). The evaluations of `s2m_s*` are re-run with it (minutes each) so the
+arms have a baseline before they start; those numbers are filled in here then.
+
+**21.12.4 Arm W, windows that start from the recorded state (the path; a training fix, not knowledge
+given to the brain).** *The change (one):* `collect` records the model's (h, z) at the start of every
+`--length` steps; `Replay` stores them with the sequence (896 numbers each, 3.7 MB at 1,024
+sequences); `observe` takes an optional start state and the training step passes the stored one
+instead of zeros. The stored states come from parameters at most a few iterations old (the replay
+turns over every three iterations at `--replay 1024 --add_frac 0.5`), so no burn-in is needed. The
+sheep learns nothing it did not earn: the same losses, computed from the state it actually had. Code
+to write before the run: about forty lines and a test (a stored start reproduces the online state;
+zeros remain the default so every earlier result is unchanged). *The run:* `s2m_s{0,1,2}` →
+`s2p_s{0,1,2}`, 2,000 iterations, the § 21.10 recipe (`--skyline 2`) with the stored starts and nothing
+else; then § 21.10's evaluations and both probes. *Pass rules (three seeds):* **S** as § 21.10. **L**:
+`wm_recon`'s last-100 mean within 25 % of s2m's (27.9 / 36.1 / 37.1), else the fix is broken and the
+reading void. **K**: the egocentric recent-water bearing from h at night (`D3_recent_night`, input h)
+≥ 0.3 at two seeds (s2m: −0.85 / −1.90 / −1.23; by day 0.56–0.67), and the heading from h at night
+(`DH_heading.night`, h) ≥ 0.3 at two seeds (s2m: −0.06 / 0.29 / 0.35). **B**: the night blind leg
+(12–16 or 16–24, steps per blind tile) falls ≥ 25 % against s2m at two seeds. **M** and **A** as
+§ 21.10, reported. *Fallbacks:* L fails → bug, fix and re-run once; K and B both fail → the reach was
+not what held the memory back, the incentive is, arm T runs as planned; K passes and B fails → the
+state holds the bearing and the policy does not use it, to the owner with arm T's result; both pass
+→ the stage continues on this recipe.
+
+**21.12.5 Arm T, thirst that binds within a night (the reason).** *The change (one):* a meadow field
+`thirst` (float, default 1.0) multiplying `HYDRATION_DECAY`, threaded like `skyline` through training,
+evaluation, probes and the recorder (`--thirst F`) and saved in the config; the sheep is told nothing,
+it feels its hydration fall faster. At F = 2 the reserve is 1,875 steps (0.8 day) and a night costs
+0.51; at 3, 1,250 steps (0.5 day) and 0.77; at 1.5, 2,500 steps and 0.38. *Before the run, the balance
+rule of § 11 is kept:* `scripts/meadow2_checks.py` is run at F = 3, 2 and 1.5 and the largest F at
+which the naive explorer still finds water before it would die in ≥ 50 % of starts is the one used
+(65 % at F = 1); if none does, to the owner (the brains here are not naive, they drink at 0.66–0.80
+success; the rule's purpose, a learnable world, may be argued either way). *The run:* from
+`s2m_s{0,1,2}` (or from arm W's brains if W passes K; the owner's call) → `s2q_s{0,1,2}`, 2,000
+iterations, the § 21.10 recipe with `--thirst F` from iteration 0 and nothing else; the stage
+evaluations with the same F, plus the plain world with it. *Pass rules (three seeds):* **P**, the
+pressure is felt: thirsty steps ≥ 5 % of living steps (s2m 1 %) or hydration at the farthest point of
+night excursions ≤ 0.90 (s2m 0.98); neither → the change did nothing, void. **S**: ≤ 15 % dead on the
+stage world and ≤ 15 % plain at every seed (the bar is wider because the world is harder; the deaths'
+composition is reported: since water was last seen, time of day). **K**, **B** as arm W. **M** as
+§ 21.10. **A**: skyline 0 slows the fog-night returns ≥ 25 % in a bin at two seeds, or costs ≥ 5
+points of survival (now there is a reason to use the compass). *Fallbacks:* S fails at two seeds →
+F one step down (3 → 2 → 1.5), once; P fails → F one step up, once; P passes and K and B fail → the
+incentive alone was not it either: reach and reason together is two changes, to the owner; both
+pass → the stage continues with this F.
+
+**Order and cost.** W first (a fix, cheap to build, about 7 hours of GPU), then T (about 7 hours plus
+the checks); results to the owner after each. **Open points for the owner:** (1) if § 21.11 passes
+its K tonight, whether `--ms_weight 0.4` joins the recipe these arms start from (default: no, one
+change at a time); (2) the alternative incentive not proposed here, the drive norm quartic → quadratic
+so a deficit of 0.3 is felt as reward before death: kept in reserve, since T acts on the same thing
+more directly; (3) the river meadow (§ 21.8) lowers the pressure on memory, a line of water being
+easier to hit by chance than a pond, and should be read as the orientation pressure it is, not as a
+memory incentive.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
