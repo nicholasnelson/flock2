@@ -1,0 +1,1451 @@
+E1031 20:36:30.136135  208524 slow_operation_alarm.cc:74] 
+********************************
+[Compiling module input_reduce_fusion for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+E1031 20:37:10.668157  208509 slow_operation_alarm.cc:141] The operation took 2m40.532107068s
+
+********************************
+[Compiling module input_reduce_fusion for GPU] Very slow compile? If you want to file a bug, run with envvar XLA_FLAGS=--xla_dump_to=/tmp/foo and attach the results.
+********************************
+heading clear_day sin {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+heading clear_day cos {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+heading fog_day sin {"embed": {"ridge": -0.137, "n_train": 69060, "n_test": 8076, "mlp_es": -0.205}, "h": {"ridge": -0.117, "n_train": 69060, "n_test": 8076, "mlp_es": -0.186}, "z": {"ridge": -0.011, "n_train": 69060, "n_test": 8076, "mlp_es": -0.116}, "hz": {"ridge": -0.123, "n_train": 69060, "n_test": 8076, "mlp_es": -0.203}, "g": {"ridge": -0.045, "n_train": 69060, "n_test": 8076, "mlp_es": -0.233}, "hzg": {"ridge": -0.183, "n_train": 69060, "n_test": 8076, "mlp_es": -0.339}}
+heading fog_day cos {"embed": {"ridge": -0.071, "n_train": 69060, "n_test": 8076, "mlp_es": -0.18}, "h": {"ridge": -0.018, "n_train": 69060, "n_test": 8076, "mlp_es": -0.225}, "z": {"ridge": -0.015, "n_train": 69060, "n_test": 8076, "mlp_es": -0.057}, "hz": {"ridge": -0.021, "n_train": 69060, "n_test": 8076, "mlp_es": -0.143}, "g": {"ridge": -0.082, "n_train": 69060, "n_test": 8076, "mlp_es": -0.034}, "hzg": {"ridge": -0.088, "n_train": 69060, "n_test": 8076, "mlp_es": -0.176}}
+heading night sin {"embed": {"ridge": -0.865, "n_train": 17340, "n_test": 20724, "mlp_es": -0.71}, "h": {"ridge": -0.658, "n_train": 17340, "n_test": 20724, "mlp_es": -0.616}, "z": {"ridge": -0.262, "n_train": 17340, "n_test": 20724, "mlp_es": -0.489}, "hz": {"ridge": -0.661, "n_train": 17340, "n_test": 20724, "mlp_es": -0.702}, "g": {"ridge": -0.735, "n_train": 17340, "n_test": 20724, "mlp_es": -0.796}, "hzg": {"ridge": -1.05, "n_train": 17340, "n_test": 20724, "mlp_es": -0.671}}
+heading night cos {"embed": {"ridge": -0.914, "n_train": 17340, "n_test": 20724, "mlp_es": -0.975}, "h": {"ridge": -1.205, "n_train": 17340, "n_test": 20724, "mlp_es": -0.672}, "z": {"ridge": -0.273, "n_train": 17340, "n_test": 20724, "mlp_es": -0.349}, "hz": {"ridge": -1.243, "n_train": 17340, "n_test": 20724, "mlp_es": -0.587}, "g": {"ridge": -0.865, "n_train": 17340, "n_test": 20724, "mlp_es": -0.742}, "hzg": {"ridge": -1.608, "n_train": 17340, "n_test": 20724, "mlp_es": -0.546}}
+bearing 0-4 {"embed": {"ridge": 0.608, "n_train": 8726, "n_test": 4352, "mlp_es": 0.576}, "h": {"ridge": 0.407, "n_train": 8726, "n_test": 4352, "mlp_es": 0.553}, "z": {"ridge": 0.088, "n_train": 8726, "n_test": 4352, "mlp_es": -0.113}, "hz": {"ridge": 0.405, "n_train": 8726, "n_test": 4352, "mlp_es": 0.464}, "g": {"ridge": 0.159, "n_train": 8726, "n_test": 4352, "mlp_es": 0.26}, "hzg": {"ridge": 0.521, "n_train": 8726, "n_test": 4352, "mlp_es": 0.46}}
+distance 0-4 {"embed": {"ridge": 0.361, "n_train": 8726, "n_test": 4352, "mlp_es": -0.022}, "h": {"ridge": -0.036, "n_train": 8726, "n_test": 4352, "mlp_es": 0.126}, "z": {"ridge": -0.065, "n_train": 8726, "n_test": 4352, "mlp_es": -0.314}, "hz": {"ridge": -0.044, "n_train": 8726, "n_test": 4352, "mlp_es": 0.138}, "g": {"ridge": -0.284, "n_train": 8726, "n_test": 4352, "mlp_es": -0.03}, "hzg": {"ridge": -0.092, "n_train": 8726, "n_test": 4352, "mlp_es": 0.141}}
+bearing 4-8 {"embed": {"ridge": 0.294, "n_train": 15412, "n_test": 5611, "mlp_es": 0.071}, "h": {"ridge": 0.241, "n_train": 15412, "n_test": 5611, "mlp_es": 0.078}, "z": {"ridge": -0.13, "n_train": 15412, "n_test": 5611, "mlp_es": -0.281}, "hz": {"ridge": 0.221, "n_train": 15412, "n_test": 5611, "mlp_es": 0.057}, "g": {"ridge": -0.073, "n_train": 15412, "n_test": 5611, "mlp_es": -0.415}, "hzg": {"ridge": 0.065, "n_train": 15412, "n_test": 5611, "mlp_es": 0.126}}
+distance 4-8 {"embed": {"ridge": 0.273, "n_train": 15412, "n_test": 5611, "mlp_es": -0.345}, "h": {"ridge": 0.079, "n_train": 15412, "n_test": 5611, "mlp_es": 0.113}, "z": {"ridge": -0.059, "n_train": 15412, "n_test": 5611, "mlp_es": -0.152}, "hz": {"ridge": 0.08, "n_train": 15412, "n_test": 5611, "mlp_es": 0.031}, "g": {"ridge": -0.161, "n_train": 15412, "n_test": 5611, "mlp_es": -0.365}, "hzg": {"ridge": -0.493, "n_train": 15412, "n_test": 5611, "mlp_es": -0.154}}
+bearing 8-16 {"embed": {"ridge": -0.489, "n_train": 42361, "n_test": 12414, "mlp_es": -0.413}, "h": {"ridge": -0.403, "n_train": 42361, "n_test": 12414, "mlp_es": -0.466}, "z": {"ridge": -0.313, "n_train": 42361, "n_test": 12414, "mlp_es": -0.426}, "hz": {"ridge": -0.402, "n_train": 42361, "n_test": 12414, "mlp_es": -0.7}, "g": {"ridge": -0.48, "n_train": 42361, "n_test": 12414, "mlp_es": -0.459}, "hzg": {"ridge": -0.451, "n_train": 42361, "n_test": 12414, "mlp_es": -0.721}}
+distance 8-16 {"embed": {"ridge": -0.231, "n_train": 42361, "n_test": 12414, "mlp_es": -0.24}, "h": {"ridge": -0.366, "n_train": 42361, "n_test": 12414, "mlp_es": -0.104}, "z": {"ridge": -0.05, "n_train": 42361, "n_test": 12414, "mlp_es": -0.256}, "hz": {"ridge": -0.377, "n_train": 42361, "n_test": 12414, "mlp_es": -0.173}, "g": {"ridge": -0.34, "n_train": 42361, "n_test": 12414, "mlp_es": -0.565}, "hzg": {"ridge": -0.393, "n_train": 42361, "n_test": 12414, "mlp_es": -0.224}}
+bearing 16-inf {"embed": {"ridge": -3.446, "n_train": 3247, "n_test": 975, "mlp_es": -2.441}, "h": {"ridge": -1.49, "n_train": 3247, "n_test": 975, "mlp_es": -1.304}, "z": {"ridge": -1.627, "n_train": 3247, "n_test": 975, "mlp_es": -1.636}, "hz": {"ridge": -1.492, "n_train": 3247, "n_test": 975, "mlp_es": -1.673}, "g": {"ridge": -1.573, "n_train": 3247, "n_test": 975, "mlp_es": -4.091}, "hzg": {"ridge": -1.339, "n_train": 3247, "n_test": 975, "mlp_es": -2.788}}
+distance 16-inf {"embed": {"ridge": -1.218, "n_train": 3247, "n_test": 975, "mlp_es": -0.71}, "h": {"ridge": -0.392, "n_train": 3247, "n_test": 975, "mlp_es": -1.346}, "z": {"ridge": -0.688, "n_train": 3247, "n_test": 975, "mlp_es": -0.927}, "hz": {"ridge": -0.485, "n_train": 3247, "n_test": 975, "mlp_es": -0.993}, "g": {"ridge": -1.369, "n_train": 3247, "n_test": 975, "mlp_es": -1.349}, "hzg": {"ridge": -0.121, "n_train": 3247, "n_test": 975, "mlp_es": -0.901}}
+bearing day<8 {"embed": {"ridge": 0.695, "n_train": 18196, "n_test": 2458, "mlp_es": 0.476}, "h": {"ridge": 0.51, "n_train": 18196, "n_test": 2458, "mlp_es": 0.434}, "z": {"ridge": -0.005, "n_train": 18196, "n_test": 2458, "mlp_es": -0.184}, "hz": {"ridge": 0.5, "n_train": 18196, "n_test": 2458, "mlp_es": 0.424}, "g": {"ridge": 0.293, "n_train": 18196, "n_test": 2458, "mlp_es": 0.374}, "hzg": {"ridge": 0.502, "n_train": 18196, "n_test": 2458, "mlp_es": 0.437}}
+true sin day_0-4 {"embed": {"ridge": 0.845, "n_train": 4882, "n_test": 929, "mlp_es": 0.659}, "h": {"ridge": 0.683, "n_train": 4882, "n_test": 929, "mlp_es": 0.621}, "z": {"ridge": 0.053, "n_train": 4882, "n_test": 929, "mlp_es": -0.08}, "hz": {"ridge": 0.682, "n_train": 4882, "n_test": 929, "mlp_es": 0.586}, "g": {"ridge": 0.548, "n_train": 4882, "n_test": 929, "mlp_es": 0.348}, "hzg": {"ridge": 0.582, "n_train": 4882, "n_test": 929, "mlp_es": 0.565}}
+true cos day_0-4 {"embed": {"ridge": 0.842, "n_train": 4882, "n_test": 929, "mlp_es": 0.716}, "h": {"ridge": 0.831, "n_train": 4882, "n_test": 929, "mlp_es": 0.679}, "z": {"ridge": 0.004, "n_train": 4882, "n_test": 929, "mlp_es": -0.223}, "hz": {"ridge": 0.826, "n_train": 4882, "n_test": 929, "mlp_es": 0.65}, "g": {"ridge": 0.478, "n_train": 4882, "n_test": 929, "mlp_es": 0.422}, "hzg": {"ridge": 0.835, "n_train": 4882, "n_test": 929, "mlp_es": 0.593}}
+true sin day_4-8 {"embed": {"ridge": 0.863, "n_train": 15154, "n_test": 1821, "mlp_es": 0.697}, "h": {"ridge": 0.691, "n_train": 15154, "n_test": 1821, "mlp_es": 0.633}, "z": {"ridge": 0.011, "n_train": 15154, "n_test": 1821, "mlp_es": -0.118}, "hz": {"ridge": 0.692, "n_train": 15154, "n_test": 1821, "mlp_es": 0.599}, "g": {"ridge": 0.315, "n_train": 15154, "n_test": 1821, "mlp_es": 0.489}, "hzg": {"ridge": 0.691, "n_train": 15154, "n_test": 1821, "mlp_es": 0.594}}
+true cos day_4-8 {"embed": {"ridge": 0.834, "n_train": 15154, "n_test": 1821, "mlp_es": 0.744}, "h": {"ridge": 0.806, "n_train": 15154, "n_test": 1821, "mlp_es": 0.748}, "z": {"ridge": 0.02, "n_train": 15154, "n_test": 1821, "mlp_es": -0.085}, "hz": {"ridge": 0.804, "n_train": 15154, "n_test": 1821, "mlp_es": 0.694}, "g": {"ridge": 0.596, "n_train": 15154, "n_test": 1821, "mlp_es": 0.594}, "hzg": {"ridge": 0.803, "n_train": 15154, "n_test": 1821, "mlp_es": 0.703}}
+true sin day_8-16 {"embed": {"ridge": 0.713, "n_train": 38474, "n_test": 3930, "mlp_es": 0.679}, "h": {"ridge": 0.665, "n_train": 38474, "n_test": 3930, "mlp_es": 0.673}, "z": {"ridge": 0.045, "n_train": 38474, "n_test": 3930, "mlp_es": -0.067}, "hz": {"ridge": 0.666, "n_train": 38474, "n_test": 3930, "mlp_es": 0.6}, "g": {"ridge": 0.495, "n_train": 38474, "n_test": 3930, "mlp_es": 0.241}, "hzg": {"ridge": 0.667, "n_train": 38474, "n_test": 3930, "mlp_es": 0.634}}
+true cos day_8-16 {"embed": {"ridge": 0.659, "n_train": 38474, "n_test": 3930, "mlp_es": 0.579}, "h": {"ridge": 0.61, "n_train": 38474, "n_test": 3930, "mlp_es": 0.496}, "z": {"ridge": 0.06, "n_train": 38474, "n_test": 3930, "mlp_es": -0.058}, "hz": {"ridge": 0.607, "n_train": 38474, "n_test": 3930, "mlp_es": 0.532}, "g": {"ridge": 0.535, "n_train": 38474, "n_test": 3930, "mlp_es": 0.492}, "hzg": {"ridge": 0.594, "n_train": 38474, "n_test": 3930, "mlp_es": 0.566}}
+allo sin day_8-16 {"embed": {"ridge": -1.809, "n_train": 38474, "n_test": 3930, "mlp_es": -4.062}, "h": {"ridge": -2.018, "n_train": 38474, "n_test": 3930, "mlp_es": -2.42}, "z": {"ridge": -0.591, "n_train": 38474, "n_test": 3930, "mlp_es": -1.212}, "hz": {"ridge": -2.12, "n_train": 38474, "n_test": 3930, "mlp_es": -1.86}, "g": {"ridge": -1.268, "n_train": 38474, "n_test": 3930, "mlp_es": -3.623}, "hzg": {"ridge": -3.03, "n_train": 38474, "n_test": 3930, "mlp_es": -2.61}}
+allo cos day_8-16 {"embed": {"ridge": -0.134, "n_train": 38474, "n_test": 3930, "mlp_es": -0.203}, "h": {"ridge": -0.135, "n_train": 38474, "n_test": 3930, "mlp_es": -0.167}, "z": {"ridge": -0.095, "n_train": 38474, "n_test": 3930, "mlp_es": -0.109}, "hz": {"ridge": -0.141, "n_train": 38474, "n_test": 3930, "mlp_es": -0.175}, "g": {"ridge": -0.109, "n_train": 38474, "n_test": 3930, "mlp_es": -0.034}, "hzg": {"ridge": -0.149, "n_train": 38474, "n_test": 3930, "mlp_es": -0.215}}
+true sin day_8-12 {"embed": {"ridge": 0.857, "n_train": 26395, "n_test": 2708, "mlp_es": 0.775}, "h": {"ridge": 0.674, "n_train": 26395, "n_test": 2708, "mlp_es": 0.732}, "z": {"ridge": 0.025, "n_train": 26395, "n_test": 2708, "mlp_es": -0.099}, "hz": {"ridge": 0.676, "n_train": 26395, "n_test": 2708, "mlp_es": 0.659}, "g": {"ridge": 0.498, "n_train": 26395, "n_test": 2708, "mlp_es": 0.435}, "hzg": {"ridge": 0.668, "n_train": 26395, "n_test": 2708, "mlp_es": 0.657}}
+true cos day_8-12 {"embed": {"ridge": 0.796, "n_train": 26395, "n_test": 2708, "mlp_es": 0.747}, "h": {"ridge": 0.711, "n_train": 26395, "n_test": 2708, "mlp_es": 0.642}, "z": {"ridge": 0.076, "n_train": 26395, "n_test": 2708, "mlp_es": -0.056}, "hz": {"ridge": 0.712, "n_train": 26395, "n_test": 2708, "mlp_es": 0.64}, "g": {"ridge": 0.549, "n_train": 26395, "n_test": 2708, "mlp_es": 0.608}, "hzg": {"ridge": 0.699, "n_train": 26395, "n_test": 2708, "mlp_es": 0.671}}
+allo sin day_8-12 {"embed": {"ridge": -2.743, "n_train": 26395, "n_test": 2708, "mlp_es": -3.933}, "h": {"ridge": -2.48, "n_train": 26395, "n_test": 2708, "mlp_es": -2.408}, "z": {"ridge": -0.783, "n_train": 26395, "n_test": 2708, "mlp_es": -1.988}, "hz": {"ridge": -2.572, "n_train": 26395, "n_test": 2708, "mlp_es": -3.124}, "g": {"ridge": -1.11, "n_train": 26395, "n_test": 2708, "mlp_es": -2.65}, "hzg": {"ridge": -3.12, "n_train": 26395, "n_test": 2708, "mlp_es": -3.153}}
+allo cos day_8-12 {"embed": {"ridge": -0.019, "n_train": 26395, "n_test": 2708, "mlp_es": -0.019}, "h": {"ridge": -0.029, "n_train": 26395, "n_test": 2708, "mlp_es": -0.142}, "z": {"ridge": 0.013, "n_train": 26395, "n_test": 2708, "mlp_es": -0.075}, "hz": {"ridge": -0.033, "n_train": 26395, "n_test": 2708, "mlp_es": -0.04}, "g": {"ridge": -0.035, "n_train": 26395, "n_test": 2708, "mlp_es": 0.051}, "hzg": {"ridge": -0.1, "n_train": 26395, "n_test": 2708, "mlp_es": -0.091}}
+true sin day_12-16 {"embed": {"ridge": 0.692, "n_train": 12079, "n_test": 1222, "mlp_es": 0.496}, "h": {"ridge": 0.554, "n_train": 12079, "n_test": 1222, "mlp_es": 0.499}, "z": {"ridge": 0.016, "n_train": 12079, "n_test": 1222, "mlp_es": -0.188}, "hz": {"ridge": 0.543, "n_train": 12079, "n_test": 1222, "mlp_es": 0.393}, "g": {"ridge": 0.387, "n_train": 12079, "n_test": 1222, "mlp_es": 0.178}, "hzg": {"ridge": 0.51, "n_train": 12079, "n_test": 1222, "mlp_es": 0.458}}
+true cos day_12-16 {"embed": {"ridge": 0.588, "n_train": 12079, "n_test": 1222, "mlp_es": 0.185}, "h": {"ridge": 0.443, "n_train": 12079, "n_test": 1222, "mlp_es": 0.235}, "z": {"ridge": -0.047, "n_train": 12079, "n_test": 1222, "mlp_es": -0.165}, "hz": {"ridge": 0.437, "n_train": 12079, "n_test": 1222, "mlp_es": 0.317}, "g": {"ridge": 0.474, "n_train": 12079, "n_test": 1222, "mlp_es": 0.421}, "hzg": {"ridge": 0.367, "n_train": 12079, "n_test": 1222, "mlp_es": 0.352}}
+allo sin day_12-16 {"embed": {"ridge": -2.136, "n_train": 12079, "n_test": 1222, "mlp_es": -3.942}, "h": {"ridge": -2.754, "n_train": 12079, "n_test": 1222, "mlp_es": -3.824}, "z": {"ridge": -0.853, "n_train": 12079, "n_test": 1222, "mlp_es": -2.05}, "hz": {"ridge": -2.882, "n_train": 12079, "n_test": 1222, "mlp_es": -3.239}, "g": {"ridge": -3.816, "n_train": 12079, "n_test": 1222, "mlp_es": -3.071}, "hzg": {"ridge": -4.142, "n_train": 12079, "n_test": 1222, "mlp_es": -3.255}}
+allo cos day_12-16 {"embed": {"ridge": -10.879, "n_train": 12079, "n_test": 1222, "mlp_es": -12.187}, "h": {"ridge": -10.821, "n_train": 12079, "n_test": 1222, "mlp_es": -11.19}, "z": {"ridge": -10.369, "n_train": 12079, "n_test": 1222, "mlp_es": -11.113}, "hz": {"ridge": -10.996, "n_train": 12079, "n_test": 1222, "mlp_es": -11.145}, "g": {"ridge": -9.575, "n_train": 12079, "n_test": 1222, "mlp_es": -11.515}, "hzg": {"ridge": -10.447, "n_train": 12079, "n_test": 1222, "mlp_es": -9.556}}
+/home/nnels/.venvs/flock2/lib/python3.12/site-packages/numpy/_core/fromnumeric.py:3862: RuntimeWarning: Mean of empty slice
+  return _methods._mean(a, axis=axis, dtype=dtype,
+/home/nnels/.venvs/flock2/lib/python3.12/site-packages/numpy/_core/_methods.py:142: RuntimeWarning: invalid value encountered in divide
+  ret = ret.dtype.type(ret / rcount)
+true sin night_0-4 {"embed": {"ridge": 0.567, "n_train": 2991, "n_test": 3035, "mlp_es": -0.339}, "h": {"ridge": 0.502, "n_train": 2991, "n_test": 3035, "mlp_es": -0.306}, "z": {"ridge": 0.05, "n_train": 2991, "n_test": 3035, "mlp_es": -0.861}, "hz": {"ridge": 0.521, "n_train": 2991, "n_test": 3035, "mlp_es": -0.494}, "g": {"ridge": 0.515, "n_train": 2991, "n_test": 3035, "mlp_es": -1.672}, "hzg": {"ridge": 0.387, "n_train": 2991, "n_test": 3035, "mlp_es": -0.448}}
+true cos night_0-4 {"embed": {"ridge": 0.33, "n_train": 2991, "n_test": 3035, "mlp_es": -1.813}, "h": {"ridge": 0.35, "n_train": 2991, "n_test": 3035, "mlp_es": -0.875}, "z": {"ridge": -0.048, "n_train": 2991, "n_test": 3035, "mlp_es": -0.727}, "hz": {"ridge": 0.36, "n_train": 2991, "n_test": 3035, "mlp_es": -0.886}, "g": {"ridge": 0.095, "n_train": 2991, "n_test": 3035, "mlp_es": -1.298}, "hzg": {"ridge": 0.203, "n_train": 2991, "n_test": 3035, "mlp_es": -0.933}}
+true sin night_4-8 {"embed": {"ridge": 0.073, "n_train": 3330, "n_test": 6089, "mlp_es": -0.707}, "h": {"ridge": -0.128, "n_train": 3330, "n_test": 6089, "mlp_es": -0.918}, "z": {"ridge": -1.07, "n_train": 3330, "n_test": 6089, "mlp_es": -1.515}, "hz": {"ridge": -0.062, "n_train": 3330, "n_test": 6089, "mlp_es": -0.332}, "g": {"ridge": -1.013, "n_train": 3330, "n_test": 6089, "mlp_es": -1.908}, "hzg": {"ridge": -0.129, "n_train": 3330, "n_test": 6089, "mlp_es": -0.5}}
+true cos night_4-8 {"embed": {"ridge": 0.42, "n_train": 3330, "n_test": 6089, "mlp_es": -0.083}, "h": {"ridge": -0.081, "n_train": 3330, "n_test": 6089, "mlp_es": -0.075}, "z": {"ridge": -0.352, "n_train": 3330, "n_test": 6089, "mlp_es": -0.407}, "hz": {"ridge": 0.018, "n_train": 3330, "n_test": 6089, "mlp_es": -0.191}, "g": {"ridge": -0.828, "n_train": 3330, "n_test": 6089, "mlp_es": -0.675}, "hzg": {"ridge": -0.302, "n_train": 3330, "n_test": 6089, "mlp_es": -0.125}}
+true sin night_8-16 {"embed": {"ridge": -0.73, "n_train": 6190, "n_test": 8737, "mlp_es": -1.051}, "h": {"ridge": -0.761, "n_train": 6190, "n_test": 8737, "mlp_es": -0.604}, "z": {"ridge": -0.566, "n_train": 6190, "n_test": 8737, "mlp_es": -0.594}, "hz": {"ridge": -0.726, "n_train": 6190, "n_test": 8737, "mlp_es": -0.594}, "g": {"ridge": -1.039, "n_train": 6190, "n_test": 8737, "mlp_es": -0.742}, "hzg": {"ridge": -0.874, "n_train": 6190, "n_test": 8737, "mlp_es": -0.623}}
+true cos night_8-16 {"embed": {"ridge": -1.431, "n_train": 6190, "n_test": 8737, "mlp_es": -0.707}, "h": {"ridge": -1.485, "n_train": 6190, "n_test": 8737, "mlp_es": -0.52}, "z": {"ridge": -0.259, "n_train": 6190, "n_test": 8737, "mlp_es": -0.605}, "hz": {"ridge": -1.557, "n_train": 6190, "n_test": 8737, "mlp_es": -0.632}, "g": {"ridge": -1.678, "n_train": 6190, "n_test": 8737, "mlp_es": -0.586}, "hzg": {"ridge": -1.501, "n_train": 6190, "n_test": 8737, "mlp_es": -0.541}}
+allo sin night_8-16 {"embed": {"ridge": -5.869, "n_train": 6190, "n_test": 8737, "mlp_es": -2.819}, "h": {"ridge": -5.471, "n_train": 6190, "n_test": 8737, "mlp_es": -3.231}, "z": {"ridge": -1.943, "n_train": 6190, "n_test": 8737, "mlp_es": -2.979}, "hz": {"ridge": -5.526, "n_train": 6190, "n_test": 8737, "mlp_es": -3.041}, "g": {"ridge": -5.821, "n_train": 6190, "n_test": 8737, "mlp_es": -3.015}, "hzg": {"ridge": -6.44, "n_train": 6190, "n_test": 8737, "mlp_es": -3.212}}
+allo cos night_8-16 {"embed": {"ridge": -0.346, "n_train": 6190, "n_test": 8737, "mlp_es": 0.082}, "h": {"ridge": -0.272, "n_train": 6190, "n_test": 8737, "mlp_es": -0.09}, "z": {"ridge": -0.093, "n_train": 6190, "n_test": 8737, "mlp_es": -0.205}, "hz": {"ridge": -0.253, "n_train": 6190, "n_test": 8737, "mlp_es": -0.148}, "g": {"ridge": -0.51, "n_train": 6190, "n_test": 8737, "mlp_es": 0.251}, "hzg": {"ridge": -0.116, "n_train": 6190, "n_test": 8737, "mlp_es": -0.156}}
+true sin night_8-12 {"embed": {"ridge": 0.266, "n_train": 3182, "n_test": 5329, "mlp_es": -1.292}, "h": {"ridge": -0.373, "n_train": 3182, "n_test": 5329, "mlp_es": 0.151}, "z": {"ridge": -0.099, "n_train": 3182, "n_test": 5329, "mlp_es": -0.245}, "hz": {"ridge": -0.386, "n_train": 3182, "n_test": 5329, "mlp_es": 0.217}, "g": {"ridge": -0.59, "n_train": 3182, "n_test": 5329, "mlp_es": -0.3}, "hzg": {"ridge": 0.011, "n_train": 3182, "n_test": 5329, "mlp_es": -0.147}}
+true cos night_8-12 {"embed": {"ridge": -0.073, "n_train": 3182, "n_test": 5329, "mlp_es": -0.885}, "h": {"ridge": -0.203, "n_train": 3182, "n_test": 5329, "mlp_es": -0.679}, "z": {"ridge": -0.397, "n_train": 3182, "n_test": 5329, "mlp_es": -0.529}, "hz": {"ridge": -0.295, "n_train": 3182, "n_test": 5329, "mlp_es": -0.564}, "g": {"ridge": -1.005, "n_train": 3182, "n_test": 5329, "mlp_es": -0.141}, "hzg": {"ridge": -0.469, "n_train": 3182, "n_test": 5329, "mlp_es": -0.267}}
+allo sin night_8-12 {"embed": {"ridge": -5.007, "n_train": 3182, "n_test": 5329, "mlp_es": -1.622}, "h": {"ridge": -2.737, "n_train": 3182, "n_test": 5329, "mlp_es": -0.245}, "z": {"ridge": -0.421, "n_train": 3182, "n_test": 5329, "mlp_es": -0.347}, "hz": {"ridge": -2.567, "n_train": 3182, "n_test": 5329, "mlp_es": -0.374}, "g": {"ridge": -2.692, "n_train": 3182, "n_test": 5329, "mlp_es": -0.429}, "hzg": {"ridge": -3.251, "n_train": 3182, "n_test": 5329, "mlp_es": -1.256}}
+allo cos night_8-12 {"embed": {"ridge": -3.524, "n_train": 3182, "n_test": 5329, "mlp_es": -0.703}, "h": {"ridge": -2.813, "n_train": 3182, "n_test": 5329, "mlp_es": -2.153}, "z": {"ridge": -1.229, "n_train": 3182, "n_test": 5329, "mlp_es": -1.165}, "hz": {"ridge": -2.947, "n_train": 3182, "n_test": 5329, "mlp_es": -1.662}, "g": {"ridge": -2.634, "n_train": 3182, "n_test": 5329, "mlp_es": -0.742}, "hzg": {"ridge": -2.794, "n_train": 3182, "n_test": 5329, "mlp_es": -1.619}}
+true sin night_12-16 {"embed": {"ridge": -1.652, "n_train": 3008, "n_test": 3408, "mlp_es": -1.704}, "h": {"ridge": -1.435, "n_train": 3008, "n_test": 3408, "mlp_es": -1.513}, "z": {"ridge": -0.916, "n_train": 3008, "n_test": 3408, "mlp_es": -1.289}, "hz": {"ridge": -1.363, "n_train": 3008, "n_test": 3408, "mlp_es": -1.753}, "g": {"ridge": -0.738, "n_train": 3008, "n_test": 3408, "mlp_es": -0.878}, "hzg": {"ridge": -1.138, "n_train": 3008, "n_test": 3408, "mlp_es": -1.889}}
+true cos night_12-16 {"embed": {"ridge": -2.761, "n_train": 3008, "n_test": 3408, "mlp_es": -0.502}, "h": {"ridge": -1.678, "n_train": 3008, "n_test": 3408, "mlp_es": -0.755}, "z": {"ridge": -0.358, "n_train": 3008, "n_test": 3408, "mlp_es": -0.522}, "hz": {"ridge": -1.723, "n_train": 3008, "n_test": 3408, "mlp_es": -0.368}, "g": {"ridge": -1.474, "n_train": 3008, "n_test": 3408, "mlp_es": -0.628}, "hzg": {"ridge": -2.161, "n_train": 3008, "n_test": 3408, "mlp_es": -0.396}}
+allo sin night_12-16 {"embed": {"ridge": -7.825, "n_train": 3008, "n_test": 3408, "mlp_es": -4.957}, "h": {"ridge": -5.271, "n_train": 3008, "n_test": 3408, "mlp_es": -6.73}, "z": {"ridge": -4.145, "n_train": 3008, "n_test": 3408, "mlp_es": -5.092}, "hz": {"ridge": -5.105, "n_train": 3008, "n_test": 3408, "mlp_es": -6.693}, "g": {"ridge": -6.517, "n_train": 3008, "n_test": 3408, "mlp_es": -11.675}, "hzg": {"ridge": -5.886, "n_train": 3008, "n_test": 3408, "mlp_es": -4.809}}
+allo cos night_12-16 {"embed": {"ridge": -5.612, "n_train": 3008, "n_test": 3408, "mlp_es": -5.16}, "h": {"ridge": -7.909, "n_train": 3008, "n_test": 3408, "mlp_es": -3.803}, "z": {"ridge": -5.577, "n_train": 3008, "n_test": 3408, "mlp_es": -4.384}, "hz": {"ridge": -7.93, "n_train": 3008, "n_test": 3408, "mlp_es": -4.732}, "g": {"ridge": -7.951, "n_train": 3008, "n_test": 3408, "mlp_es": -3.69}, "hzg": {"ridge": -7.936, "n_train": 3008, "n_test": 3408, "mlp_es": -3.136}}
+true sin fog_day_0-4 {"embed": {"ridge": 0.845, "n_train": 4882, "n_test": 929, "mlp_es": 0.659}, "h": {"ridge": 0.683, "n_train": 4882, "n_test": 929, "mlp_es": 0.621}, "z": {"ridge": 0.053, "n_train": 4882, "n_test": 929, "mlp_es": -0.08}, "hz": {"ridge": 0.682, "n_train": 4882, "n_test": 929, "mlp_es": 0.586}, "g": {"ridge": 0.548, "n_train": 4882, "n_test": 929, "mlp_es": 0.348}, "hzg": {"ridge": 0.582, "n_train": 4882, "n_test": 929, "mlp_es": 0.565}}
+true cos fog_day_0-4 {"embed": {"ridge": 0.842, "n_train": 4882, "n_test": 929, "mlp_es": 0.716}, "h": {"ridge": 0.831, "n_train": 4882, "n_test": 929, "mlp_es": 0.679}, "z": {"ridge": 0.004, "n_train": 4882, "n_test": 929, "mlp_es": -0.223}, "hz": {"ridge": 0.826, "n_train": 4882, "n_test": 929, "mlp_es": 0.65}, "g": {"ridge": 0.478, "n_train": 4882, "n_test": 929, "mlp_es": 0.422}, "hzg": {"ridge": 0.835, "n_train": 4882, "n_test": 929, "mlp_es": 0.593}}
+true sin fog_day_4-8 {"embed": {"ridge": 0.863, "n_train": 15154, "n_test": 1821, "mlp_es": 0.697}, "h": {"ridge": 0.691, "n_train": 15154, "n_test": 1821, "mlp_es": 0.633}, "z": {"ridge": 0.011, "n_train": 15154, "n_test": 1821, "mlp_es": -0.118}, "hz": {"ridge": 0.692, "n_train": 15154, "n_test": 1821, "mlp_es": 0.599}, "g": {"ridge": 0.315, "n_train": 15154, "n_test": 1821, "mlp_es": 0.489}, "hzg": {"ridge": 0.691, "n_train": 15154, "n_test": 1821, "mlp_es": 0.594}}
+true cos fog_day_4-8 {"embed": {"ridge": 0.834, "n_train": 15154, "n_test": 1821, "mlp_es": 0.744}, "h": {"ridge": 0.806, "n_train": 15154, "n_test": 1821, "mlp_es": 0.748}, "z": {"ridge": 0.02, "n_train": 15154, "n_test": 1821, "mlp_es": -0.085}, "hz": {"ridge": 0.804, "n_train": 15154, "n_test": 1821, "mlp_es": 0.694}, "g": {"ridge": 0.596, "n_train": 15154, "n_test": 1821, "mlp_es": 0.594}, "hzg": {"ridge": 0.803, "n_train": 15154, "n_test": 1821, "mlp_es": 0.703}}
+true sin fog_day_8-16 {"embed": {"ridge": 0.713, "n_train": 38474, "n_test": 3930, "mlp_es": 0.679}, "h": {"ridge": 0.665, "n_train": 38474, "n_test": 3930, "mlp_es": 0.673}, "z": {"ridge": 0.045, "n_train": 38474, "n_test": 3930, "mlp_es": -0.067}, "hz": {"ridge": 0.666, "n_train": 38474, "n_test": 3930, "mlp_es": 0.6}, "g": {"ridge": 0.495, "n_train": 38474, "n_test": 3930, "mlp_es": 0.241}, "hzg": {"ridge": 0.667, "n_train": 38474, "n_test": 3930, "mlp_es": 0.634}}
+true cos fog_day_8-16 {"embed": {"ridge": 0.659, "n_train": 38474, "n_test": 3930, "mlp_es": 0.579}, "h": {"ridge": 0.61, "n_train": 38474, "n_test": 3930, "mlp_es": 0.496}, "z": {"ridge": 0.06, "n_train": 38474, "n_test": 3930, "mlp_es": -0.058}, "hz": {"ridge": 0.607, "n_train": 38474, "n_test": 3930, "mlp_es": 0.532}, "g": {"ridge": 0.535, "n_train": 38474, "n_test": 3930, "mlp_es": 0.492}, "hzg": {"ridge": 0.594, "n_train": 38474, "n_test": 3930, "mlp_es": 0.566}}
+allo sin fog_day_8-16 {"embed": {"ridge": -1.809, "n_train": 38474, "n_test": 3930, "mlp_es": -4.062}, "h": {"ridge": -2.018, "n_train": 38474, "n_test": 3930, "mlp_es": -2.42}, "z": {"ridge": -0.591, "n_train": 38474, "n_test": 3930, "mlp_es": -1.212}, "hz": {"ridge": -2.12, "n_train": 38474, "n_test": 3930, "mlp_es": -1.86}, "g": {"ridge": -1.268, "n_train": 38474, "n_test": 3930, "mlp_es": -3.623}, "hzg": {"ridge": -3.03, "n_train": 38474, "n_test": 3930, "mlp_es": -2.61}}
+allo cos fog_day_8-16 {"embed": {"ridge": -0.134, "n_train": 38474, "n_test": 3930, "mlp_es": -0.203}, "h": {"ridge": -0.135, "n_train": 38474, "n_test": 3930, "mlp_es": -0.167}, "z": {"ridge": -0.095, "n_train": 38474, "n_test": 3930, "mlp_es": -0.109}, "hz": {"ridge": -0.141, "n_train": 38474, "n_test": 3930, "mlp_es": -0.175}, "g": {"ridge": -0.109, "n_train": 38474, "n_test": 3930, "mlp_es": -0.034}, "hzg": {"ridge": -0.149, "n_train": 38474, "n_test": 3930, "mlp_es": -0.215}}
+true sin fog_day_8-12 {"embed": {"ridge": 0.857, "n_train": 26395, "n_test": 2708, "mlp_es": 0.775}, "h": {"ridge": 0.674, "n_train": 26395, "n_test": 2708, "mlp_es": 0.732}, "z": {"ridge": 0.025, "n_train": 26395, "n_test": 2708, "mlp_es": -0.099}, "hz": {"ridge": 0.676, "n_train": 26395, "n_test": 2708, "mlp_es": 0.659}, "g": {"ridge": 0.498, "n_train": 26395, "n_test": 2708, "mlp_es": 0.435}, "hzg": {"ridge": 0.668, "n_train": 26395, "n_test": 2708, "mlp_es": 0.657}}
+true cos fog_day_8-12 {"embed": {"ridge": 0.796, "n_train": 26395, "n_test": 2708, "mlp_es": 0.747}, "h": {"ridge": 0.711, "n_train": 26395, "n_test": 2708, "mlp_es": 0.642}, "z": {"ridge": 0.076, "n_train": 26395, "n_test": 2708, "mlp_es": -0.056}, "hz": {"ridge": 0.712, "n_train": 26395, "n_test": 2708, "mlp_es": 0.64}, "g": {"ridge": 0.549, "n_train": 26395, "n_test": 2708, "mlp_es": 0.608}, "hzg": {"ridge": 0.699, "n_train": 26395, "n_test": 2708, "mlp_es": 0.671}}
+allo sin fog_day_8-12 {"embed": {"ridge": -2.743, "n_train": 26395, "n_test": 2708, "mlp_es": -3.933}, "h": {"ridge": -2.48, "n_train": 26395, "n_test": 2708, "mlp_es": -2.408}, "z": {"ridge": -0.783, "n_train": 26395, "n_test": 2708, "mlp_es": -1.988}, "hz": {"ridge": -2.572, "n_train": 26395, "n_test": 2708, "mlp_es": -3.124}, "g": {"ridge": -1.11, "n_train": 26395, "n_test": 2708, "mlp_es": -2.65}, "hzg": {"ridge": -3.12, "n_train": 26395, "n_test": 2708, "mlp_es": -3.153}}
+allo cos fog_day_8-12 {"embed": {"ridge": -0.019, "n_train": 26395, "n_test": 2708, "mlp_es": -0.019}, "h": {"ridge": -0.029, "n_train": 26395, "n_test": 2708, "mlp_es": -0.142}, "z": {"ridge": 0.013, "n_train": 26395, "n_test": 2708, "mlp_es": -0.075}, "hz": {"ridge": -0.033, "n_train": 26395, "n_test": 2708, "mlp_es": -0.04}, "g": {"ridge": -0.035, "n_train": 26395, "n_test": 2708, "mlp_es": 0.051}, "hzg": {"ridge": -0.1, "n_train": 26395, "n_test": 2708, "mlp_es": -0.091}}
+true sin fog_day_12-16 {"embed": {"ridge": 0.692, "n_train": 12079, "n_test": 1222, "mlp_es": 0.496}, "h": {"ridge": 0.554, "n_train": 12079, "n_test": 1222, "mlp_es": 0.499}, "z": {"ridge": 0.016, "n_train": 12079, "n_test": 1222, "mlp_es": -0.188}, "hz": {"ridge": 0.543, "n_train": 12079, "n_test": 1222, "mlp_es": 0.393}, "g": {"ridge": 0.387, "n_train": 12079, "n_test": 1222, "mlp_es": 0.178}, "hzg": {"ridge": 0.51, "n_train": 12079, "n_test": 1222, "mlp_es": 0.458}}
+true cos fog_day_12-16 {"embed": {"ridge": 0.588, "n_train": 12079, "n_test": 1222, "mlp_es": 0.185}, "h": {"ridge": 0.443, "n_train": 12079, "n_test": 1222, "mlp_es": 0.235}, "z": {"ridge": -0.047, "n_train": 12079, "n_test": 1222, "mlp_es": -0.165}, "hz": {"ridge": 0.437, "n_train": 12079, "n_test": 1222, "mlp_es": 0.317}, "g": {"ridge": 0.474, "n_train": 12079, "n_test": 1222, "mlp_es": 0.421}, "hzg": {"ridge": 0.367, "n_train": 12079, "n_test": 1222, "mlp_es": 0.352}}
+allo sin fog_day_12-16 {"embed": {"ridge": -2.136, "n_train": 12079, "n_test": 1222, "mlp_es": -3.942}, "h": {"ridge": -2.754, "n_train": 12079, "n_test": 1222, "mlp_es": -3.824}, "z": {"ridge": -0.853, "n_train": 12079, "n_test": 1222, "mlp_es": -2.05}, "hz": {"ridge": -2.882, "n_train": 12079, "n_test": 1222, "mlp_es": -3.239}, "g": {"ridge": -3.816, "n_train": 12079, "n_test": 1222, "mlp_es": -3.071}, "hzg": {"ridge": -4.142, "n_train": 12079, "n_test": 1222, "mlp_es": -3.255}}
+allo cos fog_day_12-16 {"embed": {"ridge": -10.879, "n_train": 12079, "n_test": 1222, "mlp_es": -12.187}, "h": {"ridge": -10.821, "n_train": 12079, "n_test": 1222, "mlp_es": -11.19}, "z": {"ridge": -10.369, "n_train": 12079, "n_test": 1222, "mlp_es": -11.113}, "hz": {"ridge": -10.996, "n_train": 12079, "n_test": 1222, "mlp_es": -11.145}, "g": {"ridge": -9.575, "n_train": 12079, "n_test": 1222, "mlp_es": -11.515}, "hzg": {"ridge": -10.447, "n_train": 12079, "n_test": 1222, "mlp_es": -9.556}}
+true sin clear_day_0-4 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true cos clear_day_0-4 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true sin clear_day_4-8 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true cos clear_day_4-8 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true sin clear_day_8-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true cos clear_day_8-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo sin clear_day_8-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo cos clear_day_8-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true sin clear_day_8-12 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true cos clear_day_8-12 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo sin clear_day_8-12 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo cos clear_day_8-12 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true sin clear_day_12-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+true cos clear_day_12-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo sin clear_day_12-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+allo cos clear_day_12-16 {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null}
+recent sin {"embed": {"ridge": -0.131, "n_train": 9582, "n_test": 2040, "mlp_es": 0.351}, "h": {"ridge": -0.009, "n_train": 9582, "n_test": 2040, "mlp_es": 0.062}, "z": {"ridge": 0.012, "n_train": 9582, "n_test": 2040, "mlp_es": -0.115}, "hz": {"ridge": 0.01, "n_train": 9582, "n_test": 2040, "mlp_es": 0.074}, "g": {"ridge": -0.334, "n_train": 9582, "n_test": 2040, "mlp_es": -0.082}, "hzg": {"ridge": -0.256, "n_train": 9582, "n_test": 2040, "mlp_es": -0.162}, "noise_g": {"ridge": -0.037, "n_train": 9582, "n_test": 2040, "mlp_es": -0.216}, "noise_hzg": {"ridge": -0.161, "n_train": 9582, "n_test": 2040, "mlp_es": -0.273}}
+recent cos {"embed": {"ridge": 0.255, "n_train": 9582, "n_test": 2040, "mlp_es": 0.11}, "h": {"ridge": 0.302, "n_train": 9582, "n_test": 2040, "mlp_es": 0.28}, "z": {"ridge": 0.008, "n_train": 9582, "n_test": 2040, "mlp_es": -0.085}, "hz": {"ridge": 0.285, "n_train": 9582, "n_test": 2040, "mlp_es": 0.16}, "g": {"ridge": -0.153, "n_train": 9582, "n_test": 2040, "mlp_es": -0.119}, "hzg": {"ridge": 0.26, "n_train": 9582, "n_test": 2040, "mlp_es": 0.165}, "noise_g": {"ridge": -0.062, "n_train": 9582, "n_test": 2040, "mlp_es": -0.253}, "noise_hzg": {"ridge": -0.108, "n_train": 9582, "n_test": 2040, "mlp_es": -0.208}}
+recent day sin {"embed": {"ridge": 0.374, "n_train": 8303, "n_test": 1111, "mlp_es": 0.295}, "h": {"ridge": 0.244, "n_train": 8303, "n_test": 1111, "mlp_es": 0.209}, "z": {"ridge": -0.036, "n_train": 8303, "n_test": 1111, "mlp_es": -0.234}, "hz": {"ridge": 0.226, "n_train": 8303, "n_test": 1111, "mlp_es": 0.162}, "g": {"ridge": -0.036, "n_train": 8303, "n_test": 1111, "mlp_es": 0.079}, "hzg": {"ridge": -0.092, "n_train": 8303, "n_test": 1111, "mlp_es": 0.258}, "noise_g": {"ridge": -0.055, "n_train": 8303, "n_test": 1111, "mlp_es": -0.373}, "noise_hzg": {"ridge": -0.207, "n_train": 8303, "n_test": 1111, "mlp_es": -0.342}}
+recent day cos {"embed": {"ridge": 0.688, "n_train": 8303, "n_test": 1111, "mlp_es": 0.636}, "h": {"ridge": 0.679, "n_train": 8303, "n_test": 1111, "mlp_es": 0.645}, "z": {"ridge": 0.037, "n_train": 8303, "n_test": 1111, "mlp_es": -0.132}, "hz": {"ridge": 0.669, "n_train": 8303, "n_test": 1111, "mlp_es": 0.546}, "g": {"ridge": 0.502, "n_train": 8303, "n_test": 1111, "mlp_es": 0.485}, "hzg": {"ridge": 0.602, "n_train": 8303, "n_test": 1111, "mlp_es": 0.629}, "noise_g": {"ridge": -0.018, "n_train": 8303, "n_test": 1111, "mlp_es": -0.184}, "noise_hzg": {"ridge": -0.085, "n_train": 8303, "n_test": 1111, "mlp_es": -0.163}}
+recent allo day sin {"embed": {"ridge": -6.792, "n_train": 8303, "n_test": 1111, "mlp_es": -12.597}, "h": {"ridge": -11.342, "n_train": 8303, "n_test": 1111, "mlp_es": -9.885}, "z": {"ridge": -2.444, "n_train": 8303, "n_test": 1111, "mlp_es": -6.385}, "hz": {"ridge": -12.349, "n_train": 8303, "n_test": 1111, "mlp_es": -10.452}, "g": {"ridge": -9.225, "n_train": 8303, "n_test": 1111, "mlp_es": -11.03}, "hzg": {"ridge": -21.423, "n_train": 8303, "n_test": 1111, "mlp_es": -9.825}, "noise_g": {"ridge": -1.228, "n_train": 8303, "n_test": 1111, "mlp_es": -7.704}, "noise_hzg": {"ridge": -4.392, "n_train": 8303, "n_test": 1111, "mlp_es": -10.492}}
+recent allo day cos {"embed": {"ridge": -10.464, "n_train": 8303, "n_test": 1111, "mlp_es": -12.285}, "h": {"ridge": -10.22, "n_train": 8303, "n_test": 1111, "mlp_es": -10.414}, "z": {"ridge": -8.664, "n_train": 8303, "n_test": 1111, "mlp_es": -10.256}, "hz": {"ridge": -10.214, "n_train": 8303, "n_test": 1111, "mlp_es": -10.107}, "g": {"ridge": -12.79, "n_train": 8303, "n_test": 1111, "mlp_es": -10.197}, "hzg": {"ridge": -11.937, "n_train": 8303, "n_test": 1111, "mlp_es": -10.075}, "noise_g": {"ridge": -8.313, "n_train": 8303, "n_test": 1111, "mlp_es": -10.309}, "noise_hzg": {"ridge": -8.458, "n_train": 8303, "n_test": 1111, "mlp_es": -9.557}}
+recent night sin {"embed": {"ridge": -1.426, "n_train": 1279, "n_test": 929, "mlp_es": -0.174}, "h": {"ridge": -1.322, "n_train": 1279, "n_test": 929, "mlp_es": -0.326}, "z": {"ridge": -0.527, "n_train": 1279, "n_test": 929, "mlp_es": -0.365}, "hz": {"ridge": -0.997, "n_train": 1279, "n_test": 929, "mlp_es": -1.01}, "g": {"ridge": -1.332, "n_train": 1279, "n_test": 929, "mlp_es": -0.127}, "hzg": {"ridge": -0.255, "n_train": 1279, "n_test": 929, "mlp_es": -0.205}, "noise_g": {"ridge": -0.412, "n_train": 1279, "n_test": 929, "mlp_es": -0.564}, "noise_hzg": {"ridge": -5.431, "n_train": 1279, "n_test": 929, "mlp_es": -0.488}}
+recent night cos {"embed": {"ridge": -1.644, "n_train": 1279, "n_test": 929, "mlp_es": -2.102}, "h": {"ridge": -2.229, "n_train": 1279, "n_test": 929, "mlp_es": -0.564}, "z": {"ridge": -0.55, "n_train": 1279, "n_test": 929, "mlp_es": -0.637}, "hz": {"ridge": -2.55, "n_train": 1279, "n_test": 929, "mlp_es": -0.51}, "g": {"ridge": -3.79, "n_train": 1279, "n_test": 929, "mlp_es": -0.834}, "hzg": {"ridge": -3.644, "n_train": 1279, "n_test": 929, "mlp_es": -0.624}, "noise_g": {"ridge": -0.281, "n_train": 1279, "n_test": 929, "mlp_es": -0.769}, "noise_hzg": {"ridge": -5.846, "n_train": 1279, "n_test": 929, "mlp_es": -0.692}}
+recent allo night sin {"embed": {"ridge": -2.834, "n_train": 1279, "n_test": 929, "mlp_es": -1.863}, "h": {"ridge": -1.334, "n_train": 1279, "n_test": 929, "mlp_es": -1.592}, "z": {"ridge": -0.47, "n_train": 1279, "n_test": 929, "mlp_es": -0.712}, "hz": {"ridge": -1.427, "n_train": 1279, "n_test": 929, "mlp_es": -1.116}, "g": {"ridge": -1.066, "n_train": 1279, "n_test": 929, "mlp_es": -1.745}, "hzg": {"ridge": -1.05, "n_train": 1279, "n_test": 929, "mlp_es": -1.034}, "noise_g": {"ridge": -0.267, "n_train": 1279, "n_test": 929, "mlp_es": -0.744}, "noise_hzg": {"ridge": -6.426, "n_train": 1279, "n_test": 929, "mlp_es": -0.755}}
+recent allo night cos {"embed": {"ridge": -1.839, "n_train": 1279, "n_test": 929, "mlp_es": -1.719}, "h": {"ridge": -1.04, "n_train": 1279, "n_test": 929, "mlp_es": -1.858}, "z": {"ridge": -1.455, "n_train": 1279, "n_test": 929, "mlp_es": -1.077}, "hz": {"ridge": -1.17, "n_train": 1279, "n_test": 929, "mlp_es": -0.928}, "g": {"ridge": -1.702, "n_train": 1279, "n_test": 929, "mlp_es": -1.145}, "hzg": {"ridge": -0.536, "n_train": 1279, "n_test": 929, "mlp_es": -0.401}, "noise_g": {"ridge": -1.455, "n_train": 1279, "n_test": 929, "mlp_es": -1.584}, "noise_hzg": {"ridge": -7.193, "n_train": 1279, "n_test": 929, "mlp_es": -1.429}}
+recent fog_day sin {"embed": {"ridge": 0.374, "n_train": 8303, "n_test": 1111, "mlp_es": 0.295}, "h": {"ridge": 0.244, "n_train": 8303, "n_test": 1111, "mlp_es": 0.209}, "z": {"ridge": -0.036, "n_train": 8303, "n_test": 1111, "mlp_es": -0.234}, "hz": {"ridge": 0.226, "n_train": 8303, "n_test": 1111, "mlp_es": 0.162}, "g": {"ridge": -0.036, "n_train": 8303, "n_test": 1111, "mlp_es": 0.079}, "hzg": {"ridge": -0.092, "n_train": 8303, "n_test": 1111, "mlp_es": 0.258}, "noise_g": {"ridge": -0.055, "n_train": 8303, "n_test": 1111, "mlp_es": -0.373}, "noise_hzg": {"ridge": -0.207, "n_train": 8303, "n_test": 1111, "mlp_es": -0.342}}
+recent fog_day cos {"embed": {"ridge": 0.688, "n_train": 8303, "n_test": 1111, "mlp_es": 0.636}, "h": {"ridge": 0.679, "n_train": 8303, "n_test": 1111, "mlp_es": 0.645}, "z": {"ridge": 0.037, "n_train": 8303, "n_test": 1111, "mlp_es": -0.132}, "hz": {"ridge": 0.669, "n_train": 8303, "n_test": 1111, "mlp_es": 0.546}, "g": {"ridge": 0.502, "n_train": 8303, "n_test": 1111, "mlp_es": 0.485}, "hzg": {"ridge": 0.602, "n_train": 8303, "n_test": 1111, "mlp_es": 0.629}, "noise_g": {"ridge": -0.018, "n_train": 8303, "n_test": 1111, "mlp_es": -0.184}, "noise_hzg": {"ridge": -0.085, "n_train": 8303, "n_test": 1111, "mlp_es": -0.163}}
+recent allo fog_day sin {"embed": {"ridge": -6.792, "n_train": 8303, "n_test": 1111, "mlp_es": -12.597}, "h": {"ridge": -11.342, "n_train": 8303, "n_test": 1111, "mlp_es": -9.885}, "z": {"ridge": -2.444, "n_train": 8303, "n_test": 1111, "mlp_es": -6.385}, "hz": {"ridge": -12.349, "n_train": 8303, "n_test": 1111, "mlp_es": -10.452}, "g": {"ridge": -9.225, "n_train": 8303, "n_test": 1111, "mlp_es": -11.03}, "hzg": {"ridge": -21.423, "n_train": 8303, "n_test": 1111, "mlp_es": -9.825}, "noise_g": {"ridge": -1.228, "n_train": 8303, "n_test": 1111, "mlp_es": -7.704}, "noise_hzg": {"ridge": -4.392, "n_train": 8303, "n_test": 1111, "mlp_es": -10.492}}
+recent allo fog_day cos {"embed": {"ridge": -10.464, "n_train": 8303, "n_test": 1111, "mlp_es": -12.285}, "h": {"ridge": -10.22, "n_train": 8303, "n_test": 1111, "mlp_es": -10.414}, "z": {"ridge": -8.664, "n_train": 8303, "n_test": 1111, "mlp_es": -10.256}, "hz": {"ridge": -10.214, "n_train": 8303, "n_test": 1111, "mlp_es": -10.107}, "g": {"ridge": -12.79, "n_train": 8303, "n_test": 1111, "mlp_es": -10.197}, "hzg": {"ridge": -11.937, "n_train": 8303, "n_test": 1111, "mlp_es": -10.075}, "noise_g": {"ridge": -8.313, "n_train": 8303, "n_test": 1111, "mlp_es": -10.309}, "noise_hzg": {"ridge": -8.458, "n_train": 8303, "n_test": 1111, "mlp_es": -9.557}}
+recent clear_day sin {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null, "noise_g": null, "noise_hzg": null}
+recent clear_day cos {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null, "noise_g": null, "noise_hzg": null}
+recent allo clear_day sin {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null, "noise_g": null, "noise_hzg": null}
+recent allo clear_day cos {"embed": null, "h": null, "z": null, "hz": null, "g": null, "hzg": null, "noise_g": null, "noise_hzg": null}
+{
+ "D1": {
+  "day": {
+   "0-4": {
+    "recall": 0.923,
+    "water_px": 924142
+   },
+   "4-8": {
+    "recall": 0.583,
+    "water_px": 337977
+   },
+   "8-16": {
+    "recall": 0.045,
+    "water_px": 212897
+   },
+   "16-inf": {
+    "recall": 0.08,
+    "water_px": 17655
+   }
+  },
+  "night": {
+   "0-4": {
+    "recall": 0.823,
+    "water_px": 598317
+   },
+   "4-8": {
+    "recall": 0.485,
+    "water_px": 226183
+   },
+   "8-16": {
+    "recall": 0.149,
+    "water_px": 81694
+   },
+   "16-inf": {
+    "recall": 0.21,
+    "water_px": 9291
+   }
+  },
+  "all": {
+   "0-4": {
+    "recall": 0.883,
+    "water_px": 1522459
+   },
+   "4-8": {
+    "recall": 0.544,
+    "water_px": 564160
+   },
+   "8-16": {
+    "recall": 0.074,
+    "water_px": 294591
+   },
+   "16-inf": {
+    "recall": 0.125,
+    "water_px": 26946
+   }
+  },
+  "day_within_8_recall": 0.832
+ },
+ "D2_true": {
+  "day_0-4": {
+   "frames": 5811,
+   "sin": {
+    "embed": {
+     "ridge": 0.845,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.659
+    },
+    "h": {
+     "ridge": 0.683,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.621
+    },
+    "z": {
+     "ridge": 0.053,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": -0.08
+    },
+    "hz": {
+     "ridge": 0.682,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.586
+    },
+    "g": {
+     "ridge": 0.548,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.348
+    },
+    "hzg": {
+     "ridge": 0.582,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.565
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.842,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.716
+    },
+    "h": {
+     "ridge": 0.831,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.679
+    },
+    "z": {
+     "ridge": 0.004,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": -0.223
+    },
+    "hz": {
+     "ridge": 0.826,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.65
+    },
+    "g": {
+     "ridge": 0.478,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.422
+    },
+    "hzg": {
+     "ridge": 0.835,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.593
+    }
+   }
+  },
+  "day_4-8": {
+   "frames": 16975,
+   "sin": {
+    "embed": {
+     "ridge": 0.863,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.697
+    },
+    "h": {
+     "ridge": 0.691,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.633
+    },
+    "z": {
+     "ridge": 0.011,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": -0.118
+    },
+    "hz": {
+     "ridge": 0.692,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.599
+    },
+    "g": {
+     "ridge": 0.315,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.489
+    },
+    "hzg": {
+     "ridge": 0.691,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.594
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.834,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.744
+    },
+    "h": {
+     "ridge": 0.806,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.748
+    },
+    "z": {
+     "ridge": 0.02,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": -0.085
+    },
+    "hz": {
+     "ridge": 0.804,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.694
+    },
+    "g": {
+     "ridge": 0.596,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.594
+    },
+    "hzg": {
+     "ridge": 0.803,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.703
+    }
+   }
+  },
+  "day_8-16": {
+   "frames": 42404,
+   "sin": {
+    "embed": {
+     "ridge": 0.713,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.679
+    },
+    "h": {
+     "ridge": 0.665,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.673
+    },
+    "z": {
+     "ridge": 0.045,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": -0.067
+    },
+    "hz": {
+     "ridge": 0.666,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.6
+    },
+    "g": {
+     "ridge": 0.495,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.241
+    },
+    "hzg": {
+     "ridge": 0.667,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.634
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.659,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.579
+    },
+    "h": {
+     "ridge": 0.61,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.496
+    },
+    "z": {
+     "ridge": 0.06,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": -0.058
+    },
+    "hz": {
+     "ridge": 0.607,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.532
+    },
+    "g": {
+     "ridge": 0.535,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.492
+    },
+    "hzg": {
+     "ridge": 0.594,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.566
+    }
+   }
+  },
+  "day_8-12": {
+   "frames": 29103,
+   "sin": {
+    "embed": {
+     "ridge": 0.857,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.775
+    },
+    "h": {
+     "ridge": 0.674,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.732
+    },
+    "z": {
+     "ridge": 0.025,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": -0.099
+    },
+    "hz": {
+     "ridge": 0.676,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.659
+    },
+    "g": {
+     "ridge": 0.498,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.435
+    },
+    "hzg": {
+     "ridge": 0.668,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.657
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.796,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.747
+    },
+    "h": {
+     "ridge": 0.711,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.642
+    },
+    "z": {
+     "ridge": 0.076,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": -0.056
+    },
+    "hz": {
+     "ridge": 0.712,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.64
+    },
+    "g": {
+     "ridge": 0.549,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.608
+    },
+    "hzg": {
+     "ridge": 0.699,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.671
+    }
+   }
+  },
+  "day_12-16": {
+   "frames": 13301,
+   "sin": {
+    "embed": {
+     "ridge": 0.692,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.496
+    },
+    "h": {
+     "ridge": 0.554,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.499
+    },
+    "z": {
+     "ridge": 0.016,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": -0.188
+    },
+    "hz": {
+     "ridge": 0.543,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.393
+    },
+    "g": {
+     "ridge": 0.387,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.178
+    },
+    "hzg": {
+     "ridge": 0.51,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.458
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.588,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.185
+    },
+    "h": {
+     "ridge": 0.443,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.235
+    },
+    "z": {
+     "ridge": -0.047,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": -0.165
+    },
+    "hz": {
+     "ridge": 0.437,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.317
+    },
+    "g": {
+     "ridge": 0.474,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.421
+    },
+    "hzg": {
+     "ridge": 0.367,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.352
+    }
+   }
+  },
+  "night_0-4": {
+   "frames": 6026,
+   "sin": {
+    "embed": {
+     "ridge": 0.567,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.339
+    },
+    "h": {
+     "ridge": 0.502,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.306
+    },
+    "z": {
+     "ridge": 0.05,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.861
+    },
+    "hz": {
+     "ridge": 0.521,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.494
+    },
+    "g": {
+     "ridge": 0.515,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -1.672
+    },
+    "hzg": {
+     "ridge": 0.387,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.448
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.33,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -1.813
+    },
+    "h": {
+     "ridge": 0.35,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.875
+    },
+    "z": {
+     "ridge": -0.048,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.727
+    },
+    "hz": {
+     "ridge": 0.36,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.886
+    },
+    "g": {
+     "ridge": 0.095,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -1.298
+    },
+    "hzg": {
+     "ridge": 0.203,
+     "n_train": 2991,
+     "n_test": 3035,
+     "mlp_es": -0.933
+    }
+   }
+  },
+  "night_4-8": {
+   "frames": 9419,
+   "sin": {
+    "embed": {
+     "ridge": 0.073,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.707
+    },
+    "h": {
+     "ridge": -0.128,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.918
+    },
+    "z": {
+     "ridge": -1.07,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -1.515
+    },
+    "hz": {
+     "ridge": -0.062,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.332
+    },
+    "g": {
+     "ridge": -1.013,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -1.908
+    },
+    "hzg": {
+     "ridge": -0.129,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.5
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.42,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.083
+    },
+    "h": {
+     "ridge": -0.081,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.075
+    },
+    "z": {
+     "ridge": -0.352,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.407
+    },
+    "hz": {
+     "ridge": 0.018,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.191
+    },
+    "g": {
+     "ridge": -0.828,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.675
+    },
+    "hzg": {
+     "ridge": -0.302,
+     "n_train": 3330,
+     "n_test": 6089,
+     "mlp_es": -0.125
+    }
+   }
+  },
+  "night_8-16": {
+   "frames": 14927,
+   "sin": {
+    "embed": {
+     "ridge": -0.73,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -1.051
+    },
+    "h": {
+     "ridge": -0.761,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.604
+    },
+    "z": {
+     "ridge": -0.566,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.594
+    },
+    "hz": {
+     "ridge": -0.726,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.594
+    },
+    "g": {
+     "ridge": -1.039,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.742
+    },
+    "hzg": {
+     "ridge": -0.874,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.623
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -1.431,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.707
+    },
+    "h": {
+     "ridge": -1.485,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.52
+    },
+    "z": {
+     "ridge": -0.259,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.605
+    },
+    "hz": {
+     "ridge": -1.557,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.632
+    },
+    "g": {
+     "ridge": -1.678,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.586
+    },
+    "hzg": {
+     "ridge": -1.501,
+     "n_train": 6190,
+     "n_test": 8737,
+     "mlp_es": -0.541
+    }
+   }
+  },
+  "night_8-12": {
+   "frames": 8511,
+   "sin": {
+    "embed": {
+     "ridge": 0.266,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -1.292
+    },
+    "h": {
+     "ridge": -0.373,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": 0.151
+    },
+    "z": {
+     "ridge": -0.099,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.245
+    },
+    "hz": {
+     "ridge": -0.386,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": 0.217
+    },
+    "g": {
+     "ridge": -0.59,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.3
+    },
+    "hzg": {
+     "ridge": 0.011,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.147
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -0.073,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.885
+    },
+    "h": {
+     "ridge": -0.203,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.679
+    },
+    "z": {
+     "ridge": -0.397,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.529
+    },
+    "hz": {
+     "ridge": -0.295,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.564
+    },
+    "g": {
+     "ridge": -1.005,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.141
+    },
+    "hzg": {
+     "ridge": -0.469,
+     "n_train": 3182,
+     "n_test": 5329,
+     "mlp_es": -0.267
+    }
+   }
+  },
+  "night_12-16": {
+   "frames": 6416,
+   "sin": {
+    "embed": {
+     "ridge": -1.652,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -1.704
+    },
+    "h": {
+     "ridge": -1.435,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -1.513
+    },
+    "z": {
+     "ridge": -0.916,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -1.289
+    },
+    "hz": {
+     "ridge": -1.363,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -1.753
+    },
+    "g": {
+     "ridge": -0.738,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.878
+    },
+    "hzg": {
+     "ridge": -1.138,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -1.889
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": -2.761,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.502
+    },
+    "h": {
+     "ridge": -1.678,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.755
+    },
+    "z": {
+     "ridge": -0.358,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.522
+    },
+    "hz": {
+     "ridge": -1.723,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.368
+    },
+    "g": {
+     "ridge": -1.474,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.628
+    },
+    "hzg": {
+     "ridge": -2.161,
+     "n_train": 3008,
+     "n_test": 3408,
+     "mlp_es": -0.396
+    }
+   }
+  },
+  "fog_day_0-4": {
+   "frames": 5811,
+   "sin": {
+    "embed": {
+     "ridge": 0.845,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.659
+    },
+    "h": {
+     "ridge": 0.683,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.621
+    },
+    "z": {
+     "ridge": 0.053,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": -0.08
+    },
+    "hz": {
+     "ridge": 0.682,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.586
+    },
+    "g": {
+     "ridge": 0.548,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.348
+    },
+    "hzg": {
+     "ridge": 0.582,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.565
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.842,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.716
+    },
+    "h": {
+     "ridge": 0.831,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.679
+    },
+    "z": {
+     "ridge": 0.004,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": -0.223
+    },
+    "hz": {
+     "ridge": 0.826,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.65
+    },
+    "g": {
+     "ridge": 0.478,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.422
+    },
+    "hzg": {
+     "ridge": 0.835,
+     "n_train": 4882,
+     "n_test": 929,
+     "mlp_es": 0.593
+    }
+   }
+  },
+  "fog_day_4-8": {
+   "frames": 16975,
+   "sin": {
+    "embed": {
+     "ridge": 0.863,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.697
+    },
+    "h": {
+     "ridge": 0.691,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.633
+    },
+    "z": {
+     "ridge": 0.011,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": -0.118
+    },
+    "hz": {
+     "ridge": 0.692,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.599
+    },
+    "g": {
+     "ridge": 0.315,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.489
+    },
+    "hzg": {
+     "ridge": 0.691,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.594
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.834,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.744
+    },
+    "h": {
+     "ridge": 0.806,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.748
+    },
+    "z": {
+     "ridge": 0.02,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": -0.085
+    },
+    "hz": {
+     "ridge": 0.804,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.694
+    },
+    "g": {
+     "ridge": 0.596,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.594
+    },
+    "hzg": {
+     "ridge": 0.803,
+     "n_train": 15154,
+     "n_test": 1821,
+     "mlp_es": 0.703
+    }
+   }
+  },
+  "fog_day_8-16": {
+   "frames": 42404,
+   "sin": {
+    "embed": {
+     "ridge": 0.713,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.679
+    },
+    "h": {
+     "ridge": 0.665,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.673
+    },
+    "z": {
+     "ridge": 0.045,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": -0.067
+    },
+    "hz": {
+     "ridge": 0.666,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.6
+    },
+    "g": {
+     "ridge": 0.495,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.241
+    },
+    "hzg": {
+     "ridge": 0.667,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.634
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.659,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.579
+    },
+    "h": {
+     "ridge": 0.61,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.496
+    },
+    "z": {
+     "ridge": 0.06,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": -0.058
+    },
+    "hz": {
+     "ridge": 0.607,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.532
+    },
+    "g": {
+     "ridge": 0.535,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.492
+    },
+    "hzg": {
+     "ridge": 0.594,
+     "n_train": 38474,
+     "n_test": 3930,
+     "mlp_es": 0.566
+    }
+   }
+  },
+  "fog_day_8-12": {
+   "frames": 29103,
+   "sin": {
+    "embed": {
+     "ridge": 0.857,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.775
+    },
+    "h": {
+     "ridge": 0.674,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.732
+    },
+    "z": {
+     "ridge": 0.025,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": -0.099
+    },
+    "hz": {
+     "ridge": 0.676,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.659
+    },
+    "g": {
+     "ridge": 0.498,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.435
+    },
+    "hzg": {
+     "ridge": 0.668,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.657
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.796,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.747
+    },
+    "h": {
+     "ridge": 0.711,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.642
+    },
+    "z": {
+     "ridge": 0.076,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": -0.056
+    },
+    "hz": {
+     "ridge": 0.712,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.64
+    },
+    "g": {
+     "ridge": 0.549,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.608
+    },
+    "hzg": {
+     "ridge": 0.699,
+     "n_train": 26395,
+     "n_test": 2708,
+     "mlp_es": 0.671
+    }
+   }
+  },
+  "fog_day_12-16": {
+   "frames": 13301,
+   "sin": {
+    "embed": {
+     "ridge": 0.692,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.496
+    },
+    "h": {
+     "ridge": 0.554,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.499
+    },
+    "z": {
+     "ridge": 0.016,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": -0.188
+    },
+    "hz": {
+     "ridge": 0.543,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.393
+    },
+    "g": {
+     "ridge": 0.387,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.178
+    },
+    "hzg": {
+     "ridge": 0.51,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.458
+    }
+   },
+   "cos": {
+    "embed": {
+     "ridge": 0.588,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.185
+    },
+    "h": {
+     "ridge": 0.443,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.235
+    },
+    "z": {
+     "ridge": -0.047,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": -0.165
+    },
+    "hz": {
+     "ridge": 0.437,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.317
+    },
+    "g": {
+     "ridge": 0.474,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.421
+    },
+    "hzg": {
+     "ridge": 0.367,
+     "n_train": 12079,
+     "n_test": 1222,
+     "mlp_es": 0.352
+    }
+   }
+  },
+  "clear_day_0-4": {
+   "frames": 0,
+   "sin": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   },
+   "cos": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   }
+  },
+  "clear_day_4-8": {
+   "frames": 0,
+   "sin": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   },
+   "cos": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   }
+  },
+  "clear_day_8-16": {
+   "frames": 0,
+   "sin": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   },
+   "cos": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   }
+  },
+  "clear_day_8-12": {
+   "frames": 0,
+   "sin": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   },
+   "cos": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   }
+  },
+  "clear_day_12-16": {
+   "frames": 0,
+   "sin": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   },
+   "cos": {
+    "embed": null,
+    "h": null,
+    "z": null,
+    "hz": null,
+    "g": null,
+    "hzg": null
+   }
+  }
+ }
+}

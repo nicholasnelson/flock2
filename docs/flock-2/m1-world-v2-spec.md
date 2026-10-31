@@ -2593,6 +2593,58 @@ does not use it: to the owner, with § 21.10's result; (3) K fails with L passin
 short a reach, and the next step would be the replay sequence length (a change to pre-register,
 not to run now).
 
+**Readings (2026-10-31, 21:00; chain4 ran 11:24–20:05, `runs/meadow2/stage2a_sky3.log`; files
+`meadow2-results/{eval,deaths,diag,hybrid}/*s2n*`).** *A fault in the run, first:* the stage script was
+edited at 13:50 (the § 21.12 modes added) while chain4's seed-0 shell was still executing it. Bash
+reads a script incrementally, so after `s2n_s0`'s training finished (exit 0, 2,000 iterations, 13:50)
+that shell ran the new blind-leg block's sky / nosky / sky1 evaluations (the same commands and seeds
+as the stage ones) and died on a syntax error. Seed 0's plain-world, lone and zero-column evaluations
+and its two probes were run afterwards by `runs/m2_fix_s2n_s0.sh` (20:05–20:50) with the stage
+script's own commands; seeds 1 and 2 ran in fresh shells and were untouched. The brains and the
+numbers are as the pre-registration meant them; the lesson (never edit a script a shell is running) is
+recorded. Training otherwise uneventful (peak 6.7 GB). Deaths in the last 100 training iterations
+14 / 13 / 18 [s2l 12 / 4 / 6]. Three seeds, the s2l baseline in brackets:
+
+- **S, survival: fails at two seeds.** Stage world **16.7 / 10.9 / 5.7 %** dead at 5 days [3.6 / 4.7 /
+  10.4; bar 10 %]: seed 0 worse by 13 points, seed 1 over by 0.9, seed 2 halved. Plain world, 3 days:
+  with the skyline 6.8 / 15.1 / 6.2 %, without it 4.7 / 11.5 / 4.7 % (bar 15 %; seed 1 over by
+  0.1 with the skyline). Alone 15.6 / 9.4 / 4.7 %; column zeroed 9.4 / 12.0 / 9.4 %: at seed 2 the
+  first brain of this stage that survives *worse* with its column zeroed (5.7 → 9.4 %); at seeds 0 and 1
+  better zeroed, as before. Seed 0 ranges far at night as `s2m_s0` did (share of night time beyond 12 tiles
+  0.38 [0.15]; 32 deaths in the evaluation [7]); both arms continued from `s2l_s0` and both produced a
+  far-ranging seed 0, so the drift may be `s2l_s0`'s own rather than either change's.
+- **L, the loss is learnable: passes at two seeds, fails at the third by 0.3.** `wm_multistep` falls at
+  every seed, first-100 → last-100 means **284 → 76, 212 → 109, 223 → 100**. `wm_recon` last-100 means
+  **23.3 / 36.4 / 34.9** against the s2l references 20.5 / 28.9 / 35.7 (limits 25.6 / 36.1 / 44.6):
+  seed 1 is over its limit by 0.3, 0.8 % of it, where the iteration values swing between 12 and 44.
+  By the letter L fails at seed 1 and the reading is void (fallback (1)); the rest is reported in full,
+  since K is the question this arm was run to answer and it does not turn on 0.3 of reconstruction.
+- **K, the state holds the compass at night: fails.** Heading from h at night on the clear mud world
+  **-0.58 / −0.16 / 0.11** [−0.45 / −0.19 / −0.11; bar 0.3 at two seeds; `s2m` reached 0.29 / 0.35 at two seeds with
+  the peaks shown through the fog]; by clear day from h 0.38 / 0.67 / 0.73 [0.46 / 0.53 / 0.67] and from
+  the embedding 0.90 / 0.91 / 0.91 [0.88]. The egocentric recent-water bearing from h at night
+  **-2.12 / −1.75 / −1.71** [−0.9 / −2.3 / −1.0], by day 0.58 / 0.64 / 0.57 as at every stage. A reach of 24
+  steps put neither the heading nor the water into the night state.
+- **M, the memory: fails at every seed.** Allocentric probes unchanged: D2_true_allo at night 8–16
+  from h -2.1 / −2.8 / −1.9, D3_recent_allo at night from h -0.54 / −0.66 / −0.73. M1 unreadable
+  (`bins_read` 0). Night returns 12–16 / 16–24: **109 / 244, 208 / 257, 121 / 186** [121 / 196, 104 /
+  184, 273 / 302; bar ≤ 63.5 / 61]: seed 2 twice as fast as before (as `s2m_s2` was), seed 1 twice as
+  slow, seed 0 slower from 16–24.
+- **A, the ablation: fails at every seed.** Skyline blanked, the fog-night returns 12–16 / 16–24 go
+  114→116 (+2 %) and 227→238 (+5 %); 178→174 (−2 %) and 220→324 (+47 %, n 56 / 56); 120→101 (−16 %)
+  and 196→169 (−14 %). Survival 16.7→19.3, 10.9→7.8, 5.7→6.2 %: no seed by either bar.
+
+**Verdict: not passed.** S fails at two seeds, K at every seed, M and A at every seed; L fails at one
+seed by 0.3 on a bar of 36.1. Under the letter fallback (1) is due (one re-run at `--ms_weight 0.2`).
+**It is not run:** the GPU goes to the approved § 21.12 sequence (the owner's order of 13:45, "after the
+multi-step arm is read"), and with the loss learned at every seed and K failing at every seed, a
+half-weight re-run would chase the L bar, not the memory. Whether fallback (1) runs after the arms is
+the owner's call; the default is no. Open point (1) of § 21.12 is answered: `--ms_weight` does not
+join the recipe. **What this arm has shown:** a multi-step view loss is learnable in place at this
+weight and buys nothing for the night state. What it predicts is a view; the view 24 steps on
+depends on the heading only through the peaks, which are already in every frame, and on the water
+not at all while it is out of sight. This is § 21.12.2's argument, now with a GPU run behind it.
+
 ### 21.12 Why the memory cannot come yet, and two arms to give it a reason and a path (2026-10-31, 13:30; owner's question; proposed, nothing run)
 
 **The owner's question (midday, after § 21.10 was read):** if survival passes while the memory
