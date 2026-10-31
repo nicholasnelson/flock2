@@ -2501,6 +2501,58 @@ old world, so that the fog-night difference is read directly), and the two probe
 (2) H-fog passes and M or A fail → § 21.11 runs as planned and both results go to the owner
 together; (3) S fails at two seeds → stop, to the owner.
 
+**Readings (2026-10-31, 11:40; chain3 ran 04:55–11:24, `runs/meadow2/stage2a_sky3.log`; files
+`meadow2-results/{eval,deaths,diag,hybrid}/*s2m*`).** Training uneventful (peak 6.4 GB; reward over
+the last 100 iterations 2.41–2.44, alive share 0.97–0.98). Deaths in the last 100 training iterations
+26 / 9 / 15 against s2l's 12 / 4 / 6: more dying in training, the lure again (below). Three seeds,
+the s2l baseline in brackets:
+
+- **S, survival: passes at every seed.** Stage world **6.8 / 3.6 / 7.3 %** dead at 5 days [3.6 / 4.7 /
+  10.4]: seed 2 came back under the bar, seed 0 got worse. Plain world, 3 days: with the skyline 3.1 /
+  9.4 / 6.2 %, without it 6.8 / 9.9 / 7.3 % (bar 15 %): the § 21.7 oddity is gone, the plain world is
+  no longer worse with the peaks at any seed. Alone 14.1 / 6.2 / 3.1 %; column zeroed 4.7 / 3.6 /
+  5.7 %, as good as or better than with it at every seed: the column is still not needed to survive.
+- **H-fog, the brain sees the peaks through the fog: passes at every seed, with margin.** On the
+  all-fog probe world, heading from the embedding **0.94 / 0.94 / 0.95** by fog day and **0.71 / 0.66 /
+  0.70** at night [−0.13 / −0.9, nothing drawn there; bar 0.3]. On the stage probe world (fog three
+  days in four) the embedding reads 0.91 / 0.92 / 0.92 by clear day [0.88] and 0.57 / 0.58 / 0.53 at
+  night [0.50 / 0.46 / 0.40]. And the recurrent state moved: from h, clear day **0.65 / 0.81 / 0.81**
+  [0.46 / 0.53 / 0.67], fog day 0.80 / 0.88 / 0.87, **night −0.06 / 0.29 / 0.35** [−0.45 / −0.19 /
+  −0.11] on the stage probe world and 0.01 / **0.48 / 0.54** on the all-fog one. For the first time
+  the heading is carried in the state at night at two seeds (§ 21.11's K bar for the heading, 0.3 from
+  h at night at two seeds, is met on the all-fog world and missed by 0.01 on the stage one). The peaks
+  shown through the fog gave the state something it could hold: an input present on every frame.
+- **M, the memory: fails at every seed.** The allocentric probes are unchanged: D2_true_allo at night
+  8–16 from h −2.9 / −2.0 / −3.1, z −0.9, g −3 to −5; D3_recent_allo at night from h −1.3 / −1.0 /
+  −1.0. The egocentric D3_recent reads by day from h 0.67 / 0.64 / 0.56 and not at night (−0.9 /
+  −1.9 / −1.2), as at every stage. M1 unreadable (`bins_read` 0). Night returns 12–16 / 16–24:
+  **159 / 198, 107 / 180, 119 / 244** [121 / 196, 104 / 184, 273 / 302; bar ≤ 63.5 / 61]: seed 2
+  twice as fast as before, seed 0 slower, seed 1 the same. The direct reading, fog nights with
+  skyline 2 against skyline 1 at the same brain (the peaks hidden again): 149→170 (+14 %) and 204→240
+  (+17 %); 92→93 (+1 %) and 178→239 (+34 %, n 17 / 14); 125→113 (−10 %) and 253→237 (−6 %).
+- **A, the compass is used on fog nights: fails, one seed of the two required, and the sign has
+  turned back.** Seed 1 clears the bar against both ablations: skyline 1 slows the 16–24 fog-night
+  return 34 % (small n); skyline 0 slows both bins, **+40 % (92→129, n 171 / 91) and +26 % (178→225)**;
+  survival 3.6→5.2→6.8 %. Seed 0 points the same way in every reading but stays under the bar: 7 to
+  22 % slower in all six night and fog-night medians against both ablations, survival 6.8→8.3→**11.5 %**
+  (4.7 points worse blanked, 0.3 under the 5-point bar). Seed 2 is reversed: 3–15 % *faster* without
+  the peaks in all six, and it survives better without them (7.3→3.6→6.8 %). The lure, reported as
+  promised: the peaks now visible on fog nights draw seed 0 out far more (night excursions from 12–16
+  n 565 against s2l's 337; share of night time beyond 12 tiles 0.40 against 0.15; with the peaks
+  hidden by fog again the share beyond 16 tiles falls 0.124→0.079, blanked 0.064), and it dies for it.
+  Seed 2 is lured out as before and comes back no faster for the peaks. The clear-night splits are
+  small (16–24 holds 37 / 11 / 5 excursions) and read both ways.
+
+**Verdict: not passed. S and H-fog pass at every seed; M fails at every seed; A fails at two seeds of
+three (seed 1 passes, seed 0 just under on survival, seed 2 reversed) → fallback (2): § 21.11 runs
+as planned (chain4 started 11:24) and both results go to the owner together.** What this arm has
+shown: a one-line change to the world made the encoder read the peaks through the fog on every frame
+(0.94 by fog day, 0.7 at night) and made the recurrent state carry the heading at night at two seeds,
+where it never had; survival is in bound at every seed; the water's world-frame bearing is still coded
+nowhere; and whether the compass is *used* for the return is now a one-seed-of-three result in the
+right direction instead of a reversed one. From here skyline 1, hidden by fog, is the ablation rather
+than the world: if the stage goes on, it goes on with skyline 2.
+
 ### 21.11 The multi-step view loss on (2026-10-31, 05:00; pre-registered, runs after § 21.10)
 
 **The change (one):** the world model's multi-step view loss, present since § 20 and 0 in every
@@ -2525,6 +2577,9 @@ the three flags above and nothing else changed; then § 21.7's evaluations and p
 - **L**, the loss is learnable: `wm_multistep` in the training log falls over the 2,000 iterations
   (last 100 iterations' mean below the first 100's) at every seed, and `wm_recon` ends within 25 % of
   `s2l`'s (15–20); otherwise the weight is wrong and the reading is void (fallback (1)).
+  *Fixed before s2n is read (2026-10-31, 11:40):* the s2l reference is the mean of `wm_recon` over
+  each seed's last 100 iterations, **20.5 / 28.9 / 35.7** (the 15–20 above was read off single end
+  values); the within-25 % comparison is made seed by seed against these means.
 - **K**, the state holds the compass at night: heading from h on the clear mud world at night
   (`DH_heading.night`, input h) ≥ 0.3 at two seeds (today −0.45 / −0.19 / −0.11); and the egocentric
   recent-water bearing from h at night (`D3_recent_night`, input h) ≥ 0.3 at two seeds (today −0.9 /
