@@ -2599,7 +2599,9 @@ not to run now).
 fails, is the world too easily survivable on what the eyes give, so that the memory wants more
 incentive? And is a memory even plausible with the present setup: could the state hold the water's
 relative direction for enough steps to get there? Both answers are yes to the suspicion, from the code
-and the recordings. Nothing in this section has run; it waits for the owner.
+and the recordings. **Approved by the owner (13:45): build the metric, then run W and T as written,
+after § 21.11 is read.** Built the same afternoon (noted in each part below); the GPU runs follow
+§ 21.11's read, in that order.
 
 **21.12.1 Survival does not need the memory, so nothing pays for it.**
 
@@ -2651,18 +2653,27 @@ and the recordings. Nothing in this section has run; it waits for the owner.
 
 **21.12.3 The measure to add first: the blind leg.** Total return time mixes wandering with memory.
 Before either arm runs, `m2_eval.excursions` gains per excursion the **blind leg**: the steps from the
-last frame with the water in the 8-tile cone (`sees8`) to the first later frame with it there again,
-censored at 600 like the return, divided by the tiles beyond 8 at the farthest point (**steps per
-blind tile**), with its median per bin and split as the returns are (all, clear day, fog day, night,
-clear night, fog night, unsighted). The straight-line pace is 2.9 steps a tile at a trot and 8.3 at a
+last frame with the water in the 8-tile cone (`sees8`) at or before the farthest point to the first
+frame with it there again after the farthest point, censored at 600 steps past the farthest point
+like the return, divided by the tiles beyond 8 at the farthest point (**steps per blind tile**), with
+its median per bin and split as the returns are (all, clear day, fog day, night, clear night, fog
+night, unsighted); excursions by a sheep that had never seen the water are left out of it. *Built
+(13:50):* fields `blind_n`, `blind_leg_median`, `blind_per_tile_median`, `blind_resolved_share` in every
+excursion bin; `tests/test_excursions.py::test_blind_leg_runs_from_the_last_sighting_to_the_first_after_the_farthest_point`;
+`runs/m2_stage2a_sky.sh blindleg` re-runs the three s2m stage-world evaluations (the same meadow seeds,
+so the old numbers return with the new fields). The straight-line pace is 2.9 steps a tile at a trot and 8.3 at a
 walk (`straight_steps_per_tile`). The evaluations of `s2m_s*` are re-run with it (minutes each) so the
 arms have a baseline before they start; those numbers are filled in here then.
 
 **21.12.4 Arm W, windows that start from the recorded state (the path; a training fix, not knowledge
-given to the brain).** *The change (one):* `collect` records the model's (h, z) at the start of every
-`--length` steps; `Replay` stores them with the sequence (896 numbers each, 3.7 MB at 1,024
-sequences); `observe` takes an optional start state and the training step passes the stored one
-instead of zeros. The stored states come from parameters at most a few iterations old (the replay
+given to the brain).** *The change (one):* `collect` records the model's (h, z) and the previous
+action carried into the first step of every `--length` steps; `Replay` stores them with the sequence
+(897 numbers each, 3.7 MB at 1,024 sequences); `observe` takes an optional start state and the
+training step passes the stored one instead of zeros. *Built (13:50):* `--stored_starts` in
+`m2_hybrid.py` (zeros remain the default, so every earlier result is unchanged);
+`tests/test_wm.py::test_observe_from_a_stored_start_reproduces_the_online_state` (the state and the
+posterior at the window's first step equal the online run's, where a zero start's do not);
+`runs/m2_stage2a_sky.sh w <seed>` / `chain5`. The stored states come from parameters at most a few iterations old (the replay
 turns over every three iterations at `--replay 1024 --add_frac 0.5`), so no burn-in is needed. The
 sheep learns nothing it did not earn: the same losses, computed from the state it actually had. Code
 to write before the run: about forty lines and a test (a stored start reproduces the online state;
@@ -2679,10 +2690,13 @@ not what held the memory back, the incentive is, arm T runs as planned; K passes
 state holds the bearing and the policy does not use it, to the owner with arm T's result; both pass
 → the stage continues on this recipe.
 
-**21.12.5 Arm T, thirst that binds within a night (the reason).** *The change (one):* a meadow field
-`thirst` (float, default 1.0) multiplying `HYDRATION_DECAY`, threaded like `skyline` through training,
-evaluation, probes and the recorder (`--thirst F`) and saved in the config; the sheep is told nothing,
-it feels its hydration fall faster. At F = 2 the reserve is 1,875 steps (0.8 day) and a night costs
+**21.12.5 Arm T, thirst that binds within a night (the reason).** *The change (one):* `--thirst F`
+in training, scaling `HYDRATION_DECAY` before anything is traced, as § 21.6's evaluation flag already
+does; saved in the config and inherited by the evaluation, the probes and the recorder when their own
+`--thirst` is not given; the sheep is told nothing, it feels its hydration fall faster. *Built
+(13:50):* `m2_hybrid.py --thirst`, the inheritance in `m2_eval.py`, `m2_diag.py`, `m2_record.py`,
+`scripts/meadow2_checks.py --thirst` (the balance budgets follow the scaled decay);
+`runs/m2_stage2a_sky.sh thirstcheck`, `t <seed> <F>` / `chain6 <F>`. At F = 2 the reserve is 1,875 steps (0.8 day) and a night costs
 0.51; at 3, 1,250 steps (0.5 day) and 0.77; at 1.5, 2,500 steps and 0.38. *Before the run, the balance
 rule of § 11 is kept:* `scripts/meadow2_checks.py` is run at F = 3, 2 and 1.5 and the largest F at
 which the naive explorer still finds water before it would die in ≥ 50 % of starts is the one used

@@ -21,6 +21,12 @@ scaled by 1 - gamma), and steps taken while dead are left out. Meadows restart e
 ``--reset_every`` steps (staggered), or when every sheep in one has died, with model states zeroed.
 Checkpoints ``wm.pkl``, ``policy.pkl`` and ``config.json``; scored by ``m2_eval.py --policy hybrid``.
 
+``--stored_starts`` (spec § 21.12, arm W): every replay sequence carries the model state (h, z) and the
+previous action recorded online before its first view, and the world model's windows start from them
+instead of zeros, so the losses are computed from the state the sheep actually had. ``--thirst F``
+(spec § 21.12, arm T): the hydration decay scaled by F before anything is traced (as m2_eval's flag),
+saved in the config and inherited by the evaluation, the probes and the recorder.
+
 ``--policy_input state_embed`` (the plan review's arm, 2026-10-26): PPO sees the current view's
 embedding as well as (h, z), with the gradient stopped, so PPO does not train the encoder. The
 embedding is the sheep's own eyes, not privileged information.
@@ -188,6 +194,7 @@ def n_policy_in(world, use_embed, column=0):
 def sheep_step(world, policy, states, mems, key, use_embed=False, column=None):
     """Every sheep in a batch of meadows sees, updates its model state (and the column's), and acts."""
     h, z, a_prev, g = mems  # (B, S, ...)
+    h_in, z_in = h, z  # the state carried into this step, stored with the replay for --stored_starts
     k1, k2 = jax.random.split(key)
     views = to_bytes(R.render_meadows(states))  # (B, S, H, W, 3) uint8
     f = states.flock
@@ -205,7 +212,8 @@ def sheep_step(world, policy, states, mems, key, use_embed=False, column=None):
     logp = jnp.take_along_axis(jax.nn.log_softmax(logits), a[..., None], -1)[..., 0]
     new = jax.vmap(sim.step)(states, a)
     rec = dict(views=views, feel=feel, feat=feat, act=a, logp=logp, value=value, reward=new.flock.reward,
-               alive_before=f.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0)
+               alive_before=f.alive, alive_after=new.flock.alive, levels=new.flock.levels, fat=new.flock.fat, bad=new.flock.taste < 0,
+               h_in=h_in, z_in=z_in, a_prev=a_prev)
     if column is not None:
         rec["col_in"], rec["g"] = x, g
     return new, (h, z, a, g), rec
@@ -219,6 +227,8 @@ def collect(world, policy, states, mems, key, steps, record, gamma_lam, use_embe
         st, mm = carry
         st, mm, rec = sheep_step(world, policy, st, mm, k, use_embed, column)
         rec["views"] = rec["views"][:, :record]  # only the recorded sheep's views are kept
+        for k2 in ("h_in", "z_in", "a_prev"):  # and their states before each step (the replay's stored starts)
+            rec[k2] = rec[k2][:, :record]
         return (st, mm), rec
 
     (states, mems), tr = jax.lax.scan(one, (states, mems), jax.random.split(key, steps))  # (T, B, S, ...)
@@ -281,37 +291,46 @@ def update_recurrent(brain, opt, feat, x, g0, act_, logp_old, adv, ret, wgt, cli
 
 
 @nnx.jit
-def wm_update(world, opt, v, a, f, r, key):
-    (_, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, v, a, key, f, r)
+def wm_update(world, opt, v, a, f, r, key, start=None):
+    (_, aux), g = nnx.value_and_grad(wm.loss_fn, has_aux=True)(world, v, a, key, f, r, start)
     opt.update(world, g)
     return aux
 
 
-def wm_burst(world, opt, V, A, F, Rw, keys):
+def wm_burst(world, opt, V, A, F, Rw, keys, starts=None):
     """K world-model updates, one compiled step called K times. (Unrolling all K into one compiled
     call took 8 minutes to compile with multi-step prediction, and ran the spatial model out of
-    memory: 15 GB of host RAM while compiling, 2026-10-26.)"""
-    auxes = [wm_update(world, opt, V[i], A[i], F[i], Rw[i], keys[i]) for i in range(V.shape[0])]
+    memory: 15 GB of host RAM while compiling, 2026-10-26.) ``starts`` (H0, Z0, A0), each (K, B, ...):
+    the recorded states before each sequence's first view (spec § 21.12 arm W); None starts from zeros."""
+    auxes = [wm_update(world, opt, V[i], A[i], F[i], Rw[i], keys[i], None if starts is None else tuple(x[i] for x in starts)) for i in range(V.shape[0])]
     return jax.tree.map(lambda *v: jnp.stack(v), *auxes)
 
 
 class Replay:
-    def __init__(self, cap, length):
+    """Sequences of views, actions, feelings and rewards, and (spec § 21.12 arm W) the model state
+    (h, z) and the previous action recorded before each sequence's first view."""
+
+    def __init__(self, cap, length, state=0, stoch=0):
         self.v = np.zeros((cap, length, R.H, R.W, 3), np.uint8)
         self.a = np.zeros((cap, length), np.int32)
         self.f = np.zeros((cap, length, D.N_FELT), np.float32)
         self.r = np.zeros((cap, length), np.float32)
+        self.h0 = np.zeros((cap, state), np.float32)
+        self.z0 = np.zeros((cap, stoch), np.float32)
+        self.a0 = np.zeros((cap,), np.int32)
         self.n, self.i, self.cap = 0, 0, cap
 
-    def add(self, v, a, f, r):
+    def add(self, v, a, f, r, h0=None, z0=None, a0=None):
         idx = (self.i + np.arange(len(v))) % self.cap
         self.v[idx], self.a[idx], self.f[idx], self.r[idx] = v, a, f, r
+        if h0 is not None:
+            self.h0[idx], self.z0[idx], self.a0[idx] = h0, z0, a0
         self.i = (self.i + len(v)) % self.cap
         self.n = min(self.n + len(v), self.cap)
 
     def sample(self, rng, B, K):
         idx = rng.integers(self.n, size=(K, B))
-        return self.v[idx], self.a[idx], self.f[idx], self.r[idx]
+        return self.v[idx], self.a[idx], self.f[idx], self.r[idx], (self.h0[idx], self.z0[idx], self.a0[idx])
 
 
 def main():
@@ -342,6 +361,8 @@ def main():
     p.add_argument("--ms_horizons", default="2,4,8", help="steps ahead at which the view is predicted")
     p.add_argument("--ms_stride", type=int, default=8, help="steps between prediction starts")
     p.add_argument("--add_frac", type=float, default=1.0, help="share of each iteration's sequences added to the replay")
+    p.add_argument("--stored_starts", action="store_true", help="spec § 21.12 arm W: the world model's windows start from the recorded state before their first view, not zeros")
+    p.add_argument("--thirst", type=float, default=1.0, help="spec § 21.12 arm T: scale on the hydration decay (saved in the config; the evaluation, probes and recorder inherit it)")
     p.add_argument("--willows", type=int, default=0, help="willows per pond bank (stage 1's world change; 0 = none)")
     p.add_argument("--column", type=int, default=0, help="stage 2a: width of the reward-trained recurrent column (0 = none)")
     p.add_argument("--continue_from", default=None, help="stage 2a: a stage-1 checkpoint directory to continue from")
@@ -354,6 +375,9 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     a = p.parse_args()
     assert a.steps % a.length == 0 and a.reset_every % a.steps == 0
+    if a.thirst != 1.0:
+        # the constant is read at trace time, so scaling it here before anything is jitted changes the world (as m2_eval)
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     os.makedirs(a.out, exist_ok=True)
     a.tiles = N_TILES  # the side in force, whatever set it, so that evaluation and continuation follow it
     json.dump({**vars(a), "kind": "m2_hybrid"}, open(os.path.join(a.out, "config.json"), "w"), indent=1)
@@ -375,7 +399,7 @@ def main():
     brain = Brain(policy, column)
     trained = brain if column is not None else policy
     opt = nnx.Optimizer(trained, optax.chain(optax.clip_by_global_norm(0.5), optax.adam(a.lr)), wrt=nnx.Param)
-    replay = Replay(a.replay, a.length)
+    replay = Replay(a.replay, a.length, world.cfg.state, world.cfg.stoch * world.cfg.classes)
     rng = np.random.default_rng(a.seed)
     key = jax.random.PRNGKey(a.seed)
     fresh_plain = jax.jit(jax.vmap(lambda k, f: random_start(k, willows=a.willows, fog=f, skyline=a.skyline, river=a.river), in_axes=(0, None)))
@@ -407,13 +431,14 @@ def main():
         cut = lambda x: x[:, :, : a.record].transpose((1, 2, 0) + tuple(range(3, x.ndim))).reshape((-1, T // L, L) + x.shape[3:]).reshape((-1, L) + x.shape[3:])
         alive_seq = cut(tr["alive_before"]).all(-1) & (rng.random(cut(tr["alive_before"]).shape[0]) < a.add_frac)
         if alive_seq.any():
-            replay.add(cut(tr["views"])[alive_seq], cut(tr["act"])[alive_seq], cut(tr["feel"])[alive_seq], cut(tr["reward"])[alive_seq])
+            replay.add(cut(tr["views"])[alive_seq], cut(tr["act"])[alive_seq], cut(tr["feel"])[alive_seq], cut(tr["reward"])[alive_seq],
+                       cut(tr["h_in"])[alive_seq][:, 0], cut(tr["z_in"])[alive_seq][:, 0], cut(tr["a_prev"])[alive_seq][:, 0])
         t_b = time.time()
         wm_aux = {}
         if replay.n >= a.batch:
-            V, A, F, Rw = replay.sample(rng, a.batch, a.wm_steps)
+            V, A, F, Rw, St = replay.sample(rng, a.batch, a.wm_steps)
             key, k = jax.random.split(key)
-            wm_aux = {k2: float(np.mean(np.asarray(v))) for k2, v in wm_burst(world, wm_opt, V, A, F, Rw, jax.random.split(k, a.wm_steps)).items()}
+            wm_aux = {k2: float(np.mean(np.asarray(v))) for k2, v in wm_burst(world, wm_opt, V, A, F, Rw, jax.random.split(k, a.wm_steps), St if a.stored_starts else None).items()}
         ppo_aux = {}
         if it > a.ppo_start and column is not None:
             # sequences: one per sheep (N = meadows x sheep), the column run from its stored start

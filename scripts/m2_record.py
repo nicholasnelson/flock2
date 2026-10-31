@@ -357,7 +357,7 @@ def main(argv=None):
     p.add_argument("--edge", type=float, default=2.0, help="tiles over which regrowth ramps back to full outside the mud")
     p.add_argument("--trample", type=float, default=0.0, help="biomass lost per step under a moving sheep")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy")
-    p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay")
+    p.add_argument("--thirst", type=float, default=None, help="scale on the hydration decay; default the agent's config (spec section 21.12 arm T), else 1")
     p.add_argument("--zero_column", action="store_true", help="hybrid ablation: the column's state stays at zeros")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon, hidden by fog (spec section 21.7); 2: drawn on fog days too (spec section 21.10); default the agent's config, else 0")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec section 21.8); default the agent's config, else 0")
@@ -370,24 +370,27 @@ def main(argv=None):
     p.add_argument("--name", default=None, help="file name without extension (default: from the label)")
     p.add_argument("--dir", default=DEFAULT_DIR, help="replay directory (holds index.json)")
     a = p.parse_args(argv)
-    if a.thirst != 1.0:
-        # the constant is read at trace time, so scaling it here before anything is jitted changes the world
-        D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     ev = load_script("m2_eval")
     agent, willows = load_agent(a.policy, a.agent, a.willows, a.zero_column)
     skyline, river = int(a.skyline or 0), bool(a.river or 0)
+    thirst = 1.0 if a.thirst is None else a.thirst
     if a.agent:  # as m2_eval: the brain's own world unless overridden
         cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
         if a.skyline is None:
             skyline = int(cfg0.get("skyline", False) or 0)
         if a.river is None:
             river = bool(cfg0.get("river", False))
+        if a.thirst is None:
+            thirst = float(cfg0.get("thirst", 1.0) or 1.0)
+    if thirst != 1.0:
+        # the constant is read at trace time, so scaling it here before anything is jitted changes the world
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * thirst
     steps = a.steps if a.steps is not None else int(a.days * DAY)
     states = make_states(a.meadows, willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, seed=a.meadow_seed, skyline=skyline, river=river)
     rec = record(ev.policy_fn(a.policy, agent), states, steps, grass_every=a.grass_every, key_seed=a.seed)
     meta = {
         "label": a.label, "description": a.description, "policy": a.policy, "agent": a.agent, "willows": willows, "sheep": a.sheep or 12,
-        "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "zero_column": a.zero_column, "skyline": skyline, "river": river, "tiles": N_TILES,
+        "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": thirst, "zero_column": a.zero_column, "skyline": skyline, "river": river, "tiles": N_TILES,
         "days": steps / DAY, "seed": a.seed, "meadow_seed0": a.meadow_seed, "meadows_run": a.meadows, "grass_every": a.grass_every,
         "git": git_commit(), "date": _dt.datetime.now().isoformat(timespec="seconds"),
         "DAY": DAY, "N_TILES": N_TILES, "MAX_DAYS": MAX_DAYS, "day_fraction": sim.DAY_FRACTION, "action_names": list(sim.ACTION_NAMES), "drive_names": list(D.NAMES),

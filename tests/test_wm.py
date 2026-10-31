@@ -131,3 +131,23 @@ def test_class_balanced_reconstruction_keeps_scale_and_upweights_rare_classes():
     _, a1 = wm.loss_fn(m, views, acts, jax.random.PRNGKey(0))
     _, a0 = wm.loss_fn(plain, views, acts, jax.random.PRNGKey(0))
     assert np.isfinite(float(a1["recon"])) and 0.2 < float(a1["recon"]) / float(a0["recon"]) < 5.0
+
+
+def test_observe_from_a_stored_start_reproduces_the_online_state():
+    """Meadow v2 spec section 21.12, arm W: a sequence observed from the recorded (h, z, previous action)
+    continues the online run exactly (the deterministic state and the posterior at its first step equal
+    the full run's), where a zero start does not; the loss accepts the start."""
+    m = wm.WorldModel(nnx.Rngs(11))
+    views = jax.random.randint(jax.random.PRNGKey(0), (2, 8, wm.H, wm.W), 0, 16)
+    acts = jax.random.randint(jax.random.PRNGKey(1), (2, 8), 0, wm.N_ACTIONS)
+    full = m.observe(views, acts, jax.random.PRNGKey(3))
+    L = 4
+    start = (full.h[:, L - 1], full.z[:, L - 1], acts[:, L - 1])
+    half = m.observe(views[:, L:], acts[:, L:], jax.random.PRNGKey(9), start=start)
+    assert np.allclose(np.asarray(half.h[:, 0]), np.asarray(full.h[:, L]), atol=1e-5)
+    assert np.allclose(np.asarray(half.post[:, 0]), np.asarray(full.post[:, L]), atol=1e-4)
+    zeros = m.observe(views[:, L:], acts[:, L:], jax.random.PRNGKey(9))
+    assert not np.allclose(np.asarray(zeros.h[:, 0]), np.asarray(full.h[:, L]), atol=1e-3)
+    (loss, _), grads = nnx.value_and_grad(wm.loss_fn, has_aux=True)(m, views[:, L:], acts[:, L:], jax.random.PRNGKey(2), None, None, start)
+    assert np.isfinite(float(loss))
+    assert all(np.isfinite(np.asarray(g)).all() for g in jax.tree.leaves(nnx.state(grads, nnx.Param)))

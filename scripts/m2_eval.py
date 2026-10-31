@@ -315,26 +315,40 @@ def wdist_share(rec):
 def excursions(rec):
     """Spec § 21.6's R1: every spell more than 8 tiles from water by a sheep that had been within 8 before: its
     farthest point and the conditions there, and the time from the farthest point back to within 8 tiles
-    (censored at R1_CAP, by death or the end of the run), per bin of the farthest distance."""
+    (censored at R1_CAP, by death or the end of the run), per bin of the farthest distance. Spec § 21.12.3's
+    **blind leg** beside it: the steps from the last frame with the water in the 8-tile cone (``sees8``) at or
+    before the farthest point to the first frame with it there again after the farthest point, censored at
+    R1_CAP past the farthest point, and per tile beyond 8 at the farthest point (steps per blind tile);
+    excursions whose sheep never saw the water before are left out of it."""
     T, B, S = rec["alive_now"].shape
-    al, wdist, near8, fog = (rec[k] for k in ("alive_now", "wdist", "last_near8", "fog"))
+    al, wdist, near8, fog, sees8 = (rec[k] for k in ("alive_now", "wdist", "last_near8", "fog", "sees8"))
     hyd = rec["levels_before"][..., D.HYDRATION]
     night = np.broadcast_to(rec["night"][..., None], al.shape)
+    last_seen = np.maximum.accumulate(np.where(sees8, np.arange(T)[:, None, None], NEVER), axis=0)  # the last sighting at or before t
     out_now = al & (wdist > NEAR_RANGE) & (near8 != NEVER)
     active = np.zeros((B, S), bool)
     dmax, hmax = np.zeros((B, S)), np.zeros((B, S))
     tmax = np.zeros((B, S), int)
     fmax, nmax = np.zeros((B, S), bool), np.zeros((B, S), bool)
-    rows = []  # (d_max, return steps, resolved, fog, night, hydration at the farthest point, hydration at re-entry)
+    seen_at_max, resight = np.full((B, S), NEVER), np.full((B, S), -1)
+    rows = []  # (d_max, return steps, resolved, fog, night, hydration at the farthest point, hydration at re-entry, blind-leg steps, blind leg resolved)
 
     def close(mask, t, resolved):
         for b, s in zip(*np.nonzero(mask)):
             dur = t - tmax[b, s]
+            if seen_at_max[b, s] == NEVER:
+                blind, bres = np.nan, False
+            elif resight[b, s] >= 0 and resight[b, s] - tmax[b, s] <= R1_CAP:
+                blind, bres = resight[b, s] - seen_at_max[b, s], True
+            else:
+                blind, bres = min(t, tmax[b, s] + R1_CAP) - seen_at_max[b, s], False
             rows.append((dmax[b, s], min(dur, R1_CAP), bool(resolved and dur <= R1_CAP), bool(fmax[b, s]), bool(nmax[b, s]),
-                         hmax[b, s], hyd[t, b, s] if resolved else np.nan))
+                         hmax[b, s], hyd[t, b, s] if resolved else np.nan, blind, bres))
         active[mask] = False
 
     for t in range(T):
+        rs = active & (resight < 0) & sees8[t] & (t > tmax)
+        resight[rs] = t
         close(active & al[t] & (wdist[t] <= NEAR_RANGE), t, True)
         close(active & ~al[t], t, False)
         start = out_now[t] & ~active
@@ -342,8 +356,9 @@ def excursions(rec):
         dmax[start] = 0.0
         further = active & (wdist[t] > dmax)
         dmax[further], tmax[further], fmax[further], nmax[further], hmax[further] = wdist[t][further], t, fog[t][further], night[t][further], hyd[t][further]
+        seen_at_max[further], resight[further] = last_seen[t][further], -1
     close(active, T - 1, False)
-    arr = np.array(rows, dtype=float).reshape(-1, 7)
+    arr = np.array(rows, dtype=float).reshape(-1, 9)
     out = {"excursions": int(len(arr)), "cap": R1_CAP, "straight_steps_per_tile": {"walk": round(1 / sim.WALK_SPEED, 1), "trot": round(1 / sim.TROT_SPEED, 1)}}
     unsighted = (arr[:, 3] > 0) | (arr[:, 4] > 0)
     splits = {"all": np.ones(len(arr), bool), "clear_day": ~unsighted, "fog_day": (arr[:, 3] > 0) & (arr[:, 4] == 0), "night": arr[:, 4] > 0,
@@ -360,6 +375,10 @@ def excursions(rec):
                 row.update(median_return=med(dur), resolved_share=float(res.mean()), resolved_median=med(dur[res]),
                            steps_per_tile_median=med(dur / np.maximum(arr[m, 0] - NEAR_RANGE, 0.5)),
                            hydration_at_farthest_median=med(arr[m, 5]), hydration_at_reentry_median=med(arr[m, 6][res]))
+                valid = ~np.isnan(arr[m, 7])
+                blind = arr[m, 7][valid]
+                row.update(blind_n=int(valid.sum()), blind_leg_median=med(blind), blind_per_tile_median=med(blind / np.maximum(arr[m, 0][valid] - NEAR_RANGE, 0.5)),
+                           blind_resolved_share=float(arr[m, 8][valid].mean()) if valid.any() else None)
             bins[_bin_key(lo, hi)] = row
         out[name] = bins
     return out
@@ -426,26 +445,29 @@ def main():
     p.add_argument("--trample", type=float, default=0.0, help="biomass lost per step under a moving sheep")
     p.add_argument("--zero_column", action="store_true", help="ablation (spec § 21.4): the policy sees zeros where the column's state would be")
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy (spec § 21.4)")
-    p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay (spec § 21.6: 2 halves the reserve)")
+    p.add_argument("--thirst", type=float, default=None, help="scale on the hydration decay (spec § 21.6: 2 halves the reserve); default the agent's config (spec § 21.12 arm T), else 1")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the horizon, hidden by fog (spec § 21.7); 2: drawn on fog days too (spec § 21.10); default the agent's config, else 0; 0 on a skyline-trained brain is the ablation")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config, else 0")
     p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     a = p.parse_args()
-    if a.thirst != 1.0:
-        # the constant is read at trace time, so scaling it here before anything is jitted changes the world
-        D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst
     agent = None
     willows = a.willows or 0
     skyline = int(a.skyline or 0)
     river = bool(a.river or 0)
+    thirst = 1.0 if a.thirst is None else a.thirst
     if a.agent:
         cfg0 = json.load(open(os.path.join(os.path.expanduser(a.agent), "config.json")))
         if a.willows is None:
             willows = cfg0.get("willows", 0)
+        if a.thirst is None:
+            thirst = float(cfg0.get("thirst", 1.0) or 1.0)
         if a.skyline is None:
             skyline = int(cfg0.get("skyline", False) or 0)
         if a.river is None:
             river = bool(cfg0.get("river", False))
+    if thirst != 1.0:
+        # the constant is read at trace time, so scaling it here before anything is jitted changes the world
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * thirst
     if a.policy == "reactive":
         import importlib.util
 
@@ -491,7 +513,7 @@ def main():
         agent = (world, policy, hy, use_embed, None if a.zero_column else column, col)
     rec = run(policy_fn(a.policy, agent), a.meadows, int(a.days * DAY), willows=willows, n_sheep=a.sheep, inner=a.inner, edge=a.edge, trample=a.trample, fog=a.fog, skyline=skyline, river=river)
     res = {"policy": a.policy + (f":{a.agent}" if a.agent else ""), "meadows": a.meadows, "days": a.days, "willows": willows,
-           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": a.thirst, "skyline": skyline, "river": river, "tiles": N_TILES, "zero_column": a.zero_column, **summarise(rec)}
+           "sheep": a.sheep or 12, "inner": a.inner, "edge": a.edge, "trample": a.trample, "fog": a.fog, "thirst": thirst, "skyline": skyline, "river": river, "tiles": N_TILES, "zero_column": a.zero_column, **summarise(rec)}
     print(json.dumps(res, indent=1))
     if a.out:
         os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

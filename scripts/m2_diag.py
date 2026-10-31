@@ -232,6 +232,7 @@ def main():
     p.add_argument("--fog", type=float, default=0.0, help="probability of each day being foggy on the probe's meadows (spec § 21.4)")
     p.add_argument("--skyline", type=int, default=None, help="1: the fixed peaks on the probe's meadows, hidden by fog (spec § 21.7); 2: drawn on fog days too (spec § 21.10); default the agent's config")
     p.add_argument("--river", type=int, default=None, help="1: the river meadow (spec § 21.8); default the agent's config")
+    p.add_argument("--thirst", type=float, default=None, help="scale on the hydration decay (spec § 21.12 arm T); default the agent's config, else 1")
     p.add_argument("--tiles", type=int, default=None, help="the meadow's side in tiles (spec § 21.8); default the agent's config, else 48")
     p.add_argument("--decode_every", type=int, default=10)
     p.add_argument("--seed", type=int, default=0)
@@ -244,6 +245,9 @@ def main():
     willows = int(cfg.get("willows", 0))
     skyline = int(cfg.get("skyline", False) or 0) if a.skyline is None else int(a.skyline)
     river = bool(cfg.get("river", False)) if a.river is None else bool(a.river)
+    thirst = float(cfg.get("thirst", 1.0) or 1.0) if a.thirst is None else a.thirst
+    if thirst != 1.0:
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * thirst  # read at trace time, so set before anything is jitted
     reactive = cfg.get("kind") == "m2_reactive"
     world = None
     if reactive:
@@ -259,7 +263,7 @@ def main():
         if column is not None:
             wm.load_into(column, pickle.load(open(os.path.join(d, "column.pkl"), "rb")))
         rec = collect(world, hy, a.meadows, a.warm, a.steps, 10**9 if a.validate_d3 else a.decode_every, a.seed, willows, column, a.inner, a.fog, skyline, river)
-    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog, "skyline": skyline, "river": river, "tiles": N_TILES}
+    res = {"agent": a.agent, "meadows": a.meadows, "steps": a.steps, "willows": willows, "inner": a.inner, "fog": a.fog, "thirst": thirst, "skyline": skyline, "river": river, "tiles": N_TILES}
 
     day = rec["light"][:, :, 0] >= 0.5  # (T, B), each meadow by its own light
     if not reactive:

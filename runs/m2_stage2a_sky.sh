@@ -10,6 +10,12 @@
 #   bash runs/m2_stage2a_sky.sh chain3       section 21.10 for seeds 0, 1, 2 in turn
 #   bash runs/m2_stage2a_sky.sh ms <seed>    spec section 21.11, the multi-step view loss on: s2l_s<seed> -> s2n_s<seed>, then the same evaluations
 #   bash runs/m2_stage2a_sky.sh chain4       section 21.11 for seeds 0, 1, 2 in turn
+#   bash runs/m2_stage2a_sky.sh blindleg     spec section 21.12.3: the s2m stage-world evaluations re-run (same seeds) so the blind-leg metric has its baseline
+#   bash runs/m2_stage2a_sky.sh thirstcheck  spec section 21.12.5: the section 11 balance rule (naive explorer) at thirst 3, 2 and 1.5, plain world and stage world
+#   bash runs/m2_stage2a_sky.sh w <seed>     spec section 21.12.4, arm W: s2m_s<seed> -> s2p_s<seed> with --stored_starts, then section 21.10's evaluations
+#   bash runs/m2_stage2a_sky.sh chain5       arm W for seeds 0, 1, 2 in turn
+#   bash runs/m2_stage2a_sky.sh t <seed> <F> spec section 21.12.5, arm T: s2m_s<seed> -> s2q_s<seed> with --thirst F, then the evaluations (the brain's world keeps F)
+#   bash runs/m2_stage2a_sky.sh chain6 <F>   arm T for seeds 0, 1, 2 in turn
 cd /mnt/c/Users/nnels/Documents/projects/flock2 && . ~/.venvs/flock2/bin/activate && export XLA_PYTHON_CLIENT_PREALLOCATE=false
 mkdir -p runs/meadow2/hybrid runs/meadow2/eval runs/meadow2/deaths runs/meadow2/diag
 E=runs/meadow2/eval; X=runs/meadow2/deaths; G=runs/meadow2/diag
@@ -55,11 +61,48 @@ if [ "$1" = chain4 ]; then
   echo MS_ALL_DONE $(date +%H:%M:%S)
   exit
 fi
+if [ "$1" = blindleg ]; then
+  echo BLINDLEG_START $(date +%H:%M:%S)
+  for s in 0 1 2; do
+    n=s2m_s$s; agent=~/flock2_data/m2_hybrid/$n
+    for v in "sky:" "nosky:--skyline 0" "sky1:--skyline 1"; do
+      tag=${v%%:*}; fl=${v#*:}
+      python scripts/m2_eval.py --policy hybrid --agent $agent $W $fl --out $E/hybrid_${n}_${tag}_mud8_fog075_d5.json --deaths $X/hybrid_${n}_${tag}_mud8_fog075_d5.json > $E/hybrid_${n}_${tag}_mud8_fog075_d5.log 2>&1 || echo EVAL_FAILED $n $tag
+    done
+    echo BLINDLEG_DONE $n $(date +%H:%M:%S)
+  done
+  echo BLINDLEG_ALL_DONE $(date +%H:%M:%S)
+  exit
+fi
+if [ "$1" = thirstcheck ]; then
+  echo THIRSTCHECK_START $(date +%H:%M:%S)
+  for F in 3 2 1.5; do
+    python scripts/meadow2_checks.py --walker_only --thirst $F --out runs/meadow2/checks_thirst${F}_plain.json > runs/meadow2/checks_thirst${F}_plain.log 2>&1 || echo CHECK_FAILED $F plain
+    python scripts/meadow2_checks.py --walker_only --willows 3 --inner 8 --thirst $F --out runs/meadow2/checks_thirst${F}_mud8.json > runs/meadow2/checks_thirst${F}_mud8.log 2>&1 || echo CHECK_FAILED $F mud8
+    echo THIRSTCHECK_DONE $F $(date +%H:%M:%S)
+  done
+  echo THIRSTCHECK_ALL_DONE $(date +%H:%M:%S)
+  exit
+fi
+if [ "$1" = chain5 ]; then
+  echo W_START $(date +%H:%M:%S)
+  for s in 0 1 2; do bash runs/m2_stage2a_sky.sh w $s; echo $(date +%H:%M:%S); done
+  echo W_ALL_DONE $(date +%H:%M:%S)
+  exit
+fi
+if [ "$1" = chain6 ]; then
+  echo T_START $2 $(date +%H:%M:%S)
+  for s in 0 1 2; do bash runs/m2_stage2a_sky.sh t $s $2; echo $(date +%H:%M:%S); done
+  echo T_ALL_DONE $(date +%H:%M:%S)
+  exit
+fi
 # the learning stage: the fog recipe with mud 8 and fog 0.75 held from the start (the brains know both) and the skyline on every meadow
 EXTRA=""
 if [ "$1" = more ]; then s=$2; n=s2l_s$s; from=s2k_s$s
 elif [ "$1" = above ]; then s=$2; n=s2m_s$s; from=s2l_s$s; EXTRA="--skyline 2"   # spec section 21.10: the peaks drawn on fog days too (the last --skyline wins)
 elif [ "$1" = ms ]; then s=$2; n=s2n_s$s; from=s2l_s$s; EXTRA="--ms_weight 0.4 --ms_horizons 8,16,24 --ms_stride 8"   # spec section 21.11: the multi-step view loss, weighted to match recon at the start
+elif [ "$1" = w ]; then s=$2; n=s2p_s$s; from=s2m_s$s; EXTRA="--skyline 2 --stored_starts"   # spec section 21.12.4, arm W: the world model's windows start from the recorded state
+elif [ "$1" = t ]; then s=$2; n=s2q_s$s; from=s2m_s$s; EXTRA="--skyline 2 --thirst $3"   # spec section 21.12.5, arm T: the hydration decay scaled by F (the evaluations inherit it from the config)
 else s=$1; n=s2k_s$s; from=s2f_s$s; fi
 agent=~/flock2_data/m2_hybrid/$n
 MAXGB=12 bash runs/watchdog.sh python scripts/m2_hybrid.py --out $agent $RECIPE $EXTRA --continue_from ~/flock2_data/m2_hybrid/$from --iters 2000 --seed $s > runs/meadow2/hybrid/$n.log 2>&1 || { echo TRAIN_FAILED $n; tail -5 runs/meadow2/hybrid/$n.log; exit 1; }
@@ -68,7 +111,7 @@ echo TRAIN_DONE $n $(date +%H:%M:%S)
 # the evaluations: the stage world; the ablation (skyline blanked); the plain world (stage 1's regression, with and without the skyline); alone; the column zeroed
 python scripts/m2_eval.py --policy hybrid --agent $agent $W --out $E/hybrid_${n}_sky_mud8_fog075_d5.json --deaths $X/hybrid_${n}_sky_mud8_fog075_d5.json > $E/hybrid_${n}_sky_mud8_fog075_d5.log 2>&1 || echo EVAL_FAILED $n
 python scripts/m2_eval.py --policy hybrid --agent $agent $W --skyline 0 --out $E/hybrid_${n}_nosky_mud8_fog075_d5.json --deaths $X/hybrid_${n}_nosky_mud8_fog075_d5.json > $E/hybrid_${n}_nosky_mud8_fog075_d5.log 2>&1 || echo EVAL_FAILED $n ablation
-if [ "$1" = above ]; then  # section 21.10's second ablation: the peaks hidden by the fog again (the old world)
+if [ "$1" = above ] || [ "$1" = w ] || [ "$1" = t ]; then  # section 21.10's second ablation: the peaks hidden by the fog again (the old world)
   python scripts/m2_eval.py --policy hybrid --agent $agent $W --skyline 1 --out $E/hybrid_${n}_sky1_mud8_fog075_d5.json --deaths $X/hybrid_${n}_sky1_mud8_fog075_d5.json > $E/hybrid_${n}_sky1_mud8_fog075_d5.log 2>&1 || echo EVAL_FAILED $n sky1
 fi
 python scripts/m2_eval.py --policy hybrid --agent $agent --out $E/hybrid_${n}_sky_plain.json > $E/hybrid_${n}_sky_plain.log 2>&1 || echo EVAL_FAILED $n plain

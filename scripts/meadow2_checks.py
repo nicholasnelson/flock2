@@ -99,7 +99,10 @@ def main():
     p.add_argument("--edge", type=float, default=2.0)
     p.add_argument("--trample", type=float, default=0.0)
     p.add_argument("--walker_only", action="store_true", help="only the explorer measures (both walkers)")
+    p.add_argument("--thirst", type=float, default=1.0, help="scale on the hydration decay (spec § 21.12 arm T): the balance rule re-read with it")
     a = p.parse_args()
+    if a.thirst != 1.0:
+        D.HYDRATION_DECAY = D.HYDRATION_DECAY * a.thirst  # read at trace time, so set before anything is jitted; the budgets below follow
     keys = jnp.stack([jax.random.PRNGKey(30_000 + i) for i in range(a.meadows)])
     states = jax.jit(jax.vmap(functools.partial(random_start, willows=a.willows)))(keys)
     if a.inner > 0 or a.trample > 0:  # stage 2a's terrain (spec § 21)
@@ -111,7 +114,7 @@ def main():
     if a.walker_only:
         h0 = np.asarray(states.flock.levels[..., D.HYDRATION])
         loss = D.HYDRATION_DECAY * D.NEED_SCALE
-        out = {}
+        out = {"thirst": a.thirst}
         for bounce in (False, True):
             first = np.asarray(jax.jit(run_walker, static_argnums=(2, 3))(states, jax.random.PRNGKey(a.seed + 1), a.walk_steps, bounce))
             found = first < a.walk_steps
@@ -146,7 +149,7 @@ def main():
     budget = {f"need_scale_{ns}": float((found & (first < h0 / (loss / ns))).mean()) for ns in (1, 2, 3, 4, 6)}
 
     res = {
-        "meadows": a.meadows, "willows": a.willows, "inner": a.inner, "trample": a.trample,
+        "meadows": a.meadows, "willows": a.willows, "inner": a.inner, "trample": a.trample, "thirst": a.thirst,
         "sheep_per_meadow": int(n_sheep),
         "steps": a.steps,
         "1_survival": {

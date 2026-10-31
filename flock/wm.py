@@ -315,15 +315,22 @@ class WorldModel(nnx.Module):
         return jnp.zeros((batch, self.cfg.state)), jnp.zeros((batch, self.cfg.stoch * self.cfg.classes))
 
     # --- sequences ----------------------------------------------------------------------------
-    def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None) -> Step:
+    def observe(self, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None, start=None) -> Step:
         """views (B, T, h, w) class indices, actions (B, T) (taken after each view),
         intero (B, T, n_intero) the drive levels felt with each view (if the model has them).
+        ``start`` (h, z, a_prev): the state carried into the first step and the action taken before
+        it, as recorded online (meadow v2 spec § 21.12, arm W); default a zero state and no action.
         Returns the posterior rollout (time-major fields are (B, T, ...))."""
         B, T = views.shape[:2]
         nA = self.cfg.n_actions
         embed = self.embed_obs(views, intero)
-        a_prev = jnp.concatenate([jnp.zeros((B, 1, nA)), jax.nn.one_hot(actions[:, :-1], nA)], 1)
-        h0, z0 = self.initial(B)
+        if start is None:
+            h0, z0 = self.initial(B)
+            first = jnp.zeros((B, 1, nA))
+        else:
+            h0, z0, a0 = start
+            first = jax.nn.one_hot(a0, nA)[:, None]
+        a_prev = jnp.concatenate([first, jax.nn.one_hot(actions[:, :-1], nA)], 1)
 
         def body(carry, x):
             h, z = carry
@@ -384,9 +391,10 @@ class WorldModel(nnx.Module):
         return symexp(jnp.sum(jax.nn.softmax(self.reward_head(feat), -1) * BINS, -1))
 
 
-def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None, reward: jax.Array | None = None):
-    """``reward`` (B, T): the reward of the step taken after each view (as logged)."""
-    s = model.observe(views, actions, key, intero)
+def loss_fn(model: WorldModel, views: jax.Array, actions: jax.Array, key: jax.Array, intero: jax.Array | None = None, reward: jax.Array | None = None, start=None):
+    """``reward`` (B, T): the reward of the step taken after each view (as logged); ``start`` the
+    recorded state before the first view (see ``observe``)."""
+    s = model.observe(views, actions, key, intero, start)
     logits = model.decode(s)
     if model.cfg.rgb:
         target = views.astype(jnp.float32) / 255.0
