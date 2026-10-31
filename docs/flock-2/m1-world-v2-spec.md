@@ -2717,6 +2717,29 @@ so the old numbers return with the new fields). The straight-line pace is 2.9 st
 walk (`straight_steps_per_tile`). The evaluations of `s2m_s*` are re-run with it (minutes each) so the
 arms have a baseline before they start; those numbers are filled in here then.
 
+**The baseline (2026-10-31, 21:25; `runs/m2_arms.sh` blindleg, 20:51–21:24, the s2m stage evaluations
+re-run with the same seeds; files `meadow2-results/eval/hybrid_s2m_s*_{sky,sky1,nosky}_mud8_fog075_d5.json`).**
+Night excursions, steps per blind tile (median; the blind leg's median in steps, its count and its
+resolved share in the files):
+
+| world | 12–16 tiles | 16–24 tiles |
+|---|---|---|
+| skyline 2 (the stage world, **arm W's and arm T's reference for B**) | **83 / 84 / 72** | **72 / 73 / 65** |
+| skyline 1 (peaks hidden by fog) | 98 / 86 / 72 | 81 / 74 / 76 |
+| skyline 0 (blanked) | 98 / 91 / 75 | 81 / 80 / 75 |
+
+Fog nights alone read 81 / 90 / 75 and 71 / 71 / 65 on the stage world (clear nights 98 / 80 / 64 and
+78 / 76 / 67; n 51–113 from 12–16, 3–51 from 16–24). The blind legs are 375–480 steps from 12–16 and
+700–770 from 16–24, 92–100 % resolved within the cap. **What the baseline says:** at 65–84 steps a
+blind tile against 2.9 straight at a trot and 8.3 at a walk, the blind leg is a wander of eight to
+thirty times the straight path, not a return. The peaks shown through the fog shortened it at seed 0
+(98 → 83 and 81 → 72, −15 and −11 %) and barely at seeds 1 and 2 (−2 to −8 %, 0), which agrees with
+§ 21.10's A reading seed by seed. For B, arm W (and arm T) must bring the stage-world figure to
+≤ 62 / 63 / 54 from 12–16 or ≤ 54 / 55 / 49 from 16–24 at two seeds. For reference, `s2n_s*` read
+60 / 122 / 89 and 62 / 99 / 70 on their stage world (seed 0 shorter than any s2m seed while dying
+most: the far-ranging seed 0 loses sight less often per tile and dies of distance, not of wandering).
+
+
 **21.12.4 Arm W, windows that start from the recorded state (the path; a training fix, not knowledge
 given to the brain).** *The change (one):* `collect` records the model's (h, z) and the previous
 action carried into the first step of every `--length` steps; `Replay` stores them with the sequence
