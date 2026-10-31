@@ -2739,6 +2739,19 @@ thirty times the straight path, not a return. The peaks shown through the fog sh
 60 / 122 / 89 and 62 / 99 / 70 on their stage world (seed 0 shorter than any s2m seed while dying
 most: the far-ranging seed 0 loses sight less often per tile and dies of distance, not of wandering).
 
+*Correction (2026-11-01, 05:30):* the re-run did **not** return the old numbers, although every key in
+`m2_eval` is fixed (meadow i from `PRNGKey(50 000 + i)`, the sampling from `PRNGKey(seed)`). The stage
+world read 8.3 / 3.6 / 2.6 % dead against § 21.10's 6.8 / 3.6 / 7.3, the night returns 12–16 / 16–24
+162 / 207, 129 / 182, 119 / 240 against 159 / 198, 107 / 180, 119 / 244; over the nine s2m pairs
+(three worlds, three seeds) the death share moved −4.7 to +2.6 points and a median return −53 to +22
+steps. The GPU's kernels are not bit-deterministic, so the first sample that differs sends the
+trajectories apart and the evaluation is a draw, not a replay: a death share carries about ±2 points
+(192 sheep at 5 % give a binomial spread of 1.6) and a median return about ±20 steps. Readings against
+a bar should be taken with that: § 21.11's 10.9 against 10 at seed 1 was within the draw; the B bar
+of −25 % is wider than the draw but not by much, which is why two seeds are asked. The s2m figures
+quoted as the arms' reference below are the re-run's (the same metric, the same session), the § 21.10
+reading in brackets where it differs.
+
 
 **21.12.4 Arm W, windows that start from the recorded state (the path; a training fix, not knowledge
 given to the brain).** *The change (one):* `collect` records the model's (h, z) and the previous
@@ -2765,6 +2778,63 @@ not what held the memory back, the incentive is, arm T runs as planned; K passes
 state holds the bearing and the policy does not use it, to the owner with arm T's result; both pass
 → the stage continues on this recipe.
 
+**Readings (2026-11-01, 05:30; chain5 ran 21:24–05:12 inside `runs/m2_arms.sh`, `runs/meadow2/arms.log`;
+files `meadow2-results/{eval,deaths,diag,hybrid}/*s2p*`).** Training uneventful (peak 6.4 GB, 2,000
+iterations a seed, `stored_starts: true` in every config). Deaths in the last 100 training iterations
+9 / 6 / 13 [s2m 26 / 9 / 15]. Three seeds, the s2m re-run in brackets:
+
+- **L, the fix is sound: passes at every seed.** `wm_recon` last-100 means **27.7 / 35.2 / 39.7**
+  against s2m's 27.9 / 36.1 / 37.1 (limits 20.9–34.9, 27.1–45.1, 27.8–46.4). The stored start does what
+  it was built to do and no more: the first-100 means are 57.7 / 59.7 / 80.7 against s2m's own first
+  hundred after its restart 85.6 / 66.5 / 78.7, iterations 100–200 read 34.2 / 28.2 / 36.9 against
+  52.9 / 48.0 / 41.7, and by the end the two recipes meet. The first steps of every window were
+  predicted from zeros before; now they are not, and the loss those steps carried is gone.
+- **S, survival: passes at every seed.** Stage world **5.7 / 3.6 / 5.7 %** dead at 5 days [8.3 / 3.6 /
+  2.6; § 21.10 read 6.8 / 3.6 / 7.3; bar 10]. Plain world, 3 days: with the skyline 10.9 / 6.2 / 10.4 %
+  [3.1 / 9.4 / 6.2], without it 6.8 / 6.2 / 7.8 % [6.8 / 9.9 / 7.3] (bar 15). Alone 1.6 / 4.7 / 6.2 %
+  [14.1 / 6.2 / 3.1]; column zeroed 2.1 / 3.1 / 3.6 % [4.7 / 3.6 / 5.7]: better with the column zeroed
+  at every seed (5.7 → 2.1, 3.6 → 3.1, 5.7 → 3.6), the column still costs survival rather than earning it.
+- **K, the state holds the compass at night: fails.** The egocentric recent-water bearing from h at
+  night **−0.64 / −1.18 / −0.33** [−0.85 / −1.90 / −1.23; bar 0.3 at two seeds]: less negative at every
+  seed, nowhere near read. The heading from h at night on the stage probe world **0.10 / 0.35 / 0.25**
+  [−0.06 / 0.29 / 0.35]: one seed over 0.3, as before; on the all-fog probe world 0.09 / 0.47 / 0.47
+  [0.01 / 0.48 / 0.54]. By clear day from h 0.73 / 0.86 / 0.84 [0.65 / 0.81 / 0.81], by fog day 0.84 /
+  0.90 / 0.89 [0.80 / 0.88 / 0.87]: a little higher at every seed, within what the probe's fit moves.
+  The embedding at night 0.57 / 0.62 / 0.50 [0.57 / 0.58 / 0.53]. The night state is where it was.
+- **B, the blind leg: fails at two seeds, passes at one.** Night steps per blind tile on the stage world,
+  12–16 / 16–24: **133 / 47 / 109** and **96 / 52 / 72** [83 / 84 / 72 and 72 / 73 / 65; bars ≤ 62 / 63 /
+  54 or ≤ 54 / 55 / 49]. Seed 1 falls 44 % and 29 %, both bins under the bar; seed 0 rises 60 % and
+  33 %, seed 2 51 % and 11 %. The blind legs themselves are 750 / 238 / 539 steps from 12–16 [468 /
+  482 / 375] over 449 / 478 / 319 excursions [560 / 198 / 248], 95–99 % resolved. Note that the blind
+  leg is longer than the return (750 against 261 at seed 0): most of it is spent *before* the farthest
+  point, out of sight of the water and still walking away; the measure counts the whole blind spell as
+  meant, and the spell is mostly outbound.
+- **M, the memory: fails at every seed.** Night returns 12–16 / 16–24 **261 / 152, 90 / 206, 202 / 164**
+  [162 / 207, 129 / 182, 119 / 240; bar ≤ 63.5 / 61]: seed 1's 90 (n 478, 99 % resolved) is the fastest
+  12–16 return of this stage and still 1.4 times the bar; seeds 0 and 2 are slower from 12–16 and
+  faster from 16–24 than s2m, each by more than the draw. Allocentric probes negative everywhere:
+  D2_true_allo at night 8–16 from h −3.46 / −3.26 / −2.60, D3_recent_allo at night from h −1.13 /
+  −2.11 / −0.86; M1 unreadable (`bins_read` 0).
+- **A, the ablation: one seed, as § 21.10.** Peaks blanked (skyline 0), the fog-night returns 12–16 /
+  16–24 go 263 → 245 (−7 %) and 160 → 184 (+15 %); **84 → 116 (+38 %)** and 200 → 234 (+17 %); 200 → 213
+  (+6 %) and 162 → 163 (0). Survival 5.7 → 5.7, 3.6 → 4.2, 5.7 → 5.2 %. Peaks hidden by the fog (skyline
+  1): 263 → 232 and 160 → 208 (+30 %, n 53 → 26); **84 → 122 (+45 %)** and 200 → 231; 200 → 216 and 162 →
+  140; survival 5.7 → 3.1, 3.6 → 3.1, 5.7 → 5.7 %. Seed 1 passes by either ablation, as `s2m_s1` did;
+  seed 0 only by the hidden peaks in the thin 16–24 bin; seed 2 by neither. Blanked, the night blind leg
+  per tile reads 137 / 57 / 121 and 89 / 66 / 106: longer at seeds 1 and 2 (+21 / +11 % from 12–16,
+  +27 / +47 % from 16–24), unchanged at seed 0.
+
+**Verdict: L and S pass, K fails, B fails at two seeds; not passed.** Under the fallbacks as written,
+K and B both failing means the reach was not what held the memory back, and arm T runs as planned
+(it started at 05:13 from `s2m_s*`, since W did not pass K; see below). **What this arm has shown:**
+the replay's zero start was a real flaw in the training (the early loss says so) and not the thing
+holding the night state back. With the losses computed from the state the sheep actually had, the
+night heading in h, the water bearing, the returns and the survival are within the evaluation's draw
+of s2m's. Seed 1 is the exception worth a sentence: its blind leg shortened by a third to a half, its
+12–16 return is the stage's fastest and both ablations slow it by 38–45 %, while its night state reads
+0.35 / 0.47 as `s2m_s1`'s did (0.29 / 0.48). One seed, and the state did not change; it is reported,
+not claimed.
+
 **21.12.5 Arm T, thirst that binds within a night (the reason).** *The change (one):* `--thirst F`
 in training, scaling `HYDRATION_DECAY` before anything is traced, as § 21.6's evaluation flag already
 does; saved in the config and inherited by the evaluation, the probes and the recorder when their own
@@ -2789,6 +2859,18 @@ points of survival (now there is a reason to use the compass). *Fallbacks:* S fa
 F one step down (3 → 2 → 1.5), once; P fails → F one step up, once; P passes and K and B fail → the
 incentive alone was not it either: reach and reason together is two changes, to the owner; both
 pass → the stage continues with this F.
+
+**The checks (2026-11-01, 05:13; `runs/m2_arms.sh` thirstcheck, 20 s; files `meadow2-results/checks_thirst{3,2,1.5}_{plain,mud8}.json`).**
+The naive explorer that turns when blocked finds water before it would die (`need_scale_3`) in **32 %**
+of starts at F = 3, **44 %** at F = 2 and **52 %** at F = 1.5 on the plain world (30 / 42 / 50 % inside
+the mud ring; 65 % at F = 1). The rule allows **F = 1.5** and nothing stronger, by two points. Arm T
+therefore runs at `--thirst 1.5` (reserve 2,500 steps, a night costs 0.38 of it) from `s2m_s{0,1,2}`,
+not from arm W's brains, since W did not pass K: `s2q_s{0,1,2}`, T_START 05:13, `thirst: 1.5` and
+`stored_starts: false` in the config. P's baseline on the stage world: s2m's thirsty share of living
+steps 1.9 / 0.9 / 0.8 % and hydration at the farthest point of night 12–16 excursions 0.99–1.02 (s2p
+1.4 / 0.9 / 1.1 % and 1.01 / 0.97 / 0.95). Weaker than the 2 or 3 the section was written around: at
+1.5 a sheep that leaves the water at dusk still has two-thirds of its reserve at dawn, so P (≥ 5 %
+thirsty steps, or ≤ 0.90 at the farthest point) is the first thing to read.
 
 **Order and cost.** W first (a fix, cheap to build, about 7 hours of GPU), then T (about 7 hours plus
 the checks); results to the owner after each. **Open points for the owner:** (1) if § 21.11 passes
