@@ -1,0 +1,12 @@
+continued from /home/nnels/flock2_data/m2_hybrid/s2r_s0
+W1102 08:48:52.444025     840 cuda_timer.cc:88] Delay kernel timed out: measured time has sub-optimal accuracy. There may be a missing warmup execution, please investigate in Nsight Systems.
+W1102 08:48:55.541788     851 bfc_allocator.cc:504] Allocator (GPU_0_bfc) ran out of memory trying to allocate 9.09GiB from the lower end with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+E1102 08:48:55.881641     850 cuda_executor.cc:1439] [0] Failed to allocate device memory of 4.00GiB (4294967296 bytes): RESOURCE_EXHAUSTED: : CUDA_ERROR_OUT_OF_MEMORY: out of memory
+=== Source Location Trace: ===
+external/xla+/xla/stream_executor/cuda/cuda_status.cc:45
+external/xla+/xla/stream_executor/cuda/cuda_device_allocator.cc:242
+external/xla+/xla/stream_executor/cuda/cuda_device_allocator.cc:510
+
+W1102 08:48:55.882743     850 bfc_allocator.cc:504] Allocator (GPU_0_bfc) ran out of memory trying to allocate 3.82GiB from the lower end with freed_by_count=0. The caller indicates that this is not a failure, but this may mean that there could be performance gains if more memory were available.
+{"iter": 1, "t": 41.584025144577026, "reward": 2.244694709777832, "alive_share": 1.0, "deaths": 0, "levels": [0.854, 0.808, 0.693, 0.853], "fat": 0.49593059221903485, "bad_taste": 0.0069580078125, "ppo_entropy": 0.7184430435299873, "wm_recon": 129.37860107421875, "wm_multistep": null, "wm_pixel_acc": 0.021777832880616188, "wm_reward_ce": 0.4897036552429199, "t_collect": 15.363558292388916, "t_train": 24.81066393852234}
+WATCHDOG: peak 8269 MB, exit 0

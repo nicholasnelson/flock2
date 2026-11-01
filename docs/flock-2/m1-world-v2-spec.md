@@ -3175,6 +3175,97 @@ multi-step loss (§ 21.11). The river meadow (§ 21.8) stays after. If the owner
 the ring longer first, 4,000 more iterations of the same recipe from `s2r_s*` is the cheap control
 for "not enough training", and § 21.12.2 predicts it changes nothing.
 
+### 21.14 The column's reach: `--steps 512` from `s2r` on the 12-tile ring (2026-11-02, 08:52; the owner's choice of § 21.13's option (a); pre-registered before the run)
+
+**21.14.1 The reading that leads here.** § 21.13 left the world right and the training without a path:
+the sheep leave sight of the water four or five times a day and two thirds of their night steps are
+beyond 12 tiles, the few deaths are the memory's (a sheep that had seen the water and died of thirst
+23–29 tiles out), and the water's bearing is absent from the night state at every seed while the
+heading is present at every seed. § 21.12.2's account: the one loss that depends on the water when it
+is out of view is the reward, and the column's back-propagation reaches 128 steps; a night return is
+300–600 steps, a lost sheep dies a thousand steps after the turn that lost it, and a value function
+with γ = 0.998 is asked to carry the rest from (h, z, g) at the rollout's end. Of § 21.13's three
+options the owner chose **(a), the column's reach**: `--steps 512`, so that the drink at the end of a
+night return, and the thirst death that follows a wrong turn, reach the turn through the column's own
+recurrence, and the value is bootstrapped from a state four times farther along.
+
+**21.14.2 The smoke test (08:48–08:50; `runs/m2_steps512.sh smoke`; log
+`meadow2-results/hybrid/smoke_steps512.log`, the GPU's memory sampled every second in
+`smoke_steps512_gpu.txt`).** Four iterations of the recipe below from `s2r_s0`: host memory peaked at
+**8.3 GB** (the watchdog kills at 12; `s2r` peaked at 6.3–6.4), the GPU at 7.2 GB with the desktop's
+2.3 GB already there (16 GB card); an iteration takes **8.6 s** (collect 4.2, train 2.8; `s2r` 2.5 =
+1.0 + 1.25: the rollout 4× longer, PPO's update 3.4×, the world model's burst unchanged); every sheep
+alive, reward 2.45, the reconstruction loss 96–129 on the first iterations as every continuation's
+(the replay and Adam's state start empty; `s2r`'s first hundred averaged 58). Fits; runs.
+
+**21.14.3 The changes (one against `s2r`, named; two things it forces, named; one thing found,
+recorded).** (1) **`--steps 512`** (128 in every arm since § 21.10): the rollout every sheep acts for
+between updates, the window the column's gradient is run back through from its stored start, and the
+distance to GAE's bootstrap. (2) Forced by (1): `--reset_every 5120` (the trainer requires the reset
+period to be a multiple of the rollout; 4,864 = 38 × 128 is not one of 512; 10 × 512 = 2.13 days
+against 2.03, the resets staggered over 10 phases across the 8 training meadows instead of 38), and
+`--mud_ramp 0,1,12` (the ring at 12 tiles from the first iteration; § 21.13's ramp over 200 iterations
+was for brains that knew the 8-tile ring, and `s2r` was trained on the 12-tile one: the world is the
+same at every iteration). Not changes but consequences of (1), stated so that the reading can name
+them: 4× the experience per iteration (49,152 sheep-steps against 12,288; over 2,000 iterations 98 M
+against 25 M), the replay fed 256 sequences an iteration instead of 64 and turned over every 4
+iterations instead of 16 against the same 16 world-model updates an iteration (each stored window is
+drawn about 0.5 times instead of 2), PPO's 16 updates an iteration on minibatches of 24 sequences ×
+512 steps instead of × 128. **Iterations 2,000**, as every arm, from **`s2r_s{0,1,2}` → `s2s_s{0,1,2}`**;
+everything else the § 21.13 recipe (`--thirst 1.5 --skyline 2 --stored_starts`, the § 21.10 recipe).
+The confound this leaves is 4× the experience; the control that would separate reach from experience
+(the same rollout with the column's gradient cut every 128 steps) is not a flag today and is **not
+run**; if M or B passes it is the owner's next decision (a small change to `update_recurrent`, about
+5 h a seed). (3) **Found while writing this section, recorded, not changed:** `--continue_from` loads
+the world model and the policy and builds the column anew (the stage-1 → 2a semantics of § 21.1,
+never extended), so every arm from `s2m` on (`s2p`, `s2q`, `s2r`) trained a **new column** for 2,000
+iterations beside a policy whose g-weights were tuned to the previous arm's column; the world model
+is carried, which is where the heading's growth across arms (0.10 → 0.36 → 0.44–0.62 in h) lives.
+This arm keeps the procedure (one change): `s2s`'s column is new too, with 512 steps of reach from
+its first iteration. The repair, loading `column.pkl` when the source has one, is the owner's, proposed
+as the next recipe repair in the manner of `--stored_starts`, and not made here. § 21.12.2's account
+does not depend on it: a new column with a 128-step reach is as blind to the drink as a carried one.
+Driver `runs/m2_steps512.sh` (a new file; `runs/m2_ring12.sh` is left alone), log
+`runs/meadow2/steps512.log`.
+
+**21.14.4 The evaluations.** § 21.13.5's set at 32 meadows, unchanged: the ring world
+(`sky_mud12_fog075_d5_m32`), the peaks blanked, the peaks hidden by fog, the 8-tile ring at 32, the
+plain world with and without the peaks at 16, alone, the column zeroed; probes on the clear and the
+all-fog ring worlds. **`s2r` on the same world is the reference** for S, L, B and M.
+
+**21.14.5 Pass rules (three seeds).** **P′:** as § 21.13.6 (excursions beyond 12 tiles ≥ 1 per living
+sheep-day at every seed); the world is unchanged, so a fail means the longer rollout taught the sheep
+a way to stay: void, to the owner. **S:** ≤ 15 % dead on the 12-tile ring at every seed; on the plain
+world no worse than `s2r` by more than 5 points at two seeds (`s2r` 5.7 / 16.1 / 12.0 with the peaks);
+the deaths' composition reported, and the column's cost reported beside (`s2r` with the column zeroed
+0.5 / 1.6 / 1.3 against 4.2 / 6.8 / 1.8: the column costs lives at every seed; the reading "the column
+no longer costs lives" is dead with the column ≤ dead zeroed + 1.1 at two seeds, reported, not
+required). **L:** `wm_recon` last-100 within 25 % of `s2r`'s 21.5 / 24.7 / 30.2 (the world is the same,
+so a move either way is the replay's turnover, named above). **K:** the egocentric recent-water
+bearing at night ≥ 0.3 at two seeds, read on **g** (the column, which this change reaches; `s2r`
+−2.60 / −3.36 / −3.57, and the heading from g −2.20 / −0.71 / −0.60: the new column of each arm has
+carried neither) and on h (`s2r` −0.61 / −1.92 / −0.66): a pass on either, which one said. The heading
+from h at night (`s2r` 0.44 / 0.62 / 0.51) is inherited and reported, not a rule.
+**B:** the night blind leg per tile from 12–16 on the ring ≤ 0.75 × `s2r`'s 46 / 53 / 69, so **≤ 35 / 40 /
+52**, at two seeds. **M:** the night return from 12–16 on the ring ≤ 0.75 × `s2r`'s 109 / 57 / 118, so
+**≤ 82 / 43 / 89**, at two seeds; seed 1's bar is about 1.1 × a straight walk from 14 tiles, so M can
+hardly be met at seed 1 by the ratio and rests on seeds 0 and 2 (their bars are 27–29 steps below
+`s2r`, at the edge of the ± 20-step draw of § 21.12.3); § 21.10's absolute bar of 63.5 is reported
+beside. **A:** as § 21.13.6. The draw of § 21.12.3 holds: ± 1.1 points of survival at 32 meadows,
+± 20 steps of median return.
+
+**21.14.6 Fallbacks.** S fails at two seeds with **≥ 40 %** dead (collapse: the long rollout, or the
+gradient through 512 steps under the 0.5 clip, breaks the column) → **`--steps 256`** once, the same
+recipe (`s2s256_s*`, `--reset_every 5120`), run by the driver without a further approval. The
+training fails (memory, a fault) → nothing more runs, to the owner. P′ fails → void. S passes, M and
+B fail at two seeds → the reach was not the block either; to the owner with § 21.13's (b) (`--length
+128`) and the column repair of 21.14.3 (3) as the next candidates. S passes and M or B passes at two
+seeds → the stage's first memory reading; K on g says whether the column holds it, the allocentric
+probes (D2, D3, M1) whether it is a map, and the truncation control of 21.14.3 whether it was the
+reach or the experience. **Cost:** 8.6 s an iteration, 4.8 h of training a seed, about 6 h a seed with
+the eight evaluations and two probes, the three seeds by about 03:00 on 2026-11-03 from a 09:00
+start; the 256 fallback another 12 h if it is due.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
