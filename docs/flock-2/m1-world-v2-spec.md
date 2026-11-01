@@ -3017,6 +3017,35 @@ that is not where it was); nothing trains. Reported either way: deaths and their
 (hunger or thirst), last-day energy, thirsty steps, the night share beyond 12, excursions beyond 12
 per sheep-day, the night returns and blind legs from 12–16 and 16–24.
 
+**The demand check read (2026-11-01, 18:10; `runs/m2_ring12.sh demand`, 17:17–18:09, six evaluations of
+about 8.5 minutes; files `meadow2-results/eval/hybrid_s2q_s*_sky_mud{12,8}_fog075_d5_m32.json`,
+deaths likewise). GATE GO: every seed pressed, by the night clause.** On the 12-tile ring the s2q brains
+spend **0.50 / 0.33 / 0.53** of their night steps beyond 12 tiles (0.03 / 0.06 / 0.09 on the 8-tile ring
+at the same size), leave the 12-tile circle **4.3 / 4.0 / 5.0 times a living sheep-day** (0.3–0.5 on the
+8-ring), and end the fifth day at energy **0.90 / 0.93 / 0.92** (0.97 / 1.00 / 0.95): the grass is out
+of sight and they go to it, by day and by night. The comfort clauses are not met: dead **1.3 / 4.2 /
+0.8 %**, thirsty 0.5 / 1.0 / 0.5 % of steps, hydration at the farthest point of night 12–16 excursions
+0.95 / 1.01 / 0.96. *Two things not expected, both recorded:* (1) **the brains survive the 12-tile ring
+better than the 8-tile one** (1.3 / 4.2 / 0.8 % against 3.4 / 9.1 / 5.5 % at 32 meadows; the 16-meadow
+readings of § 21.12.5 were 4.2 / 9.4 / 5.7). The 8-ring's deaths are the start deaths of § 21.12.5
+(7 / 21 / 16 of them on the first day; 60–76 % of the dead never had the water within 8 tiles): a
+28-tile disc of bare mud is a landmark a sheep can see from the grass by day, and a sheep that starts
+without the water in view now finds it. Fair by § 6's rule (the world, not the brain). (2) **The ring's
+own deaths are the memory's**: on the 12-ring they fall on the second day (0 / 1 / 2 on the first,
+4 / 11 / 1 on the second), of thirst (hydration 0, energy 0.94–1.10), 21–35 tiles from the water, and
+at seeds 0 and 1 the dead *had* seen the water (`never_seen8` 0.00 / 0.06; 0.67 at seed 2): sheep that
+went out to graze and did not find the way back. Few, because the brains keep 0.28 / 0.48 / 0.28 of
+their night steps within 8 tiles too, but these are the deaths the stage asks the memory to prevent.
+**The references for B and M (same world, same size):** night returns from 12–16 **170 / 69 / 97**
+(n 2,750 / 2,973 / 3,684; from 16–24 175 / 98 / 146, n 147 / 376 / 274), night blind leg per tile
+**70 / 40 / 50** (16–24: 63 / 44 / 48); fog-day returns from 12–16 166 / 210 / 169 (n 3,044–4,266),
+blind leg per tile 52 / 60 / 57. So the bars for `s2r`: **M ≤ 128 / 52 / 73**, **B ≤ 53 / 30 / 38** at
+two seeds. On the 8-ring at 32 meadows (the transfer reference): night 12–16 returns 120 / 56 / 111
+(n 327 / 465 / 653), blind leg per tile 88 / 58 / 67. Seed 1's 69 and 40 on the 12-ring are a return
+of about 1.4 times a straight walk from 14 tiles and are the stage's best figure so far; its night
+share beyond 12 (0.33) is the smallest and its drink success the lowest (0.67). Training started 18:08
+(`s2r_s0`), the three seeds and their evaluations due about 03:30.
+
 **21.13.5 The evaluations, at 32 meadows.** A death share at 32 meadows (384 sheep) carries a binomial
 spread of 1.1 points at 5 % against 1.6 at 16 (§ 21.12.3's correction: the evaluation is a draw), and
 the 12–16 bins fill. The ring world (`sky_mud12_fog075_d5_m32`); the peaks blanked (`nosky`); the
