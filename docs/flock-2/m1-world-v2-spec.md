@@ -2970,6 +2970,93 @@ more directly; (3) the river meadow (§ 21.8) lowers the pressure on memory, a l
 easier to hit by chance than a pond, and should be read as the orientation pressure it is, not as a
 memory incentive.
 
+### 21.13 The 12-tile ring: a world in which staying near the water is not enough (2026-11-01, 17:20; the owner's go-ahead; pre-registered before the run)
+
+**21.13.1 The reading that leads here.** Every arm of this stage made the compass better and the memory
+no closer, and arm T (§ 21.12.5) showed why. Given a thirst that binds within a day, the sheep moved to
+the 8–12 tile band and stayed there day and night: the night share of steps beyond 12 tiles is 0.04 /
+0.07 / 0.09, the within-8 share 0.35–0.49, the night excursions beyond 12 come to 0.3 a sheep-day. On
+the 8-tile ring the grass begins within sight of the water (bites at 10–11.5 tiles, § 21's ring grid 5),
+energy is not binding there, and the night return is a short walk. Nothing in the world makes a sheep
+leave sight of the water and come back, so nothing pays for remembering where it is; the thirst was
+answered by staying near, as § 21.12.1 said a cheaper solution would be. The lever is the world's own:
+the ring grid read bites at **14–16 tiles at `inner` 12**, beyond the night cone, and the scripted flock
+there lost 9–15 % to hunger over 8 days "because the walk between water and grass is what its rules
+cannot afford". The 8-tile ring was chosen by the scripted flock's 2 % gate, which is a gate on that
+flock's means, not on the pressure this stage needs. At 12 tiles, with the 2,500-step reserve, a sheep
+must graze out of sight of the water and drink every day, so every day's foraging ends in a return from
+beyond the cone, and whatever it does at night it does from there. A fact of the world, told to nobody
+(§ 6's rule is about the brain); the brain still earns its knowledge.
+
+**21.13.2 The balance rule (§ 11), checked before the run (17:00; files
+`meadow2-results/checks_inner{12,16}_thirst{1,1.5}.json`).** The naive explorer that turns when blocked
+finds water before it would die in **63.7 %** of starts at F = 1 and **49.7 %** at F = 1.5 inside a 12-tile
+ring, the same figures inside a 16-tile ring (the ring does not touch the water search; inside the
+8-tile ring the 1.5 figure was 50 %), against 52 % on the plain world, where the rule was registered
+and read for arm T. `never_within_4000` 0.169, `within_500` 0.224, unchanged. The rule holds as read;
+the ring figure sits on the line, and is recorded.
+
+**21.13.3 The changes (two against `s2q`, named).** (1) The world: `--inner 12` in every evaluation and
+probe; in training `--mud_ramp 0,200,12` (the radius 0 at iteration 0, 12 at iteration 200, held for
+the remaining 1,800; it passes the 8 tiles the brains know at iteration 133). (2) Arm W's fix,
+`--stored_starts`, counted as repair, not recipe: it changed nothing but the early loss (§ 21.12.4,
+L), and L below reads it again; if L fails, the fix is the first suspect. Everything else as `s2q`:
+`--thirst 1.5`, `--skyline 2`, the § 21.10 recipe, 2,000 iterations, from `s2q_s{0,1,2}` →
+**`s2r_s{0,1,2}`**. Driver `runs/m2_ring12.sh` (a new file; the stage script is left alone), log
+`runs/meadow2/ring12.log`.
+
+**21.13.4 The demand check and its gate (runs first; no training until it is read).** `s2q_s{0,1,2}`
+are evaluated on the 12-tile ring (fog 0.75, skyline 2, 5 days, **32 meadows**) and on the 8-tile ring
+at 32 meadows (the reference at the new size; § 21.13.5). A seed is *pressed* if on the 12-tile ring
+the brain does not live comfortably (dead ≥ 15 %, or last-day energy ≤ 0.85, or thirsty steps ≥ 5 %)
+or spends ≥ 0.25 of its night steps beyond 12 tiles (the night return is forced). **Two seeds pressed
+→ GO**: the three seeds train without a further approval, the owner is told the reading while they
+run. **Fewer → STOP**: the brains answer the ring by a schedule within their present means, nothing
+forces the night return, and the owner decides (a 16-tile ring; grass that grows only at night; water
+that is not where it was); nothing trains. Reported either way: deaths and their composition
+(hunger or thirst), last-day energy, thirsty steps, the night share beyond 12, excursions beyond 12
+per sheep-day, the night returns and blind legs from 12–16 and 16–24.
+
+**21.13.5 The evaluations, at 32 meadows.** A death share at 32 meadows (384 sheep) carries a binomial
+spread of 1.1 points at 5 % against 1.6 at 16 (§ 21.12.3's correction: the evaluation is a draw), and
+the 12–16 bins fill. The ring world (`sky_mud12_fog075_d5_m32`); the peaks blanked (`nosky`); the
+peaks hidden by fog (`sky1`); the 8-tile ring at 32 meadows (the transfer; against `s2q` at 32); the
+plain world with and without the peaks (16 meadows, stage 1's regression, against `s2q`'s plain
+readings); alone (64 meadows, one sheep); the column zeroed. Probes (`m2_diag`) on the clear and the
+all-fog 12-tile ring worlds. `s2q` on the 12-tile ring from the demand check is the reference for
+B and M, on the same world at the same size.
+
+**21.13.6 Pass rules (three seeds).** **P′, the pressure is in the behaviour:** on the 12-tile ring,
+excursions beyond 12 tiles ≥ 1 per living sheep-day at every seed (the world forces the leave-and-
+return); the night share beyond 12 and the night excursions per sheep-night are reported, and if the
+night share is < 0.10 at two seeds, the memory rules below are read on fog-day returns as well as
+night ones (the brains do their blind returning by fog-day). P′ fails → the sheep found a way not to
+leave: void, to the owner. A rule on thirst as experienced is not used again (§ 21.12.5's P). **S:**
+≤ 15 % dead on the 12-tile ring at every seed; on the plain world no worse than `s2q` by more than
+5 points at two seeds (`s2q` 3.6 / 21.9 / 16.7 with the peaks; the plain failure of § 21.12.5 was a
+start problem and is inherited). The deaths' composition is reported. **L:** `wm_recon` last-100
+within 25 % of `s2q`'s 34.7 / 32.0 / 37.4. **K:** as arm W (heading from h at night ≥ 0.3 at two
+seeds; the egocentric recent-water bearing from h at night ≥ 0.3 at two seeds), on the ring probe
+worlds. **B:** the night blind leg per tile from 12–16 on the 12-tile ring ≤ 0.75 × `s2q`'s at two
+seeds. **M:** the night return from 12–16 on the 12-tile ring ≤ 0.75 × `s2q`'s at two seeds (§ 21.10's
+absolute bar of 63.5 is reported beside it; `s2q_s1` already meets it on the 8-tile ring, so it does
+not discriminate). **A:** as arm T (the peaks blanked slow the fog-night returns ≥ 25 % in a bin at
+two seeds, or cost ≥ 5 points of survival).
+
+**21.13.7 Fallbacks.** S fails at two seeds with **≥ 40 %** dead (collapse) → the ring at **10**,
+once, the same recipe (`s2r10_s*`, `--mud_ramp 0,200,10`), run by the driver without a further
+approval. S fails at two seeds with 15–40 % → to the owner with the composition (hunger says the
+walk is unaffordable, as the scripted flock's was; thirst says the return fails). P′ fails → void.
+S passes, M and B fail at two seeds, A passes → the sheep return by the compass without the memory;
+the next lever is the owner's (the peaks taken away at night; water that moves). S passes and M or B
+passes at two seeds → the stage's first memory reading; K says whether the night state holds it, the
+allocentric probes (D2, D3, M1) whether it is a map. **Cost:** the demand check about 45 minutes
+(six evaluations at 32 meadows); then about 3 hours a seed (training 1.5 h, eight evaluations, two
+probes), the three seeds by about 03:30 on 2026-11-02 if the gate opens at 18:00; the inner-10
+fallback another 9 hours if it is due. **Not run:** § 21.11's fallback (1) (`--ms_weight 0.2`; the loss
+is learnable and bought nothing), F = 2 (barred by § 11), the river meadow (§ 21.8; an orientation
+test, after this).
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
