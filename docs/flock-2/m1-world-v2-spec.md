@@ -3086,6 +3086,95 @@ fallback another 9 hours if it is due. **Not run:** § 21.11's fallback (1) (`--
 is learnable and bought nothing), F = 2 (barred by § 11), the river meadow (§ 21.8; an orientation
 test, after this).
 
+**Readings (2026-11-02, 03:10; `runs/m2_ring12.sh chain`, 18:08–02:55, about 2 h 55 min a seed; log
+`meadow2-results/ring12.log`; files `meadow2-results/{eval,deaths,diag,hybrid}/*s2r*`).** Training
+uneventful (peak 6.3–6.4 GB; the ten CUDA out-of-memory lines at the start of each log are the
+allocator's probing, the same ten in every run of this stage). Deaths in the last 100 training
+iterations 6 / 2 / 3 [s2q 1 / 15 / 15]. COLLAPSE NO: the inner-10 fallback did not run. Three seeds;
+`s2q` on the 12-tile ring at 32 meadows (the demand check) in brackets where the world is the same:
+
+- **P′, the pressure is in the behaviour: passes at every seed.** Excursions beyond 12 tiles **5.0 /
+  4.7 / 3.6** a living sheep-day [4.3 / 4.0 / 5.0; bar 1]. The night share of steps beyond 12 **0.64 /
+  0.60 / 0.73** [0.50 / 0.33 / 0.53], within 8 at night 0.25 / 0.28 / 0.18 [0.28 / 0.48 / 0.28]; the
+  night share in 16–24 0.16 / 0.11 / 0.26 [0.02 / 0.04 / 0.03]: training on the ring sent the sheep
+  farther out at night, not nearer. They graze better for it (graze success 0.96 / 0.97 / 0.94 [0.79 /
+  0.85 / 0.83], last-day energy 1.02 / 1.02 / 1.06 [0.90 / 0.93 / 0.92]) and are not thirsty (1.3 / 1.3 /
+  0.8 % of steps; hydration at the farthest point of night 12–16 excursions 1.01 / 0.96 / 0.92).
+- **S, survival: passes.** The 12-tile ring **4.2 / 6.8 / 1.8 %** dead at 5 days [1.3 / 4.2 / 0.8; bar
+  15]: more than `s2q` at every seed, by 1 to 3 points (the draw at 32 meadows is about 1.1 at 5 %).
+  Plain world, 3 days, 16 meadows, with the peaks 5.7 / 16.1 / 12.0 % [`s2q` 3.6 / 21.9 / 16.7; bar
+  `s2q` + 5], without 4.7 / 16.1 / 10.9 [6.8 / 22.9 / 18.8]: no worse, better at two seeds; the deaths
+  are the first-day start deaths as before (9 / 26 / 20 of 11 / 31 / 23 on day one). The 8-tile ring at
+  32 meadows (the transfer) 4.7 / 11.5 / 3.1 % [3.4 / 9.1 / 5.5]. Alone 7.8 / 10.9 / 0.0 %. Column
+  zeroed **0.5 / 1.6 / 1.3 %** against 4.2 / 6.8 / 1.8 with it: better zeroed at every seed, as every
+  brain of this stage. *The deaths' composition on the ring:* seeds 0 and 1 die on the second to fifth
+  day (2 / 10 / 3 / 1 / 0 and 0 / 14 / 5 / 4 / 3), of thirst (hydration 0; energy 0.93 / 1.14), 23–29
+  tiles from the water, and **the dead had seen it** (`never_seen8` 0.13 / 0.00): sheep that went out
+  and did not find the way back, the memory's deaths of § 21.13.4 (2), now 16 and 26 of them. Seed 2's
+  7 are a mix (57 % never saw the water; energy at death 0.39: lost and also hungry).
+- **L, the fix: the loss falls, and seed 0 falls out of the band on the low side.** `wm_recon` last-100
+  **21.5 / 24.7 / 30.2** against `s2q`'s 34.7 / 32.0 / 37.4 (bands 26.0–43.4, 24.0–40.0, 28.1–46.8):
+  −38 / −23 / −19 %. The intent (the fix does not harm the model) is met; by the letter seed 0 is
+  outside, downward. The fall is confounded with the world: a 12-tile disc of bare mud is simpler to
+  predict than grass, and the two changes cannot be separated here. First hundred 95.5 / 58.4 / 75.2
+  (the ramp starts at radius 0, a world the brains had not seen for 4,000 iterations), 100–200 37.3 /
+  28.5 / 37.5.
+- **K, the state holds the compass at night: the heading passes at every seed and is the stage's
+  highest; the water fails.** Heading from h at night on the ring probe world **0.44 / 0.62 / 0.51**
+  [`s2q` on the 8-ring 0.36 / 0.46 / 0.44; bar 0.3 at two seeds]; on the all-fog ring world 0.51 / 0.59
+  / 0.63 [0.42 / 0.58 / 0.61]; the embedding at night 0.70 / 0.68 / 0.69 [0.67 / 0.66 / 0.59]; by clear
+  day from h 0.82 / 0.89 / 0.88. The egocentric recent-water bearing from h at night **−0.61 / −1.92 /
+  −0.66** [−0.09 / −2.75 / −1.17; bar 0.3 at two seeds]; by clear day from h 0.31 / 0.30 / 0.32 [0.48 /
+  0.48 / 0.40], by fog day 0.08 / 0.06 / 0.10 [0.40 / 0.39 / 0.24]: the day reading fell. K fails on the
+  water half. (2,462 recent-water night frames against 2,014.)
+- **B, the blind leg: passes at one seed, fails at two.** Night steps per blind tile from 12–16 on the
+  ring **46 / 53 / 69** [70 / 40 / 50; bars ≤ 53 / 30 / 38]: seed 0 **−34 %**, seed 1 +33 %, seed 2
+  +38 %. From 16–24 **44 / 45 / 61** [63 / 44 / 48], n 1,115 / 793 / 1,221 [147 / 376 / 274]. From
+  8–12 26 / 28 / 32 [—]. Blanked, 49 / 55 / 75 and 46 / 45 / 69.
+- **M, the memory: passes at one seed, fails at two.** Night returns from 12–16 on the ring **109 / 57 /
+  118** [170 / 69 / 97; bars ≤ 128 / 52 / 73]: seed 0 **−36 %**, seed 1 −17 % (5 steps over its bar),
+  seed 2 +22 %. From 16–24 **175 / 96 / 205** [175 / 98 / 146]. Column zeroed 137 / 52 / 147 and
+  170 / 83 / 201: the column shortens seed 0's and seed 2's returns and costs their lives. Allocentric
+  probes negative everywhere, less so than before: D2_true_allo at night 12–16 from h −2.77 / −3.40 /
+  −3.10 [−4.12 / −4.23 / −3.86], D3_recent_allo at night from h −0.73 / −0.47 / −0.66 [−1.17 / −1.22 /
+  −1.25]; M1 unreadable (`bins_read` 0; 0–2 onsets in the far bins).
+- **A, the compass is used on fog nights: passes at one seed.** Peaks blanked (skyline 0), the
+  fog-night returns 12–16 / 16–24 go 101 → 102 and 170 → 173 (seed 0, +1 / +2 %); 56 → 55 and 90 → 98
+  (seed 1, −2 / +9 %); **117 → 150 (+28 %) and 208 → 305 (+47 %)** (seed 2; n 1,041 / 913). Peaks hidden
+  by the fog (skyline 1): 104 / 175, 60 / 96, **168 / 307 (+44 / +48 %)**. Survival 4.2 → 2.9 / 3.6,
+  6.8 → 5.5 / 7.0, 1.8 → 2.3 / 2.6 %: the lure at seeds 0 and 1 again. Seed 2, the seed that moved
+  farthest out (0.26 of its night steps in 16–24), is the one that uses the peaks; seeds 0 and 1
+  return the same with or without them.
+
+**Verdict: P′, S pass; L passes in intent (seed 0 outside the band, downward); K fails on the water;
+B and M pass at seed 0 only; A at seed 2 only. Not passed.** No fallback of § 21.13.7 is due by the
+letter (S passes; M and B fail at two seeds but A does not pass at two; no collapse). **What this arm
+has shown.** The world now supplies the reason: every sheep leaves sight of the water four or five
+times a day, spends two thirds of its night steps beyond 12 tiles, and the ones that die are the
+ones that do not find the way back, having seen it. Two thousand iterations under that pressure
+produced a better night heading at every seed (0.44 / 0.62 / 0.51), a third shorter blind legs and
+returns at one seed (seed 0, which does not use the peaks for them), and no trace of the water's
+bearing in the night state at any seed. Survival is 2–7 %, so the pressure, real as it is, is small
+in the reward: a lost sheep dies a thousand steps after the turn that lost it, and the column's
+back-propagation reaches 128 steps. **§ 21.12.2 said the memory cannot emerge from this training
+whatever the incentive; the incentive is now in place, and it did not.** The remaining item of
+§ 21.12.2 is the path: within the reach of the losses, nothing depends on the water while it is out
+of view.
+
+**For the owner (not run).** The world is right and should stay: the 12-tile ring at thirst 1.5 on
+the skyline-2 meadow is the stage's world from here, the bare disc having also ended the start
+deaths. The next change belongs to the path, one at a time, each from `s2r_s*`: (a) **the column's
+reach**, `--steps 512` (the rollout and the back-propagation through the column, 128 now): a night
+leave-and-return is 300–600 steps, so the drink at the end would reach the turn at the farthest
+point; cost about 4× the rollout memory (peak 6.4 GB now), to be smoke-tested; (b) **the world
+model's window**, `--length 128` (32 now) with the stored starts, so a window spans the blind leg
+and the state is asked to hold what the frames before the mud showed; (c) both, if each alone reads
+K or M at two seeds. None gives knowledge: they lengthen what the losses can see. Not proposed: a
+loss on the water's position (a privileged label in training; § 6), a stronger thirst (§ 11), the
+multi-step loss (§ 21.11). The river meadow (§ 21.8) stays after. If the owner would rather read
+the ring longer first, 4,000 more iterations of the same recipe from `s2r_s*` is the cheap control
+for "not enough training", and § 21.12.2 predicts it changes nothing.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
