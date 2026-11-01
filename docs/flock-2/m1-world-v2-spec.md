@@ -2872,6 +2872,95 @@ steps 1.9 / 0.9 / 0.8 % and hydration at the farthest point of night 12–16 exc
 1.5 a sheep that leaves the water at dusk still has two-thirds of its reserve at dawn, so P (≥ 5 %
 thirsty steps, or ≤ 0.90 at the farthest point) is the first thing to read.
 
+**Readings (2026-11-01, 13:45; chain6 ran 05:13–13:27 inside `runs/m2_arms.sh`; files
+`meadow2-results/{eval,deaths,diag,hybrid}/*s2q*`).** Training uneventful (peak 6.4 GB; `thirst: 1.5`,
+`stored_starts: false`, continued from `s2m_s*` in every config). Deaths in the last 100 training
+iterations 1 / 15 / 15 [s2m 26 / 9 / 15]; `wm_recon` last-100 34.7 / 32.0 / 37.4 [27.9 / 36.1 / 37.1].
+Every evaluation and probe below ran at F = 1.5 (inherited from the config), the s2m re-run at 1.0 in
+brackets:
+
+- **P, the pressure is felt: fails by the letter, and the letter is wrong.** Thirsty steps **0.9 / 1.5 /
+  0.9 %** of living steps on the stage world [1.9 / 0.9 / 0.8; bar 5 %]. Hydration at the farthest point
+  of night excursions from 12–16 **0.93 / 0.98 / 0.95** [0.97 / 0.99 / 1.03; bar ≤ 0.90]; from 16–24
+  0.85 / 0.91 / 0.87 [0.91 / 0.93 / 0.92] on 11 / 50 / 16 excursions; at re-entry 0.88 / 0.95 / 0.90
+  [0.92 / 0.94 / 0.98]. On the plain world thirsty steps 2.5 / 5.8 / 5.2 %. Neither clause is met on
+  the stage world, so by the letter the change did nothing and the reading is void. The behaviour says
+  otherwise: the sheep answered the pressure by not going far. The night share of time beyond 12 tiles
+  is **0.04 / 0.07 / 0.09** [0.37 / 0.08 / 0.13], seed 0's far ranging is gone, the night excursions
+  beyond 12 are 145 / 221 / 355 [560 / 198 / 248] and shorter (below), drink success 0.88 / 0.73 / 0.85
+  [0.67 / 0.82 / 0.86], the rest action 0.24 / 0.25 / 0.22 of steps [0.15 / 0.28 / 0.19]. **The rule
+  measured thirst as experienced, and a sheep that answers a pressure does not experience it;** P
+  cannot tell "did nothing" from "worked", and should have been written on the behaviour (time far
+  from water at night) or on the world (the reserve). Its fallback, F one step up, is barred by the
+  § 11 rule (44 % at F = 2). To the owner.
+- **S, survival: passes on the stage world, fails at two seeds on the plain world.** Stage world **4.2 /
+  9.4 / 5.7 %** dead at 5 days [8.3 / 3.6 / 2.6; bar 15]. Plain world, 3 days, at F = 1.5: with the
+  skyline **3.6 / 21.9 / 16.7 %** [3.1 / 9.4 / 6.2], without it **6.8 / 22.9 / 18.8 %** [6.8 / 9.9 / 7.3]
+  (bar 15). Alone 6.2 / 6.2 / 6.2 % [14.1 / 6.2 / 3.1]; column zeroed 2.6 / 6.8 / 5.2 % [4.7 / 3.6 / 5.7]:
+  better zeroed at every seed, as every brain of this stage. *The deaths' composition:* every death is
+  of thirst (hydration 0, energy 0.77–1.12). On the plain world 40 of seed 1's 44 and 31 of seed 2's 36
+  fall on the first day, 84 % and 72 % of the dead never had the water within 8 tiles during the run,
+  and they die 14–18 tiles from it: sheep whose random start left them without water in view and whose
+  reserve, 2,500 steps at F = 1.5, ran out within the first day of searching. s2m's plain deaths have the
+  same shape (14 of 19 on the first day, 90 % never saw) and a 3,750-step reserve to search in. On the
+  stage world seed 1's 18 deaths read the same (14 on the first day, 83 % never saw, 20–26 tiles out,
+  9 of 18 at night). The plain-world failure is the start, made fatal by the shorter reserve; it is not
+  a memory failure. Its fallback, F one step down, has no step below 1.5 in the list. To the owner.
+- **K, the state holds the compass at night: the heading, yes, at every seed for the first time; the
+  water, no.** Heading from h at night on the stage probe world **0.36 / 0.46 / 0.44** [−0.06 / 0.29 /
+  0.35; bar 0.3 at two seeds]; on the all-fog probe world 0.42 / 0.58 / 0.61 [0.01 / 0.48 / 0.54]; the
+  embedding at night 0.67 / 0.66 / 0.59 [0.57 / 0.58 / 0.53]; by clear day from h 0.86–0.91. The
+  egocentric recent-water bearing from h at night **−0.09 / −2.75 / −1.17** [−0.85 / −1.90 / −1.23; bar
+  0.3 at two seeds]; by day 0.48 / 0.48 / 0.40 [0.67 / 0.64 / 0.56], lower than before. K fails on the
+  water half. (The probe worlds ran at F = 1.5 too; 2,014 recent-water night frames against 2,208.)
+- **B, the blind leg: fails at two seeds, passes at one.** Night steps per blind tile on the stage world,
+  12–16 / 16–24: **92 / 59 / 66** and **77 / 52 / 62** [83 / 84 / 72 and 72 / 73 / 65; bars ≤ 62 / 63 /
+  54 or ≤ 54 / 55 / 49]. Seed 1 falls 30 % and 29 %, both bins under the bar (as `s2p_s1` did); seed 2
+  falls 8 % and 5 %, seed 0 rises 11 % and 7 %. Blind legs 476 / 292 / 336 steps from 12–16 [468 / 482 /
+  375], 97–100 % resolved.
+- **M, the memory: fails at every seed, and the returns are the fastest of the stage.** Night returns
+  12–16 / 16–24 **124 / 135, 48 / 130, 108 / 152** [162 / 207, 129 / 182, 119 / 240; bar ≤ 63.5 / 61]:
+  faster than s2m at every seed in both bins (−23 / −35 %, −63 / −29 %, −9 / −37 %; 16–24 on 11 / 50 /
+  16 excursions), seed 1 under the 12–16 bar and twice the 16–24 bar. Near excursions (8–12) at night
+  return in 68 / 32 / 46 [58 / 42 / 42]. Allocentric probes negative everywhere: D2_true_allo at night
+  8–16 from h −3.13 / −1.88 / −2.12, D3_recent_allo at night from hzg −0.96 / −1.56 / −1.40; M1
+  unreadable.
+- **A, the compass is used on fog nights: passes by the letter at two seeds, on thin bins; the direction
+  is the same in every comparison for the first time.** Peaks blanked (skyline 0), the fog-night
+  returns 12–16 / 16–24 go 109 → 124 (+14 %) and 170 → 194 (+14 %, n 10 → 18); 48 → 49 (+2 %) and
+  **116 → 154 (+33 %, n 39 → 14)**; 98 → 115 (+17 %) and **147 → 195 (+32 %, n 13 → 8)**. Survival
+  4.2 → 3.1, 9.4 → 7.8, 5.7 → 7.3 %. Peaks hidden by the fog (skyline 1): 109 → 125 (+14 %) and 170 → 192;
+  48 → 63 (+30 %) and 116 → 213 (+83 %, n 16); 98 → 117 (+19 %) and 147 → 306 (+108 %, n 9); survival
+  4.2 → 4.2, 9.4 → 7.8, 5.7 → 8.9 %. Twelve comparisons, twelve slower without the peaks, +2 to
+  +108 %; in the well-filled 12–16 bin (n 90–239) the slowing is 2–19 % blanked and 14–30 % hidden,
+  under the bar at seeds 0 and 2. The blind leg per tile blanked reads 93 / 67 / 76 and 81 / 59 / 75
+  (+1 / +14 / +15 %, +5 / +13 / +21 %). Seed 1 survives better without the peaks by either ablation
+  (the lure, 1.6 points), seed 2 worse (1.6–3.2 points).
+
+**Verdict: void by P's letter, S fails at two seeds on the plain world, K fails on the water, B one seed;
+M fails; A passes at two seeds on thin bins. Both fallbacks that are due (F up for P, F down for S)
+have no step the rules allow. To the owner, with arm W's result.** **What this arm has shown:** a
+thirst that costs 0.38 of the reserve a night was answered, not suffered. The sheep keep within 12
+tiles of the water at night at every seed, return faster from every bin at every seed, the heading is
+in the night state at every seed, and taking the peaks away slows every seed in every bin. None of
+that is the allocentric memory the stage asks for (the probes read nothing, the blind leg shortens at
+one seed), and it came at a price the plain world shows: a sheep that starts without water in view
+has one day to find it. P's clause was the wrong instrument; the behaviour it was meant to catch is
+in the excursion and time-far figures above.
+
+**What the two arms say together (for the owner).** The reach fix (W) is sound and changed nothing
+but the early loss; it costs nothing and is a candidate for the recipe (one change, no knowledge
+given), the owner's call. The incentive (T) moved the behaviour and the night state more than any
+single change of this stage, at F = 1.5, the weakest factor tried, and the one the § 11 rule allows;
+the sheep answered it by staying near rather than by remembering where. Memory was not forced because
+it was not needed: within 12 tiles the peaks and the cone suffice. Options, none run: (a) T's recipe
+with W's fix, two changes against s2m, or one against s2q; (b) the river meadow (§ 21.8), where water
+is a line and the pressure is orientation; (c) a world in which staying near is not enough: the
+water moves, dries, or is unsafe at night, so the sheep must leave and come back, which is the
+memory pressure § 21.12.1 named and no arm here supplied. The plain-world start deaths at F = 1.5
+argue for reading the plain world at F = 1 for a brain trained at 1.5, or for a start in view of the
+water, before the factor is judged.
+
 **Order and cost.** W first (a fix, cheap to build, about 7 hours of GPU), then T (about 7 hours plus
 the checks); results to the owner after each. **Open points for the owner:** (1) if § 21.11 passes
 its K tonight, whether `--ms_weight 0.4` joins the recipe these arms start from (default: no, one

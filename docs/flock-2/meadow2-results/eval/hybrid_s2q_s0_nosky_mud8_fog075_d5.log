@@ -1,0 +1,805 @@
+{
+ "policy": "hybrid:/home/nnels/flock2_data/m2_hybrid/s2q_s0",
+ "meadows": 16,
+ "days": 5.0,
+ "willows": 3,
+ "sheep": 12,
+ "inner": 8.0,
+ "edge": 2.0,
+ "trample": 0.0,
+ "fog": 0.75,
+ "thirst": 1.5,
+ "skyline": 0,
+ "river": false,
+ "tiles": 48,
+ "zero_column": false,
+ "reward": 2.3997349739074707,
+ "reward_se": 0.046716753393411636,
+ "drive": 0.04111144691705704,
+ "drive_se": 0.0030033031944185495,
+ "death_share": 0.03125,
+ "deaths_per_meadow_max": 4,
+ "days_survived_mean": 4.879841579861111,
+ "last_day_levels": {
+  "energy": 0.975,
+  "hydration": 0.985,
+  "warmth": 1.085,
+  "interest": 1.137
+ },
+ "last_day_fat": 0.958,
+ "drink_success": 0.8646512546927485,
+ "graze_success": 0.832096694622595,
+ "bad_taste_per_step": 0.016962765344780893,
+ "huddled_share_of_night_rest": 0.11669499918241924,
+ "actions": {
+  "stop": 0.161,
+  "walk": 0.086,
+  "trot": 0.175,
+  "left": 0.115,
+  "right": 0.109,
+  "graze": 0.09,
+  "drink": 0.014,
+  "rest": 0.251
+ },
+ "nearest_neighbour_tiles": 4.080186367034912,
+ "others_in_view": 5.20227575302124,
+ "thirsty_share_of_living_steps": 0.007615300153737985,
+ "thirsty_sees_water": 0.54239663629993,
+ "information_gap": 0.21694697500583976,
+ "thirsty_sees_water_8": 0.2738262088297127,
+ "information_gap_8": 0.276045316514833,
+ "within_8_share_of_living_steps": 0.39802172966573884,
+ "forensics": {
+  "deaths_by_day": [
+   5,
+   0,
+   0,
+   1,
+   0
+  ],
+  "deaths": 6,
+  "water_dist_at_death_q": [
+   17.5,
+   24.2,
+   26.8
+  ],
+  "since_seen8_q": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "since_seen8_over_300": 0.0,
+  "never_seen8": 0.833,
+  "since_near8_q": [
+   0.0,
+   0.0,
+   0.0
+  ],
+  "hydration_at_death_median": 0.0,
+  "energy_at_death_median": 1.028
+ },
+ "M1": {
+  "onsets": 0,
+  "recent": 4000,
+  "cap": 600,
+  "thirst": 0.25,
+  "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec \u00a7 20.1)",
+  "all": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "clear_day": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "fog_day": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "night": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "clear_night": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "fog_night": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted_fresh": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted_stale": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "pass": false,
+  "bins_read": 0
+ },
+ "wdist_share": {
+  "all": {
+   "steps": 2248631,
+   "0-8": 0.398,
+   "8-12": 0.568,
+   "12-16": 0.025,
+   "16-24": 0.007,
+   "24-inf": 0.001
+  },
+  "clear_day": {
+   "steps": 283572,
+   "0-8": 0.408,
+   "8-12": 0.565,
+   "12-16": 0.026,
+   "16-24": 0.002,
+   "24-inf": 0.0
+  },
+  "fog_day": {
+   "steps": 1065680,
+   "0-8": 0.453,
+   "8-12": 0.526,
+   "12-16": 0.013,
+   "16-24": 0.006,
+   "24-inf": 0.002
+  },
+  "night": {
+   "steps": 899379,
+   "0-8": 0.33,
+   "8-12": 0.619,
+   "12-16": 0.039,
+   "16-24": 0.01,
+   "24-inf": 0.001
+  },
+  "unsighted": {
+   "steps": 1965059,
+   "0-8": 0.397,
+   "8-12": 0.569,
+   "12-16": 0.025,
+   "16-24": 0.008,
+   "24-inf": 0.001
+  }
+ },
+ "excursions": {
+  "excursions": 5803,
+  "cap": 600,
+  "straight_steps_per_tile": {
+   "walk": 8.3,
+   "trot": 2.9
+  },
+  "all": {
+   "8-12": {
+    "n": 5549,
+    "median_return": 70.0,
+    "resolved_share": 0.9837808614164715,
+    "resolved_median": 71.0,
+    "steps_per_tile_median": 46.185051687531704,
+    "hydration_at_farthest_median": 0.9688440561294556,
+    "hydration_at_reentry_median": 0.9272159337997437,
+    "blind_n": 5547,
+    "blind_leg_median": 210.0,
+    "blind_per_tile_median": 124.45321762726772,
+    "blind_resolved_share": 0.9832341806381828
+   },
+   "12-16": {
+    "n": 228,
+    "median_return": 170.5,
+    "resolved_share": 0.9912280701754386,
+    "resolved_median": 171.0,
+    "steps_per_tile_median": 34.1947926891054,
+    "hydration_at_farthest_median": 0.9580324292182922,
+    "hydration_at_reentry_median": 0.8838272392749786,
+    "blind_n": 228,
+    "blind_leg_median": 480.5,
+    "blind_per_tile_median": 93.2810745158315,
+    "blind_resolved_share": 0.9912280701754386
+   },
+   "16-24": {
+    "n": 26,
+    "median_return": 186.0,
+    "resolved_share": 1.0,
+    "resolved_median": 186.0,
+    "steps_per_tile_median": 15.750829624533576,
+    "hydration_at_farthest_median": 0.8282481133937836,
+    "hydration_at_reentry_median": 0.7675296366214752,
+    "blind_n": 26,
+    "blind_leg_median": 774.0,
+    "blind_per_tile_median": 81.25796600657083,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "clear_day": {
+   "8-12": {
+    "n": 603,
+    "median_return": 87.0,
+    "resolved_share": 0.9817578772802653,
+    "resolved_median": 89.0,
+    "steps_per_tile_median": 48.173166896621225,
+    "hydration_at_farthest_median": 1.029088020324707,
+    "hydration_at_reentry_median": 0.9732193350791931,
+    "blind_n": 603,
+    "blind_leg_median": 261.0,
+    "blind_per_tile_median": 133.41493299200587,
+    "blind_resolved_share": 0.9817578772802653
+   },
+   "12-16": {
+    "n": 30,
+    "median_return": 185.0,
+    "resolved_share": 1.0,
+    "resolved_median": 185.0,
+    "steps_per_tile_median": 36.319641135609245,
+    "hydration_at_farthest_median": 1.0110313892364502,
+    "hydration_at_reentry_median": 0.9218359887599945,
+    "blind_n": 30,
+    "blind_leg_median": 454.0,
+    "blind_per_tile_median": 88.41957023942982,
+    "blind_resolved_share": 1.0
+   },
+   "16-24": {
+    "n": 3,
+    "median_return": 91.0,
+    "resolved_share": 1.0,
+    "resolved_median": 91.0,
+    "steps_per_tile_median": 7.962180890415269,
+    "hydration_at_farthest_median": 0.8040519952774048,
+    "hydration_at_reentry_median": 0.767651379108429,
+    "blind_n": 3,
+    "blind_leg_median": 609.0,
+    "blind_per_tile_median": 57.94125719252077,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "fog_day": {
+   "8-12": {
+    "n": 2865,
+    "median_return": 75.0,
+    "resolved_share": 0.9853403141361257,
+    "resolved_median": 76.0,
+    "steps_per_tile_median": 52.53393436738587,
+    "hydration_at_farthest_median": 0.9644771218299866,
+    "hydration_at_reentry_median": 0.924016535282135,
+    "blind_n": 2865,
+    "blind_leg_median": 180.0,
+    "blind_per_tile_median": 118.38128181599795,
+    "blind_resolved_share": 0.9849912739965097
+   },
+   "12-16": {
+    "n": 49,
+    "median_return": 210.0,
+    "resolved_share": 1.0,
+    "resolved_median": 210.0,
+    "steps_per_tile_median": 46.25959701260102,
+    "hydration_at_farthest_median": 0.953372061252594,
+    "hydration_at_reentry_median": 0.872424304485321,
+    "blind_n": 49,
+    "blind_leg_median": 515.0,
+    "blind_per_tile_median": 101.19546729626718,
+    "blind_resolved_share": 1.0
+   },
+   "16-24": {
+    "n": 3,
+    "median_return": 169.0,
+    "resolved_share": 1.0,
+    "resolved_median": 169.0,
+    "steps_per_tile_median": 14.600201063314408,
+    "hydration_at_farthest_median": 0.7773917317390442,
+    "hydration_at_reentry_median": 0.715390682220459,
+    "blind_n": 3,
+    "blind_leg_median": 983.0,
+    "blind_per_tile_median": 83.68779016700532,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "night": {
+   "8-12": {
+    "n": 2081,
+    "median_return": 63.0,
+    "resolved_share": 0.9822200864968765,
+    "resolved_median": 64.0,
+    "steps_per_tile_median": 39.39836888053929,
+    "hydration_at_farthest_median": 0.9598666429519653,
+    "hydration_at_reentry_median": 0.9224332571029663,
+    "blind_n": 2079,
+    "blind_leg_median": 242.0,
+    "blind_per_tile_median": 129.62718371159875,
+    "blind_resolved_share": 0.9812409812409812
+   },
+   "12-16": {
+    "n": 149,
+    "median_return": 142.0,
+    "resolved_share": 0.9865771812080537,
+    "resolved_median": 147.0,
+    "steps_per_tile_median": 27.494779747572515,
+    "hydration_at_farthest_median": 0.9512424468994141,
+    "hydration_at_reentry_median": 0.8824177980422974,
+    "blind_n": 149,
+    "blind_leg_median": 480.0,
+    "blind_per_tile_median": 93.05117639771053,
+    "blind_resolved_share": 0.9865771812080537
+   },
+   "16-24": {
+    "n": 20,
+    "median_return": 198.5,
+    "resolved_share": 1.0,
+    "resolved_median": 198.5,
+    "steps_per_tile_median": 19.026552807631226,
+    "hydration_at_farthest_median": 0.8433172702789307,
+    "hydration_at_reentry_median": 0.7709441184997559,
+    "blind_n": 20,
+    "blind_leg_median": 779.5,
+    "blind_per_tile_median": 81.25796600657083,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "clear_night": {
+   "8-12": {
+    "n": 390,
+    "median_return": 80.0,
+    "resolved_share": 0.9846153846153847,
+    "resolved_median": 81.5,
+    "steps_per_tile_median": 46.075324306133524,
+    "hydration_at_farthest_median": 0.9912275075912476,
+    "hydration_at_reentry_median": 0.9384187459945679,
+    "blind_n": 388,
+    "blind_leg_median": 334.5,
+    "blind_per_tile_median": 154.04738824550404,
+    "blind_resolved_share": 0.9845360824742269
+   },
+   "12-16": {
+    "n": 29,
+    "median_return": 225.0,
+    "resolved_share": 1.0,
+    "resolved_median": 225.0,
+    "steps_per_tile_median": 41.158319961610474,
+    "hydration_at_farthest_median": 0.9640191793441772,
+    "hydration_at_reentry_median": 0.8848178386688232,
+    "blind_n": 29,
+    "blind_leg_median": 563.0,
+    "blind_per_tile_median": 112.55400235203663,
+    "blind_resolved_share": 1.0
+   },
+   "16-24": {
+    "n": 2,
+    "median_return": 226.5,
+    "resolved_share": 1.0,
+    "resolved_median": 226.5,
+    "steps_per_tile_median": 25.674724907226825,
+    "hydration_at_farthest_median": 0.9196184277534485,
+    "hydration_at_reentry_median": 0.8290168941020966,
+    "blind_n": 2,
+    "blind_leg_median": 758.0,
+    "blind_per_tile_median": 85.84263849183363,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "fog_night": {
+   "8-12": {
+    "n": 1691,
+    "median_return": 59.0,
+    "resolved_share": 0.9816676522767593,
+    "resolved_median": 60.0,
+    "steps_per_tile_median": 37.65875212356221,
+    "hydration_at_farthest_median": 0.9542688727378845,
+    "hydration_at_reentry_median": 0.9191456139087677,
+    "blind_n": 1691,
+    "blind_leg_median": 223.0,
+    "blind_per_tile_median": 122.68295020353325,
+    "blind_resolved_share": 0.9804849201655825
+   },
+   "12-16": {
+    "n": 120,
+    "median_return": 124.0,
+    "resolved_share": 0.9833333333333333,
+    "resolved_median": 127.0,
+    "steps_per_tile_median": 25.77652514581471,
+    "hydration_at_farthest_median": 0.9448201060295105,
+    "hydration_at_reentry_median": 0.8792601823806763,
+    "blind_n": 120,
+    "blind_leg_median": 446.5,
+    "blind_per_tile_median": 90.20387714487947,
+    "blind_resolved_share": 0.9833333333333333
+   },
+   "16-24": {
+    "n": 18,
+    "median_return": 194.0,
+    "resolved_share": 1.0,
+    "resolved_median": 194.0,
+    "steps_per_tile_median": 14.883332127598937,
+    "hydration_at_farthest_median": 0.8282481133937836,
+    "hydration_at_reentry_median": 0.7611298859119415,
+    "blind_n": 18,
+    "blind_leg_median": 804.5,
+    "blind_per_tile_median": 78.02322081380981,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  },
+  "unsighted": {
+   "8-12": {
+    "n": 4946,
+    "median_return": 69.0,
+    "resolved_share": 0.9840274969672462,
+    "resolved_median": 69.0,
+    "steps_per_tile_median": 46.010286805525794,
+    "hydration_at_farthest_median": 0.963219165802002,
+    "hydration_at_reentry_median": 0.9232742786407471,
+    "blind_n": 4944,
+    "blind_leg_median": 203.0,
+    "blind_per_tile_median": 123.11376932808847,
+    "blind_resolved_share": 0.9834142394822006
+   },
+   "12-16": {
+    "n": 198,
+    "median_return": 167.0,
+    "resolved_share": 0.98989898989899,
+    "resolved_median": 168.5,
+    "steps_per_tile_median": 33.0409255508623,
+    "hydration_at_farthest_median": 0.9516476392745972,
+    "hydration_at_reentry_median": 0.8786177337169647,
+    "blind_n": 198,
+    "blind_leg_median": 483.0,
+    "blind_per_tile_median": 93.52447548140132,
+    "blind_resolved_share": 0.98989898989899
+   },
+   "16-24": {
+    "n": 23,
+    "median_return": 193.0,
+    "resolved_share": 1.0,
+    "resolved_median": 193.0,
+    "steps_per_tile_median": 16.901458185752745,
+    "hydration_at_farthest_median": 0.8412253260612488,
+    "hydration_at_reentry_median": 0.7674078941345215,
+    "blind_n": 23,
+    "blind_leg_median": 783.0,
+    "blind_per_tile_median": 82.38087470810531,
+    "blind_resolved_share": 1.0
+   },
+   "24-inf": {
+    "n": 0
+   }
+  }
+ },
+ "M1_at_thirsty": {
+  "onsets": 6,
+  "recent": 4000,
+  "cap": 600,
+  "thirst": 0.5,
+  "baseline": "walk_p0.1_wall median steps to the 8-tile cone (spec \u00a7 20.1)",
+  "all": {
+   "8-12": {
+    "onsets": 6,
+    "baseline_median": 90.0,
+    "median_censored": 100.0,
+    "resolved_share": 0.8333333333333334,
+    "resolved_median": 68.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted": {
+   "8-12": {
+    "onsets": 6,
+    "baseline_median": 90.0,
+    "median_censored": 100.0,
+    "resolved_share": 0.8333333333333334,
+    "resolved_median": 68.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "clear_day": {
+   "8-12": {
+    "onsets": 0,
+    "baseline_median": 90.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "fog_day": {
+   "8-12": {
+    "onsets": 2,
+    "baseline_median": 90.0,
+    "median_censored": 220.5,
+    "resolved_share": 0.5,
+    "resolved_median": 132.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "night": {
+   "8-12": {
+    "onsets": 4,
+    "baseline_median": 90.0,
+    "median_censored": 47.5,
+    "resolved_share": 1.0,
+    "resolved_median": 47.5
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "clear_night": {
+   "8-12": {
+    "onsets": 1,
+    "baseline_median": 90.0,
+    "median_censored": 10.0,
+    "resolved_share": 1.0,
+    "resolved_median": 10.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "fog_night": {
+   "8-12": {
+    "onsets": 3,
+    "baseline_median": 90.0,
+    "median_censored": 68.0,
+    "resolved_share": 1.0,
+    "resolved_median": 68.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted_fresh": {
+   "8-12": {
+    "onsets": 5,
+    "baseline_median": 90.0,
+    "median_censored": 68.0,
+    "resolved_share": 0.8,
+    "resolved_median": 47.5
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "unsighted_stale": {
+   "8-12": {
+    "onsets": 1,
+    "baseline_median": 90.0,
+    "median_censored": 146.0,
+    "resolved_share": 1.0,
+    "resolved_median": 146.0
+   },
+   "12-16": {
+    "onsets": 0,
+    "baseline_median": 254.0
+   },
+   "16-24": {
+    "onsets": 0,
+    "baseline_median": 244.0
+   },
+   "24-inf": {
+    "onsets": 0,
+    "baseline_median": 321.5
+   }
+  },
+  "pass": false,
+  "bins_read": 0
+ }
+}
