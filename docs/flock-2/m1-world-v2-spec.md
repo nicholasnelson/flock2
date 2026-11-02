@@ -3301,6 +3301,25 @@ asked to keep a few GB of Windows memory free while a 512-step seed trains, or t
 `.wslconfig`; neither is done here. Relaunched 13:10 (`s2s_s0` from the start; the chain as
 21.14.3 describes it).
 
+**21.14.7, continued: the relaunch failed too, the cause read again, the second relaunch (13:10–13:22).**
+The 13:10 relaunch died at iteration 20 (13:15) of `CUDA_ERROR_UNKNOWN` while reading PPO's statistics
+back from the device, with the trainer's host memory at 7.1 GB and the machine at 3.9 GB free: not a
+memory fault. The kernel log of the WSL machine shows its GPU layer (`dxgkrnl`, the paravirtualised
+adapter) failing its ioctls from **12:32** on, a minute after the segmentation fault, through 13:15;
+and Windows's own system log shows the NVIDIA driver (`nvlddmkm`, event 13, "Graphics FECS Exception")
+logging **1,595 exceptions between 12:25 and 12:33** and none since. So the first failure's account
+above is half right: the training slowed from iteration 1,250 (about 11:15) under host memory
+pressure, and was then killed at 12:31 inside an eight-minute storm of GPU exceptions whose trigger is
+not known (the machine was also running a game); the storm left the WSL machine's GPU layer broken,
+which is why the 60-iteration measurements ran but the relaunch did not survive its first compile
+and update. **Done:** the WSL machine restarted (`wsl --shutdown`; nothing of the owner's was running
+in it), the kernel log clean of adapter failures but for the boot-time ones of the display server, and
+a 12-iteration health run of the trainer at 512 steps passed (10 s an iteration, no error). **Kept:**
+the trainer's lighter host footprint and the driver's safeguards, since the host-memory growth was
+real and the slowdown was its mark. **Not known:** whether the GPU's exceptions were the game's, the
+memory pressure's, or the card's; if a seed dies again inside such a storm, the Windows log is the
+first place to look, and the arm waits for a quiet machine. Relaunched **13:22** from `s2s_s0`.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

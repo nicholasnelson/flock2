@@ -1,0 +1,8 @@
+STEPS512_START 13:10:35
+TRAIN_FAILED s2s_s0
+E1102 13:15:28.022389     680 cuda_executor.cc:318] [0] Failed to unload module 0x1b9f52e0; leaking: INTERNAL: CUDA error: : CUDA_ERROR_UNKNOWN: unknown error
+=== Source Location Trace: ===
+external/xla+/xla/stream_executor/cuda/cuda_status.cc:50
+
+WATCHDOG: peak 8928 MB, exit 1
+CHAIN_STOPPED 13:15:32
