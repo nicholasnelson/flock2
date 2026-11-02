@@ -3320,6 +3320,45 @@ real and the slowdown was its mark. **Not known:** whether the GPU's exceptions 
 memory pressure's, or the card's; if a seed dies again inside such a storm, the Windows log is the
 first place to look, and the arm waits for a quiet machine. Relaunched **13:22** from `s2s_s0`.
 
+**21.14.7, continued (2): the third launch died with the WSL machine (13:50); Windows's memory and its kernel pool; a
+launcher that waits for a quiet machine (16:44–17:00).** The 13:22 launch ran **153 iterations** healthy (every sheep
+alive at the end, reward 2.46, reconstruction 28; 9.5 s an iteration through 120, then 13 and 38 s over the last
+twenty) and stopped without a word at 13:49: no marker in the chain log, the training log ends at iteration 150, and
+the WSL machine itself was gone at **13:50:07** (Windows's Hyper-V log deletes its network port then; the machine's
+journal says "uncleanly shut down" on the next boot, at 16:44, when this session touched WSL). Windows's own logs give
+the sequence. A second storm of GPU exceptions, **1,471 between 13:42:17 and 13:46:30** in bursts every fifteen
+seconds, which the training survived (iterations about 100–130 at 9–13 s). A Windows `python.exe` of the owner's
+(Python 3.13, the system install, not ours) crashed at 13:43:22 in `msvcrt.dll`. From **13:49:52** the
+resource-exhaustion detector reports Windows out of virtual memory with, as the largest consumers, a Windows
+`python.exe` at **20.9 GB**, Firefox at 17 GB (60 GB by 13:52), and the WSL machine (`vmmemWSL`) at 11.7–12.6 GB; at
+13:50:07 the machine was torn down. Reading: the second death of the day by Windows's memory, taken by other programs
+while the trainer's own footprint was flat at **7.0–7.1 GB** of RSS from iteration 6 to 152 (8.35 once): the host
+growth of the first run is not visible yet at this length, and the lighter trainer did what it was measured to do. The
+first death (12:31, 0.7 GB free) reads the same way. Files: `meadow2-results/hybrid/s2s_s0_failed_1102c.log`,
+`s2s_s0_failed_1102c_log.jsonl`, `s2s_s0_failed_1102c_rss.txt` (the 13:10 run's samples first, then the 13:22 run's),
+`meadow2-results/steps512_failed_1102c.log`. **The machine at 16:44, with WSL idle at 0.9 GB:** Windows has **2.0–3.6 GB
+available of 31.8**; every process's working set together is 14.9 GB (Claude 3.0, Firefox 3.0, the game's helpers 1.4,
+WSL 1.3); and the **nonpaged kernel pool holds 12.7 GB** (paged 3.0), where a healthy machine holds under one: memory
+no program owns, that only a reboot of Windows frees (the machine has been up since 2026-10-26). Hypotheses, none
+proven: the GPU paravirtualisation's system-memory backing of the WSL machine's GPU allocations, left behind by the
+unclean deaths (the figure is close to the trainer's GPU footprint, which the XLA allocator grew to 11.9 GB in the leak
+measurement); or the NVIDIA driver's own leak under its exceptions, of which Windows has logged **7,605 since 2026-10-30
+21:00**, all of them in hours when the hybrid was *training* (`s2r`'s three seeds 10-31 22:00 to 11-01 12:00 at 128
+steps, which survived them; today's two storms), none in the idle or evaluating hours between: the trainer is the
+occasion of the storms, by what route is not known. **Done:** nothing of ours is launched into a machine with 2 GB
+available. A launcher on the Windows side, **`runs/m2_steps512_quiet.sh`** (a new file; log
+`runs/meadow2/steps512_quiet.log`), samples Windows's available memory, the nonpaged pool and the GPU's used memory
+every two minutes and, after three consecutive samples with **≥ 15 GB available and ≤ 5 GB of GPU in use**, runs a
+12-iteration health run of the trainer at 512 steps and then the chain of 21.14.3 unchanged, both under
+**`XLA_PYTHON_CLIENT_MEM_FRACTION=.5`**: the trainer's GPU allocator may grow to 8.2 GB of the card's 16 and no
+further (preallocation stays off; the job's own need measured 4.9–8.9 GB with the allocator's slack, and the health
+run says whether 8.2 is enough before a seed is risked). The cap is a setting of where memory goes, like 21.14.7's
+device-side inputs, and changes no number of the recipe; it is recorded here and in the chain log. The chain does not
+launch if the health run fails or if anything of ours is already running in WSL. **The owner is asked** to reboot
+Windows (the pool), and, while a 512-step seed trains (7 h), to keep the machine's memory for it: the machine, not
+the brain, has ended every launch today. **Cost:** this is the fourth launch; from a quiet start the three seeds take
+18–27 h, so § 21.14 is read a day later than planned, at the earliest in the evening of 2026-11-03.
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills
