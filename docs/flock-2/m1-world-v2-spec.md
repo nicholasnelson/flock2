@@ -3298,7 +3298,7 @@ iteration now takes 13 s on this machine, against 8.6 in the smoke test and 6.8 
 (the machine's other load; the training itself is unchanged), so a seed may take 7 h rather than 4.8
 and the three seeds up to 27 h: R_ALL_DONE between 03:00 and 16:00 on 2026-11-03. The owner is
 asked to keep a few GB of Windows memory free while a 512-step seed trains, or to allow a
-`.wslconfig`; neither is done here. Relaunched 13:15 (`s2s_s0` from the start; the chain as
+`.wslconfig`; neither is done here. Relaunched 13:10 (`s2s_s0` from the start; the chain as
 21.14.3 describes it).
 
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
