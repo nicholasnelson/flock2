@@ -3266,6 +3266,41 @@ reach or the experience. **Cost:** 8.6 s an iteration, 4.8 h of training a seed,
 the eight evaluations and two probes, the three seeds by about 03:00 on 2026-11-03 from a 09:00
 start; the 256 fallback another 12 h if it is due.
 
+**21.14.7 The first launch failed, and the relaunch (2026-11-02, 12:31–13:15).** `s2s_s0` ran healthy
+for 1,520 iterations (every sheep alive, reward 2.44, reconstruction 28 → 25, entropy 1.1 → 1.3,
+6.8 s an iteration through 1,250) and then died at 12:31 of a **segmentation fault in the CUDA driver**
+(`dmesg`: `segfault at 0 … in libcuda.so`, a null pointer), with the trainer's host memory at **10.9 GB**
+(8.3 at the start: about 1.7 MB an iteration of growth), the WSL machine at 15.9 GB, and Windows at
+**0.7 GB free** of 31.8 with a game and browsers running beside it; the last 250 iterations had slowed
+to 10–15 s, the mark of paging. Read as a host-memory fault under pressure from the whole machine, not
+a fault of the brain or the recipe: nothing in the training log turns before the end. Logs kept:
+`meadow2-results/hybrid/s2s_s0_failed_1102.log`, `s2s_s0_failed_1102_log.jsonl`,
+`meadow2-results/steps512_failed_1102.log`. Two faults of the driver found with it and fixed: the chain
+went on to seed 1 after the failure, against 21.14.6 (it now stops, `CHAIN_STOPPED`), and a brain's
+directory was not cleared before training (the trainer appends to an existing `log.jsonl`; it is
+cleared now). The partial `s2s_s1` was removed. **The measurement (`runs/m2_leak.sh`, 60 iterations
+from `s2r_s0` at 512 steps, host memory sampled every 5 s; files `meadow2-results/hybrid/leak_*`):**
+the trainer as it was swings between 7.2 and 9.3 GB from iteration to iteration (median 7.9), so a
+growth of 1.7 MB an iteration is invisible in an hour and is not resolved here. **The change to the
+trainer, to the place of the data and not to the numbers:** PPO's two large float inputs (the policy's
+features and the column's input, 277 + 104 MB a rollout at 512 steps) now stay on the device, where
+each minibatch's columns are gathered, instead of crossing to the host and back in sixteen minibatch
+copies an iteration (about 1.9 GB of host traffic an iteration). Measured the same way: median
+**7.05 GB**, extremes 4.3–8.9, against 7.9 and 4.8–9.3; the training statistics the same (reward 2.437
+against 2.434, reconstruction 23.0 against 23.3, entropy 1.10 against 1.09, approximate KL 0.007 both);
+the update step faster (4.8 against 5.6 s). GPU peak 11.9 GB of 16 with the desktop's 3.0 (the XLA
+allocator grows into what is free; the job's own need is smaller). A first version that also kept the
+views on the device, to transfer only the replay's kept windows, exhausted the GPU in the first
+world-model compile and was dropped. The watchdog's limit is raised from 12 to 13 GB (the machine
+has 15.9) and the driver samples the training's host memory once a minute into `<name>_rss.txt`, so
+the growth is read as the run goes. **Not changed:** the recipe, the pass rules, the reference. The
+iteration now takes 13 s on this machine, against 8.6 in the smoke test and 6.8 in the failed run
+(the machine's other load; the training itself is unchanged), so a seed may take 7 h rather than 4.8
+and the three seeds up to 27 h: R_ALL_DONE between 03:00 and 16:00 on 2026-11-03. The owner is
+asked to keep a few GB of Windows memory free while a 512-step seed trains, or to allow a
+`.wslconfig`; neither is done here. Relaunched 13:15 (`s2s_s0` from the start; the chain as
+21.14.3 describes it).
+
 ## 22. World v3: a hex lattice and terrain (owner's direction, 2026-10-29; planned, not built)
 
 **When.** At the next world change where it makes sense: stage 3's (the information gap, where hills

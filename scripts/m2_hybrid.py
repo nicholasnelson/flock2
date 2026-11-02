@@ -423,8 +423,12 @@ def main():
         mud = mud_radius(it, ramp)
         fog = mud_radius(it, fog_ramp)  # the same ramp shape, read as a probability
         g0 = mems[3]
-        states, mems, tr = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed, column)
-        tr = jax.tree.map(np.asarray, tr)
+        states, mems, tr_dev = collect(world, policy, states, mems, k, a.steps, a.record, (a.gamma, a.lam), use_embed, column)
+        # the host copy without the two large float fields (2026-11-02, after s2s_s0's segmentation fault in the CUDA driver at --steps 512
+        # under host memory pressure, spec § 21.14.7): PPO's inputs feat and col_in stay on the device, where each minibatch's columns
+        # are gathered, instead of crossing to the host and back in minibatch copies. The numbers are unchanged. (Keeping the views on
+        # the device too, to transfer only the replay's kept windows, exhausted the GPU in the first world-model compile; not done.)
+        tr = {k2: np.asarray(v) for k2, v in tr_dev.items() if k2 not in ("feat", "col_in")}
         t_collect = time.time() - t_a
         # world-model replay: recorded sheep, cut into sequences, kept if alive throughout
         T, L = a.steps, a.length
@@ -443,7 +447,8 @@ def main():
         if it > a.ppo_start and column is not None:
             # sequences: one per sheep (N = meadows x sheep), the column run from its stored start
             seq = lambda x: x.reshape((x.shape[0], -1) + x.shape[3:])  # (T, N, ...)
-            feat, x, act, lp, ad, rt, w = (seq(tr[k2]) for k2 in ("feat", "col_in", "act", "logp", "adv", "ret", "alive_before"))
+            feat, x = seq(tr_dev["feat"]), seq(tr_dev["col_in"])  # on the device
+            act, lp, ad, rt, w = (seq(tr[k2]) for k2 in ("act", "logp", "adv", "ret", "alive_before"))
             g0s = np.asarray(g0).reshape((-1, a.column))
             w = w.astype(np.float32)
             auxes = []
@@ -453,7 +458,8 @@ def main():
             ppo_aux = {k2: float(np.mean([float(v) for v in [x_[k2] for x_ in auxes]])) for k2 in auxes[0]}
         elif it > a.ppo_start:
             flat = lambda x: x.reshape((-1,) + x.shape[3:])
-            obs, act, lp, ad, rt, w = (flat(tr[k2]) for k2 in ("feat", "act", "logp", "adv", "ret", "alive_before"))
+            obs = flat(tr_dev["feat"])  # on the device
+            act, lp, ad, rt, w = (flat(tr[k2]) for k2 in ("act", "logp", "adv", "ret", "alive_before"))
             w = w.astype(np.float32)
             auxes = []
             for _ in range(a.epochs):

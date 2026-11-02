@@ -24,7 +24,11 @@ ev() {  # ev <agent dir> <brain name> <tag> <flags...>: one evaluation with its 
 }
 train() {  # train <name> <from> <T> <iters> <seed> <log>
   local n=$1 from=$2 T=$3 iters=$4 s=$5 log=$6
-  MAXGB=12 bash runs/watchdog.sh python scripts/m2_hybrid.py --out $A/$n $RECIPE --steps $T --reset_every $(reset_for $T) --continue_from $A/$from --iters $iters --seed $s > $log 2>&1
+  MAXGB=13 bash runs/watchdog.sh python scripts/m2_hybrid.py --out $A/$n $RECIPE --steps $T --reset_every $(reset_for $T) --continue_from $A/$from --iters $iters --seed $s > $log 2>&1 &
+  local wd=$!
+  # the host memory of the training, sampled every minute (seconds, RSS MB, iteration): section 21.14.7's fault was a memory one
+  ( while kill -0 $wd 2>/dev/null; do echo "$(date +%s) $(ps -o rss= --ppid $wd 2>/dev/null | awk '{s+=$1} END {print int(s/1024)}') $(tail -1 $A/$n/log.jsonl 2>/dev/null | grep -o '"iter": [0-9]*' | grep -o '[0-9]*')" >> ${log%.log}_rss.txt; sleep 60; done ) &
+  wait $wd
 }
 if [ "$1" = smoke ]; then
   n=smoke_steps512; rm -rf $A/$n; L=runs/meadow2/hybrid/$n.log
@@ -58,7 +62,7 @@ PY
 fi
 if [ "$1" = r ]; then
   s=$2; T=${3:-512}; n=s2s_s$s; if [ "$T" != 512 ]; then n=s2s${T}_s$s; fi
-  agent=$A/$n
+  agent=$A/$n; rm -rf $agent  # a fresh start: the trainer appends to an existing log.jsonl
   train $n s2r_s$s $T 2000 $s runs/meadow2/hybrid/$n.log || { echo TRAIN_FAILED $n; tail -5 runs/meadow2/hybrid/$n.log; exit 1; }
   cp $agent/log.jsonl runs/meadow2/hybrid/${n}_log.jsonl
   echo TRAIN_DONE $n $(date +%H:%M:%S)
@@ -80,12 +84,12 @@ if [ "$1" = r ]; then
 fi
 if [ "$1" = chain ]; then
   echo STEPS512_START $(date +%H:%M:%S)
-  for s in 0 1 2; do bash runs/m2_steps512.sh r $s; echo $(date +%H:%M:%S); done
+  for s in 0 1 2; do bash runs/m2_steps512.sh r $s || { echo CHAIN_STOPPED $(date +%H:%M:%S); exit 1; }; echo $(date +%H:%M:%S); done  # a failed training stops the chain (section 21.14.6)
   echo R_ALL_DONE $(date +%H:%M:%S)
   C=$(bash runs/m2_steps512.sh collapse)
   echo COLLAPSE $C $(date +%H:%M:%S)
   if [ "$C" = YES ]; then
-    for s in 0 1 2; do bash runs/m2_steps512.sh r $s 256; echo $(date +%H:%M:%S); done
+    for s in 0 1 2; do bash runs/m2_steps512.sh r $s 256 || { echo CHAIN_STOPPED $(date +%H:%M:%S); exit 1; }; echo $(date +%H:%M:%S); done
     echo R256_ALL_DONE $(date +%H:%M:%S)
   fi
   echo STEPS512_ALL_DONE $(date +%H:%M:%S)
